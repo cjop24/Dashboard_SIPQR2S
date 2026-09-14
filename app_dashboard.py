@@ -38,17 +38,12 @@ authenticator = stauth.Authenticate(
     config['cookie']['expiry_days']
 )
 
-# Renderizado de la pantalla de inicio de sesión
-authenticator.login('main')
-
-# Lectura directa del estado en sesión
-authentication_status = st.session_state.get("authentication_status")
-name = st.session_state.get("name")
-username = st.session_state.get("username")
+# En streamlit-authenticator==0.2.3, login() devuelve la tupla (name, status, username)
+name, authentication_status, username = authenticator.login('main')
 
 if authentication_status == False:
     st.error("Usuario o contraseña incorrectos")
-elif authentication_status is None:
+elif authentication_status == None:
     st.warning("Por favor ingrese sus credenciales para acceder al sistema")
 
 elif authentication_status:
