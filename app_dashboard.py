@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from sqlalchemy import create_engine
 import urllib.parse
 import streamlit_authenticator as stauth
@@ -8,25 +9,46 @@ import yaml
 from yaml.loader import SafeLoader
 
 # -----------------------------------------------------------------------------
-# 1. CONFIGURACIÓN DE PÁGINA (Responsive PC / Mobile)[cite: 1]
+# 1. CONFIGURACIÓN DE PÁGINA RESPONSIVA (Mobile-First iOS)
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Dashboard Seguimiento SIPQRS",
-    page_icon="📊",
+    page_title="Dashboard SIPQRS Móvil",
+    page_icon="📱",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# Estilo CSS personalizado para adaptar tarjetas y contenedores[cite: 1]
+# Estilos CSS estilo iOS Card para mobile
 st.markdown("""
     <style>
-    .main { padding: 1rem; }
-    div[data-testid="stMetricValue"] { font-size: 1.8rem; font-weight: bold; }
+    .main { padding: 0.5rem; }
+    
+    /* Tarjetas de métricas tipo iOS Card */
+    div[data-testid="stMetric"] {
+        background-color: #ffffff;
+        border-radius: 12px;
+        padding: 12px 16px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        border: 1px solid #e5e7eb;
+        margin-bottom: 8px;
+    }
+    div[data-testid="stMetricValue"] {
+        font-size: 1.5rem !important;
+        font-weight: 700;
+    }
+    div[data-testid="stMetricLabel"] {
+        font-size: 0.85rem !important;
+        color: #4b5563;
+        font-weight: 600;
+    }
+
+    h1 { font-size: 1.6rem !important; font-weight: 800; color: #0f172a; }
+    h3 { font-size: 1.1rem !important; font-weight: 700; color: #1e293b; margin-top: 1rem; }
     </style>
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 2. AUTENTICACIÓN DE USUARIOS
+# 2. AUTENTICACIÓN
 # -----------------------------------------------------------------------------
 with open('config.yaml') as file:
     config = yaml.load(file, Loader=SafeLoader)
@@ -38,25 +60,16 @@ authenticator = stauth.Authenticate(
     config['cookie']['expiry_days']
 )
 
-# En streamlit-authenticator==0.2.3, login() devuelve la tupla (name, status, username)
 name, authentication_status, username = authenticator.login('main')
 
 if authentication_status == False:
     st.error("Usuario o contraseña incorrectos")
 elif authentication_status == None:
-    st.warning("Por favor ingrese sus credenciales para acceder al sistema")
+    st.warning("Ingrese sus credenciales corporativas")
 
 elif authentication_status:
-
     # -----------------------------------------------------------------------------
-    # 3. CONTROL DE SESIÓN Y BARRA LATERAL[cite: 1]
-    # -----------------------------------------------------------------------------
-    st.sidebar.write(f"👤 Bienvenido(a), **{name}**")
-    authenticator.logout('Cerrar Sesión', 'sidebar')
-    st.sidebar.markdown("---")
-
-    # -----------------------------------------------------------------------------
-    # 4. CONEXIÓN A POSTGRESQL EN LA NUBE (Supabase) CON CACHÉ[cite: 1]
+    # 3. CONEXIÓN A BASE DE DATOS Y CACHÉ
     # -----------------------------------------------------------------------------
     try:
         DB_USER = st.secrets["postgres"]["user"]
@@ -65,9 +78,8 @@ elif authentication_status:
         DB_PORT = st.secrets["postgres"]["port"]
         DB_NAME = st.secrets["postgres"]["dbname"]
     except Exception:
-        # Fallback con parámetros de Supabase[cite: 1]
         DB_USER = "postgres.gsszvzxswzkqsnajimij"
-        DB_PASS = "TuContraseñaActivaDeSupabase"
+        DB_PASS = ""
         DB_HOST = "aws-0-us-east-2.pooler.supabase.com"
         DB_PORT = "6543"
         DB_NAME = "postgres"
@@ -85,145 +97,163 @@ elif authentication_status:
     try:
         df_raw = cargar_datos_consolidados()
     except Exception as e:
-        st.error(f"Error conectando a la base de datos PostgreSQL: {e}")
+        st.error(f"Error cargando base de datos: {e}")
         st.stop()
 
     # -----------------------------------------------------------------------------
-    # 5. SEGMENTADORES INTERACTIVOS (SIDEBAR)[cite: 1]
+    # 4. SEGMENTADORES INTERACTIVOS (SIDEBAR)
     # -----------------------------------------------------------------------------
-    st.sidebar.header("🔍 Filtros de Control")
+    st.sidebar.write(f"👤 **{name}**")
+    authenticator.logout('Cerrar Sesión', 'sidebar')
+    st.sidebar.markdown("---")
+    st.sidebar.header("🔍 Filtros de Consulta")
 
-    # Segmentador CATEGORÍA SALUD (Con Búsqueda y Ordenado por Cantidad)[cite: 1]
+    # Segmentador de Categorías Salud
     cat_counts = df_raw['ESPECIALIDAD_CATEGORIA'].value_counts()
     opciones_cat = [f"{cat} ({count:,})" for cat, count in cat_counts.items() if cat != '']
     mapa_cat = {f"{cat} ({count:,})": cat for cat, count in cat_counts.items() if cat != ''}
 
-    sel_cat_display = st.sidebar.multiselect(
-        "Categoría Salud / Especialidad",
-        options=opciones_cat,
-        placeholder="Escribe para buscar..."
-    )
+    sel_cat_display = st.sidebar.multiselect("Categoría Salud / Especialidad", options=opciones_cat, placeholder="Buscar categoría...")
     sel_cat = [mapa_cat[item] for item in sel_cat_display]
 
-    st.sidebar.markdown("---")
-
-    # Filtro RASES[cite: 1]
+    # Filtros estructurales
     lista_rases = sorted([x for x in df_raw['RASES'].dropna().unique() if x != ''])
     sel_rases = st.sidebar.multiselect("RASES", options=lista_rases)
 
-    # Filtro UNIDAD (UPRES) condicionado a RASES[cite: 1]
     df_filtered_unidad = df_raw[df_raw['RASES'].isin(sel_rases)] if sel_rases else df_raw
     lista_unidades = sorted([x for x in df_filtered_unidad['UNIDAD DE ASIGNACIÓN'].dropna().unique() if x != ''])
-    sel_unidades = st.sidebar.multiselect("UNIDAD DE ASIGNACIÓN", options=lista_unidades)
+    sel_unidades = st.sidebar.multiselect("Unidad de Asignación (UPRES)", options=lista_unidades)
 
-    # Filtro Tipo de Solicitud[cite: 1]
     lista_tipos = sorted([x for x in df_raw['Tipo de Solicitud'].dropna().unique() if x != ''])
     sel_tipos = st.sidebar.multiselect("Tipo de Solicitud", options=lista_tipos)
 
-    # Filtro Medio de Recepción[cite: 1]
-    lista_medios = sorted([x for x in df_raw['Medio de Recepción'].dropna().unique() if x != ''])
-    sel_medios = st.sidebar.multiselect("Medio de Recepción", options=lista_medios)
-
-    # Filtro Rango de Fechas[cite: 1]
-    min_fecha = df_raw['fecha_dt'].min().date() if not df_raw.empty else None
-    max_fecha = df_raw['fecha_dt'].max().date() if not df_raw.empty else None
-
-    if min_fecha and max_fecha:
-        rango_fechas = st.sidebar.date_input("Rango de Fechas", value=(min_fecha, max_fecha), min_value=min_fecha, max_value=max_fecha)
-    else:
-        rango_fechas = []
+    # Aplicar filtros base (Especialidad, RASES, Unidad, Tipo)
+    df_base = df_raw.copy()
+    if sel_cat: df_base = df_base[df_base['ESPECIALIDAD_CATEGORIA'].isin(sel_cat)]
+    if sel_rases: df_base = df_base[df_base['RASES'].isin(sel_rases)]
+    if sel_unidades: df_base = df_base[df_base['UNIDAD DE ASIGNACIÓN'].isin(sel_unidades)]
+    if sel_tipos: df_base = df_base[df_base['Tipo de Solicitud'].isin(sel_tipos)]
 
     # -----------------------------------------------------------------------------
-    # 6. APLICACIÓN DE FILTROS EN MEMORIA[cite: 1]
+    # 5. VISTA PRINCIPAL (PESTAÑAS OPTIMIZADAS PARA MÓVIL)
     # -----------------------------------------------------------------------------
-    df_final = df_raw.copy()
+    st.title("🛡️ SIPQRS Sanidad")
+    st.caption("Consola Ejecutiva de Atención al Usuario")
 
-    if sel_cat:
-        df_final = df_final[df_final['ESPECIALIDAD_CATEGORIA'].isin(sel_cat)]
-    if sel_rases:
-        df_final = df_final[df_final['RASES'].isin(sel_rases)]
-    if sel_unidades:
-        df_final = df_final[df_final['UNIDAD DE ASIGNACIÓN'].isin(sel_unidades)]
-    if sel_tipos:
-        df_final = df_final[df_final['Tipo de Solicitud'].isin(sel_tipos)]
-    if sel_medios:
-        df_final = df_final[df_final['Medio de Recepción'].isin(sel_medios)]
-    if len(rango_fechas) == 2:
-        df_final = df_final[(df_final['fecha_dt'].dt.date >= rango_fechas[0]) & (df_final['fecha_dt'].dt.date <= rango_fechas[1])]
+    tab_resumen, tab_comparativo, tab_detalle = st.tabs(["📊 Resumen", "🔄 Comparador de Periodos", "📋 Detalle"])
 
     # -----------------------------------------------------------------------------
-    # 7. ENCABEZADO Y TARJETAS KPI[cite: 1]
+    # PESTAÑA 1: RESUMEN GENERAL
     # -----------------------------------------------------------------------------
-    st.title("🛡️ Dashboard de Seguimiento SIPQRS")
-    st.caption("Dirección de Sanidad Policía Nacional - Oficina de Atención al Usuario")
+    with tab_resumen:
+        min_f = df_base['fecha_dt'].min().date() if not df_base.empty else None
+        max_f = df_base['fecha_dt'].max().date() if not df_base.empty else None
+        rango_general = st.date_input("Filtrar Rango del Resumen", value=(min_f, max_f), min_value=min_f, max_value=max_f)
+        
+        df_resumen = df_base.copy()
+        if len(rango_general) == 2:
+            df_resumen = df_resumen[(df_resumen['fecha_dt'].dt.date >= rango_general[0]) & (df_resumen['fecha_dt'].dt.date <= rango_general[1])]
 
-    col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
-    col_kpi1.metric("Total Reclamos / Tickets", f"{len(df_final):,}")
-    col_kpi2.metric("Unidades Activas", f"{df_final['UNIDAD DE ASIGNACIÓN'].nunique():,}")
-    col_kpi3.metric("Especialidades", f"{df_final['ESPECIALIDAD_CATEGORIA'].nunique():,}")
-    col_kpi4.metric("Tipos de Solicitud", f"{df_final['Tipo de Solicitud'].nunique():,}")
+        kpi1, kpi2 = st.columns(2)
+        kpi1.metric("Total Tickets", f"{len(df_resumen):,}")
+        kpi2.metric("Unidades Activas", f"{df_resumen['UNIDAD DE ASIGNACIÓN'].nunique():,}")
 
-    st.markdown("---")
+        kpi3, kpi4 = st.columns(2)
+        kpi3.metric("Especialidades", f"{df_resumen['ESPECIALIDAD_CATEGORIA'].nunique():,}")
+        kpi4.metric("Solicitudes", f"{df_resumen['Tipo de Solicitud'].nunique():,}")
 
-    # -----------------------------------------------------------------------------
-    # 8. FILA 1 DE GRÁFICOS: DISTRIBUCIÓN TERRITORIAL Y VOLUMEN[cite: 1]
-    # -----------------------------------------------------------------------------
-    c1, c2 = st.columns(2)
+        st.markdown("---")
 
-    with c1:
-        st.subheader("📍 Distribución por RASES")
-        df_rases = df_final['RASES'].value_counts().reset_index()
-        df_rases.columns = ['RASES', 'Cantidad']
-        fig_rases = px.bar(df_rases, x='RASES', y='Cantidad', text_auto=True, color_discrete_sequence=['#2e7d32'])
-        fig_rases.update_layout(xaxis_title="", yaxis_title="", height=320, margin=dict(l=10, r=10, t=20, b=10))
-        st.plotly_chart(fig_rases, use_container_width=True)
-
-    with c2:
-        st.subheader("🏢 Top 5 Cantidad de SIPQRS por Unidad")
-        df_unid = df_final['UNIDAD DE ASIGNACIÓN'].value_counts().head(5).reset_index()
-        df_unid.columns = ['Unidad', 'Cantidad']
-        fig_unid = px.bar(df_unid, x='Unidad', y='Cantidad', text_auto=True, color_discrete_sequence=['#388e3c'])
-        fig_unid.update_layout(xaxis_title="", yaxis_title="", height=320, margin=dict(l=10, r=10, t=20, b=10))
-        st.plotly_chart(fig_unid, use_container_width=True)
-
-    # -----------------------------------------------------------------------------
-    # 9. FILA 2 DE GRÁFICOS: ESPECIALIDADES Y MOTIVOS GENERALES[cite: 1]
-    # -----------------------------------------------------------------------------
-    c3, c4 = st.columns(2)
-
-    with c3:
-        st.subheader("🩺 Top Especialidades (Categoría Salud)")
-        df_esp = df_final['ESPECIALIDAD_CATEGORIA'].value_counts().head(10).reset_index()
+        st.subheader("🩺 Top 7 Especialidades")
+        df_esp = df_resumen['ESPECIALIDAD_CATEGORIA'].value_counts().head(7).reset_index()
         df_esp.columns = ['Especialidad', 'Cantidad']
-        fig_esp = px.bar(df_esp, y='Especialidad', x='Cantidad', orientation='h', text_auto=True, color_discrete_sequence=['#43a047'])
-        fig_esp.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=400, margin=dict(l=10, r=10, t=20, b=10))
-        st.plotly_chart(fig_esp, use_container_width=True)
-
-    with c4:
-        st.subheader("📋 SIPQRS por Motivo General")
-        df_mot = df_final['MOTIVO GENERAL'].value_counts().head(5).reset_index()
-        df_mot.columns = ['Motivo General', 'Cantidad']
-        fig_mot = px.bar(df_mot, y='Motivo General', x='Cantidad', orientation='h', text_auto=True, color_discrete_sequence=['#1b5e20'])
-        fig_mot.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=400, margin=dict(l=10, r=10, t=20, b=10))
-        st.plotly_chart(fig_mot, use_container_width=True)
+        fig_esp = px.bar(df_esp, y='Especialidad', x='Cantidad', orientation='h', text_auto=True, color_discrete_sequence=['#2e7d32'])
+        fig_esp.update_layout(yaxis=dict(autorange="reversed"), height=320, margin=dict(l=5, r=5, t=10, b=10))
+        st.plotly_chart(fig_esp, use_container_width=True, config={'displayModeBar': False})
 
     # -----------------------------------------------------------------------------
-    # 10. FILA 3 DE GRÁFICOS: TIPO DE SOLICITUD Y MEDIO DE RECEPCIÓN[cite: 1]
+    # PESTAÑA 2: COMPARADOR ENTRE DOS PERIODOS (NUEVA FUNCIONALIDAD)
     # -----------------------------------------------------------------------------
-    c5, c6 = st.columns(2)
+    with tab_comparativo:
+        st.subheader("⚔️ Comparativo entre Periodos")
+        st.caption("Selecciona los dos rangos de tiempo que deseas contrastar.")
 
-    with c5:
-        st.subheader("📩 Tipo de Solicitud")
-        df_sol = df_final['Tipo de Solicitud'].value_counts().reset_index()
-        df_sol.columns = ['Tipo', 'Cantidad']
-        fig_sol = px.bar(df_sol, y='Tipo', x='Cantidad', orientation='h', text_auto=True, color_discrete_sequence=['#66bb6a'])
-        fig_sol.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=300, margin=dict(l=10, r=10, t=20, b=10))
-        st.plotly_chart(fig_sol, use_container_width=True)
+        min_hist = df_raw['fecha_dt'].min().date()
+        max_hist = df_raw['fecha_dt'].max().date()
 
-    with c6:
-        st.subheader("📬 Medio de Recepción")
-        df_med = df_final['Medio de Recepción'].value_counts().reset_index()
-        df_med.columns = ['Medio', 'Cantidad']
-        fig_med = px.bar(df_med, y='Medio', x='Cantidad', orientation='h', text_auto=True, color_discrete_sequence=['#81c784'])
-        fig_med.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=300, margin=dict(l=10, r=10, t=20, b=10))
-        st.plotly_chart(fig_med, use_container_width=True)
+        # En iPhone, colocamos los selectores en 2 columnas compactas
+        col_pA, col_pB = st.columns(2)
+
+        with col_pA:
+            st.markdown("**📅 Periodo A (Base)**")
+            f_inicio_a = st.date_input("Inicio A", value=pd.to_datetime("2025-08-08").date(), min_value=min_hist, max_value=max_hist, key="pa_start")
+            f_fin_a = st.date_input("Fin A", value=pd.to_datetime("2025-08-14").date(), min_value=min_hist, max_value=max_hist, key="pa_end")
+
+        with col_pB:
+            st.markdown("**📅 Periodo B (Comparado)**")
+            f_inicio_b = st.date_input("Inicio B", value=pd.to_datetime("2025-09-08").date(), min_value=min_hist, max_value=max_hist, key="pb_start")
+            f_fin_b = st.date_input("Fin B", value=pd.to_datetime("2025-09-14").date(), min_value=min_hist, max_value=max_hist, key="pb_end")
+
+        # Filtrar DataFrames
+        df_pa = df_base[(df_base['fecha_dt'].dt.date >= f_inicio_a) & (df_base['fecha_dt'].dt.date <= f_fin_a)]
+        df_pb = df_base[(df_base['fecha_dt'].dt.date >= f_inicio_b) & (df_base['fecha_dt'].dt.date <= f_fin_b)]
+
+        cnt_pa = len(df_pa)
+        cnt_pb = len(df_pb)
+        diff_abs = cnt_pb - cnt_pa
+        diff_pct = ((cnt_pb - cnt_pa) / cnt_pa * 100) if cnt_pa > 0 else 0
+
+        st.markdown("---")
+
+        # Tarjetas comparativas con Deltas
+        st.markdown("##### 📊 Resultado General del Comparativo")
+        comp_col1, comp_col2 = st.columns(2)
+
+        comp_col1.metric(
+            label=f"Periodo A ({f_inicio_a.strftime('%d/%m')} - {f_fin_a.strftime('%d/%m')})",
+            value=f"{cnt_pa:,} tickets"
+        )
+        
+        comp_col2.metric(
+            label=f"Periodo B ({f_inicio_b.strftime('%d/%m')} - {f_fin_b.strftime('%d/%m')})",
+            value=f"{cnt_pb:,} tickets",
+            delta=f"{diff_abs:+} tickets ({diff_pct:+.1f}%)",
+            delta_color="inverse"  # En salud/reclamos, un aumento suele ser alerta (rojo) y reducción verde
+        )
+
+        # Gráfico comparativo de barras agrupadas por Especialidades Top 5
+        st.markdown("##### 🩺 Comparativa por Top 5 Especialidades")
+        
+        top_esp_a = df_pa['ESPECIALIDAD_CATEGORIA'].value_counts().head(5)
+        top_esp_b = df_pb['ESPECIALIDAD_CATEGORIA'].value_counts().head(5)
+        
+        # Combinar índices para el gráfico
+        esp_combinadas = list(set(top_esp_a.index).union(set(top_esp_b.index)))
+        
+        df_graf_comp = pd.DataFrame({
+            'Especialidad': esp_combinadas,
+            'Periodo A': [df_pa[df_pa['ESPECIALIDAD_CATEGORIA'] == e].shape[0] for e in esp_combinadas],
+            'Periodo B': [df_pb[df_pb['ESPECIALIDAD_CATEGORIA'] == e].shape[0] for e in esp_combinadas]
+        }).sort_values(by='Periodo B', ascending=False)
+
+        fig_comp_esp = go.Figure(data=[
+            go.Bar(name='Periodo A', x=df_graf_comp['Especialidad'], y=df_graf_comp['Periodo A'], marker_color='#81c784', text=df_graf_comp['Periodo A'], textposition='auto'),
+            go.Bar(name='Periodo B', x=df_graf_comp['Especialidad'], y=df_graf_comp['Periodo B'], marker_color='#1b5e20', text=df_graf_comp['Periodo B'], textposition='auto')
+        ])
+        
+        fig_comp_esp.update_layout(
+            barmode='group',
+            height=340,
+            margin=dict(l=5, r=5, t=10, b=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        st.plotly_chart(fig_comp_esp, use_container_width=True, config={'displayModeBar': False})
+
+    # -----------------------------------------------------------------------------
+    # PESTAÑA 3: DETALLE
+    # -----------------------------------------------------------------------------
+    with tab_detalle:
+        st.subheader("📋 Resumen por Unidad de Asignación")
+        df_tabla = df_base.groupby(['UNIDAD DE ASIGNACIÓN', 'RASES']).size().reset_index(name='Total Reclamos')
+        df_tabla = df_tabla.sort_values(by='Total Reclamos', ascending=False)
+        st.dataframe(df_tabla, use_container_width=True, hide_index=True)
