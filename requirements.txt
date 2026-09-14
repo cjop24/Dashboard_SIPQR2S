@@ -3,5 +3,5 @@ pandas
 plotly
 sqlalchemy
 psycopg2-binary
-streamlit-authenticator
+streamlit-authenticator==0.2.3
 pyyaml

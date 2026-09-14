@@ -17,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilo CSS personalizado
+# Estilo CSS personalizado para adaptar tarjetas y contenedores
 st.markdown("""
     <style>
     .main { padding: 1rem; }
@@ -31,12 +31,11 @@ st.markdown("""
 with open('config.yaml') as file:
     config = yaml.load(file, Loader=SafeLoader)
 
-# Instanciación compatible con versiones recientes
 authenticator = stauth.Authenticate(
-    credentials=config['credentials'],
-    cookie_name=config['cookie']['name'],
-    cookie_key=config['cookie']['key'],
-    cookie_expiry_days=config['cookie']['expiry_days']
+    config['credentials'],
+    config['cookie']['name'],
+    config['cookie']['key'],
+    config['cookie']['expiry_days']
 )
 
 name, authentication_status, username = authenticator.login('main')
@@ -57,7 +56,6 @@ elif authentication_status:
     # -----------------------------------------------------------------------------
     # 4. CONEXIÓN A POSTGRESQL EN LA NUBE (Supabase) CON CACHÉ
     # -----------------------------------------------------------------------------
-    # Se leen credenciales desde st.secrets (para Streamlit Cloud) o fallback local
     try:
         DB_USER = st.secrets["postgres"]["user"]
         DB_PASS = st.secrets["postgres"]["password"]
@@ -65,12 +63,12 @@ elif authentication_status:
         DB_PORT = st.secrets["postgres"]["port"]
         DB_NAME = st.secrets["postgres"]["dbname"]
     except Exception:
-        # Credenciales predeterminadas para desarrollo local
+        # Fallback local en caso de pruebas directas
         DB_USER = "postgres.gsszvzxswzkqsnajimij"
-        DB_PASS = "S1moluk002"
-        DB_HOST = "aws-0-us-east-2.pooler.supabase.com"
-        DB_PORT = "6543"
-        DB_NAME = "postgres"
+	DB_PASS = "yiODH8CCAQKDXvhf"  # Tu contraseña activa
+	DB_HOST = "aws-0-us-east-2.pooler.supabase.com"
+	DB_PORT = "6543"
+	DB_NAME = "postgres"
 
     pass_encoded = urllib.parse.quote_plus(DB_PASS)
     engine = create_engine(f"postgresql://{DB_USER}:{pass_encoded}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
