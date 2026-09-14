@@ -3,11 +3,11 @@ credentials:
     carlos_ochoa:
       email: "carlosj.ochoa@correo.policia.gov.co"
       name: "cjop1"
-      password: "$2b$12$eImiTXuWVxjM72fGC47Auu94g.uJ11R.yB1hI2mG3K123456789012" # Hash bcrypt para At3usSipqr2s0
+      password: "$2b$12$XWQ8GMtR4y2kDBrw8Aix0eeb.TyTxeYsiThyYwbRyWEC5Bd9/6qdy" # Hash bcrypt para At3usSipqr2s0
     hellen_jimenez:
       email: "hellen.jimenez@correo.policia.gov.co"
       name: "jefeAteus"
-      password: "$2b$12$eImiTXuWVxjM72fGC47Auu94g.uJ11R.yB1hI2mG3K987654321098" # Hash bcrypt para At3usSipqr2s2
+      password: "$2b$12$5fpRQL.NkL6BZ9pI19Qg2eKOUxyhzQArTqnaSva/QvGRcc04.YdHG" # Hash bcrypt para At3usSipqr2s2
 cookie:
   expiry_days: 120
   key: "dignidad_del_vencido"
