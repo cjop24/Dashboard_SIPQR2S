@@ -31,11 +31,12 @@ st.markdown("""
 with open('config.yaml') as file:
     config = yaml.load(file, Loader=SafeLoader)
 
+# Instanciación compatible con versiones recientes
 authenticator = stauth.Authenticate(
-    config['credentials'],
-    config['cookie']['name'],
-    config['cookie']['key'],
-    config['cookie']['expiry_days']
+    credentials=config['credentials'],
+    cookie_name=config['cookie']['name'],
+    cookie_key=config['cookie']['key'],
+    cookie_expiry_days=config['cookie']['expiry_days']
 )
 
 name, authentication_status, username = authenticator.login('main')
