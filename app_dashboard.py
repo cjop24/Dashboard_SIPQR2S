@@ -8,7 +8,7 @@ import yaml
 from yaml.loader import SafeLoader
 
 # -----------------------------------------------------------------------------
-# 1. CONFIGURACIÓN DE PÁGINA (Debe ejecutarse antes de cualquier renderizado)
+# 1. CONFIGURACIÓN DE PÁGINA (Responsive PC / Mobile)[cite: 1]
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Dashboard Seguimiento SIPQRS",
@@ -17,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilo CSS personalizado para adaptar tarjetas y contenedores
+# Estilo CSS personalizado para adaptar tarjetas y contenedores[cite: 1]
 st.markdown("""
     <style>
     .main { padding: 1rem; }
@@ -26,7 +26,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 2. AUTENTICACIÓN DE USUARIOS
+# 2. AUTENTICACIÓN DE USUARIOS (streamlit-authenticator v0.2.3)[cite: 1]
 # -----------------------------------------------------------------------------
 with open('config.yaml') as file:
     config = yaml.load(file, Loader=SafeLoader)
@@ -47,14 +47,14 @@ elif authentication_status == None:
 
 elif authentication_status:
     # -----------------------------------------------------------------------------
-    # 3. CONTROL DE SESIÓN Y BARRA LATERAL
+    # 3. CONTROL DE SESIÓN Y BARRA LATERAL[cite: 1]
     # -----------------------------------------------------------------------------
     st.sidebar.write(f"👤 Bienvenido(a), **{name}**")
     authenticator.logout('Cerrar Sesión', 'sidebar')
     st.sidebar.markdown("---")
 
     # -----------------------------------------------------------------------------
-    # 4. CONEXIÓN A POSTGRESQL EN LA NUBE (Supabase) CON CACHÉ
+    # 4. CONEXIÓN A POSTGRESQL EN LA NUBE (Supabase) CON CACHÉ[cite: 1]
     # -----------------------------------------------------------------------------
     try:
         DB_USER = st.secrets["postgres"]["user"]
@@ -63,9 +63,9 @@ elif authentication_status:
         DB_PORT = st.secrets["postgres"]["port"]
         DB_NAME = st.secrets["postgres"]["dbname"]
     except Exception:
-        # Fallback local en caso de pruebas directas
+        # Fallback con parámetros de Supabase[cite: 1]
         DB_USER = "postgres.gsszvzxswzkqsnajimij"
-        DB_PASS = "yiODH8CCAQKDXvhf"  # Tu contraseña activa
+        DB_PASS = "TuContraseñaActivaDeSupabase"
         DB_HOST = "aws-0-us-east-2.pooler.supabase.com"
         DB_PORT = "6543"
         DB_NAME = "postgres"
@@ -87,11 +87,11 @@ elif authentication_status:
         st.stop()
 
     # -----------------------------------------------------------------------------
-    # 5. SEGMENTADORES INTERACTIVOS (SIDEBAR)
+    # 5. SEGMENTADORES INTERACTIVOS (SIDEBAR)[cite: 1]
     # -----------------------------------------------------------------------------
     st.sidebar.header("🔍 Filtros de Control")
 
-    # Segmentador CATEGORÍA SALUD (Con Búsqueda y Ordenado por Cantidad)
+    # Segmentador CATEGORÍA SALUD (Con Búsqueda y Ordenado por Cantidad)[cite: 1]
     cat_counts = df_raw['ESPECIALIDAD_CATEGORIA'].value_counts()
     opciones_cat = [f"{cat} ({count:,})" for cat, count in cat_counts.items() if cat != '']
     mapa_cat = {f"{cat} ({count:,})": cat for cat, count in cat_counts.items() if cat != ''}
@@ -105,24 +105,24 @@ elif authentication_status:
 
     st.sidebar.markdown("---")
 
-    # Filtro RASES
+    # Filtro RASES[cite: 1]
     lista_rases = sorted([x for x in df_raw['RASES'].dropna().unique() if x != ''])
     sel_rases = st.sidebar.multiselect("RASES", options=lista_rases)
 
-    # Filtro UNIDAD (UPRES) condicionado a RASES
+    # Filtro UNIDAD (UPRES) condicionado a RASES[cite: 1]
     df_filtered_unidad = df_raw[df_raw['RASES'].isin(sel_rases)] if sel_rases else df_raw
     lista_unidades = sorted([x for x in df_filtered_unidad['UNIDAD DE ASIGNACIÓN'].dropna().unique() if x != ''])
     sel_unidades = st.sidebar.multiselect("UNIDAD DE ASIGNACIÓN", options=lista_unidades)
 
-    # Filtro Tipo de Solicitud
+    # Filtro Tipo de Solicitud[cite: 1]
     lista_tipos = sorted([x for x in df_raw['Tipo de Solicitud'].dropna().unique() if x != ''])
     sel_tipos = st.sidebar.multiselect("Tipo de Solicitud", options=lista_tipos)
 
-    # Filtro Medio de Recepción
+    # Filtro Medio de Recepción[cite: 1]
     lista_medios = sorted([x for x in df_raw['Medio de Recepción'].dropna().unique() if x != ''])
     sel_medios = st.sidebar.multiselect("Medio de Recepción", options=lista_medios)
 
-    # Filtro Rango de Fechas
+    # Filtro Rango de Fechas[cite: 1]
     min_fecha = df_raw['fecha_dt'].min().date() if not df_raw.empty else None
     max_fecha = df_raw['fecha_dt'].max().date() if not df_raw.empty else None
 
@@ -132,7 +132,7 @@ elif authentication_status:
         rango_fechas = []
 
     # -----------------------------------------------------------------------------
-    # 6. APLICACIÓN DE FILTROS EN MEMORIA
+    # 6. APLICACIÓN DE FILTROS EN MEMORIA[cite: 1]
     # -----------------------------------------------------------------------------
     df_final = df_raw.copy()
 
@@ -150,7 +150,7 @@ elif authentication_status:
         df_final = df_final[(df_final['fecha_dt'].dt.date >= rango_fechas[0]) & (df_final['fecha_dt'].dt.date <= rango_fechas[1])]
 
     # -----------------------------------------------------------------------------
-    # 7. ENCABEZADO Y TARJETAS KPI
+    # 7. ENCABEZADO Y TARJETAS KPI[cite: 1]
     # -----------------------------------------------------------------------------
     st.title("🛡️ Dashboard de Seguimiento SIPQRS")
     st.caption("Dirección de Sanidad Policía Nacional - Oficina de Atención al Usuario")
@@ -164,7 +164,7 @@ elif authentication_status:
     st.markdown("---")
 
     # -----------------------------------------------------------------------------
-    # 8. FILA 1 DE GRÁFICOS: DISTRIBUCIÓN TERRITORIAL Y VOLUMEN
+    # 8. FILA 1 DE GRÁFICOS: DISTRIBUCIÓN TERRITORIAL Y VOLUMEN[cite: 1]
     # -----------------------------------------------------------------------------
     c1, c2 = st.columns(2)
 
@@ -185,7 +185,7 @@ elif authentication_status:
         st.plotly_chart(fig_unid, use_container_width=True)
 
     # -----------------------------------------------------------------------------
-    # 9. FILA 2 DE GRÁFICOS: ESPECIALIDADES Y MOTIVOS GENERALES
+    # 9. FILA 2 DE GRÁFICOS: ESPECIALIDADES Y MOTIVOS GENERALES[cite: 1]
     # -----------------------------------------------------------------------------
     c3, c4 = st.columns(2)
 
@@ -206,7 +206,7 @@ elif authentication_status:
         st.plotly_chart(fig_mot, use_container_width=True)
 
     # -----------------------------------------------------------------------------
-    # 10. FILA 3 DE GRÁFICOS: TIPO DE SOLICITUD Y MEDIO DE RECEPCIÓN
+    # 10. FILA 3 DE GRÁFICOS: TIPO DE SOLICITUD Y MEDIO DE RECEPCIÓN[cite: 1]
     # -----------------------------------------------------------------------------
     c5, c6 = st.columns(2)
 
