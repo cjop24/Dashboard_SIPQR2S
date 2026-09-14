@@ -26,7 +26,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 2. AUTENTICACIÓN DE USUARIOS (streamlit-authenticator v0.2.3)[cite: 1]
+# 2. AUTENTICACIÓN DE USUARIOS (COMPATIBLE CON v0.2.x Y v0.3.x/v0.4.x)
 # -----------------------------------------------------------------------------
 with open('config.yaml') as file:
     config = yaml.load(file, Loader=SafeLoader)
@@ -38,14 +38,24 @@ authenticator = stauth.Authenticate(
     config['cookie']['expiry_days']
 )
 
-name, authentication_status, username = authenticator.login('main')
+# Captura de respuesta compatible
+res = authenticator.login()
+
+if isinstance(res, tuple):
+    name, authentication_status, username = res
+else:
+    # Soporte para versiones nuevas de streamlit-authenticator (0.3.x+)
+    authentication_status = st.session_state.get("authentication_status")
+    name = st.session_state.get("name")
+    username = st.session_state.get("username")
 
 if authentication_status == False:
     st.error("Usuario o contraseña incorrectos")
-elif authentication_status == None:
+elif authentication_status is None:
     st.warning("Por favor ingrese sus credenciales para acceder al sistema")
 
 elif authentication_status:
+
     # -----------------------------------------------------------------------------
     # 3. CONTROL DE SESIÓN Y BARRA LATERAL[cite: 1]
     # -----------------------------------------------------------------------------
