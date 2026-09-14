@@ -65,10 +65,10 @@ elif authentication_status:
     except Exception:
         # Fallback local en caso de pruebas directas
         DB_USER = "postgres.gsszvzxswzkqsnajimij"
-	DB_PASS = "yiODH8CCAQKDXvhf"  # Tu contraseña activa
-	DB_HOST = "aws-0-us-east-2.pooler.supabase.com"
-	DB_PORT = "6543"
-	DB_NAME = "postgres"
+        DB_PASS = "yiODH8CCAQKDXvhf"  # Tu contraseña activa
+        DB_HOST = "aws-0-us-east-2.pooler.supabase.com"
+        DB_PORT = "6543"
+        DB_NAME = "postgres"
 
     pass_encoded = urllib.parse.quote_plus(DB_PASS)
     engine = create_engine(f"postgresql://{DB_USER}:{pass_encoded}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
