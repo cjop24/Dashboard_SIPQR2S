@@ -44,8 +44,27 @@ st.markdown("""
 
     h1 { font-size: 1.6rem !important; font-weight: 800; color: #0f172a; }
     h3 { font-size: 1.1rem !important; font-weight: 700; color: #1e293b; margin-top: 1rem; }
+    
+    /* Previene la captura de gestos del scroll */
+    .js-plotly-plot .plotly .draglayer {
+        pointer-events: none;
+    }
     </style>
 """, unsafe_allow_html=True)
+
+# Función auxiliar para fijar ejes y desactivar zoom táctil molesto en iPhone
+def deshabilitar_zoom_tactil(fig):
+    fig.update_xaxes(fixedrange=True)
+    fig.update_yaxes(fixedrange=True)
+    return fig
+
+# Configuración estándar para Plotly en iPhone
+CONFIG_PLOTLY_MOBILE = {
+    'displayModeBar': False,
+    'scrollZoom': False,
+    'doubleClick': False,
+    'showAxisDragHandles': False
+}
 
 # -----------------------------------------------------------------------------
 # 2. AUTENTICACIÓN
@@ -79,7 +98,7 @@ elif authentication_status:
         DB_NAME = st.secrets["postgres"]["dbname"]
     except Exception:
         DB_USER = "postgres.gsszvzxswzkqsnajimij"
-        DB_PASS = ""
+        DB_PASS = "yiODH8CCAQKDXvhf"
         DB_HOST = "aws-0-us-east-2.pooler.supabase.com"
         DB_PORT = "6543"
         DB_NAME = "postgres"
@@ -127,7 +146,7 @@ elif authentication_status:
     lista_tipos = sorted([x for x in df_raw['Tipo de Solicitud'].dropna().unique() if x != ''])
     sel_tipos = st.sidebar.multiselect("Tipo de Solicitud", options=lista_tipos)
 
-    # Aplicar filtros base (Especialidad, RASES, Unidad, Tipo)
+    # Aplicar filtros base
     df_base = df_raw.copy()
     if sel_cat: df_base = df_base[df_base['ESPECIALIDAD_CATEGORIA'].isin(sel_cat)]
     if sel_rases: df_base = df_base[df_base['RASES'].isin(sel_rases)]
@@ -140,7 +159,12 @@ elif authentication_status:
     st.title("🛡️ SIPQRS Sanidad")
     st.caption("Consola Ejecutiva de Atención al Usuario")
 
-    tab_resumen, tab_comparativo, tab_detalle = st.tabs(["📊 Resumen", "🔄 Comparador de Periodos", "📋 Detalle"])
+    tab_resumen, tab_analisis, tab_comparativo, tab_detalle = st.tabs([
+        "📊 Resumen", 
+        "🧩 Análisis Avanzado", 
+        "🔄 Comparativo", 
+        "📋 Detalle"
+    ])
 
     # -----------------------------------------------------------------------------
     # PESTAÑA 1: RESUMEN GENERAL
@@ -164,15 +188,77 @@ elif authentication_status:
 
         st.markdown("---")
 
+        # Gráfico 1: Top Especialidades (Sin Zoom Táctil)
         st.subheader("🩺 Top 7 Especialidades")
         df_esp = df_resumen['ESPECIALIDAD_CATEGORIA'].value_counts().head(7).reset_index()
         df_esp.columns = ['Especialidad', 'Cantidad']
         fig_esp = px.bar(df_esp, y='Especialidad', x='Cantidad', orientation='h', text_auto=True, color_discrete_sequence=['#2e7d32'])
         fig_esp.update_layout(yaxis=dict(autorange="reversed"), height=320, margin=dict(l=5, r=5, t=10, b=10))
-        st.plotly_chart(fig_esp, use_container_width=True, config={'displayModeBar': False})
+        fig_esp = deshabilitar_zoom_tactil(fig_esp)
+        st.plotly_chart(fig_esp, use_container_width=True, config=CONFIG_PLOTLY_MOBILE)
+
+        # Gráfico 2: Embudo por Medio de Recepción
+        st.subheader("🔻 Embudo por Medio de Recepción")
+        df_med = df_resumen['Medio de Recepción'].value_counts().reset_index()
+        df_med.columns = ['Medio', 'Cantidad']
+        fig_funnel = px.funnel(df_med, x='Cantidad', y='Medio', color_discrete_sequence=px.colors.sequential.Greens_r)
+        fig_funnel.update_layout(height=300, margin=dict(l=5, r=5, t=10, b=10))
+        fig_funnel = deshabilitar_zoom_tactil(fig_funnel)
+        st.plotly_chart(fig_funnel, use_container_width=True, config=CONFIG_PLOTLY_MOBILE)
 
     # -----------------------------------------------------------------------------
-    # PESTAÑA 2: COMPARADOR ENTRE DOS PERIODOS (NUEVA FUNCIONALIDAD)
+    # PESTAÑA 2: ANÁLISIS AVANZADO (RECTÁNGULOS, RADIAL, TREEMAP)
+    # -----------------------------------------------------------------------------
+    with tab_analisis:
+        # Gráfico Treemap (Rectángulos Jerárquicos): RASES -> UNIDAD -> ESPECIALIDAD
+        st.subheader("🔲 Distribución Jerárquica (Treemap Rectángulos)")
+        st.caption("Proporción de reclamos por RASES y Unidades de Asignación")
+        
+        df_tree = df_base.dropna(subset=['RASES', 'UNIDAD DE ASIGNACIÓN', 'ESPECIALIDAD_CATEGORIA'])
+        if not df_tree.empty:
+            fig_tree = px.treemap(
+                df_tree, 
+                path=['RASES', 'UNIDAD DE ASIGNACIÓN'], 
+                color_discrete_sequence=px.colors.qualitative.Prism
+            )
+            fig_tree.update_layout(height=400, margin=dict(l=5, r=5, t=10, b=10))
+            st.plotly_chart(fig_tree, use_container_width=True, config=CONFIG_PLOTLY_MOBILE)
+
+        st.markdown("---")
+
+        # Gráfico Radial / Radar por RASES
+        st.subheader("🕸️ Distribución Radial por RASES")
+        df_radar = df_base['RASES'].value_counts().reset_index()
+        df_radar.columns = ['RASES', 'Cantidad']
+        
+        if not df_radar.empty:
+            fig_radar = go.Figure(data=go.Scatterpolar(
+                r=df_radar['Cantidad'],
+                theta=df_radar['RASES'],
+                fill='toself',
+                fillcolor='rgba(46, 125, 50, 0.4)',
+                line=dict(color='#1b5e20', width=2)
+            ))
+            fig_radar.update_layout(
+                polar=dict(radialaxis=dict(visible=True, showticklabels=False)),
+                showlegend=False,
+                height=350,
+                margin=dict(l=30, r=30, t=20, b=20)
+            )
+            st.plotly_chart(fig_radar, use_container_width=True, config=CONFIG_PLOTLY_MOBILE)
+
+        st.markdown("---")
+
+        # Gráfico de Anillo / Donut por Tipo de Solicitud
+        st.subheader("🍩 Distribución por Tipo de Solicitud")
+        df_pie = df_base['Tipo de Solicitud'].value_counts().reset_index()
+        df_pie.columns = ['Tipo', 'Cantidad']
+        fig_pie = px.pie(df_pie, values='Cantidad', names='Tipo', hole=0.4, color_discrete_sequence=px.colors.sequential.Greens_r)
+        fig_pie.update_layout(height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.1))
+        st.plotly_chart(fig_pie, use_container_width=True, config=CONFIG_PLOTLY_MOBILE)
+
+    # -----------------------------------------------------------------------------
+    # PESTAÑA 3: COMPARADOR ENTRE DOS PERIODOS
     # -----------------------------------------------------------------------------
     with tab_comparativo:
         st.subheader("⚔️ Comparativo entre Periodos")
@@ -181,7 +267,6 @@ elif authentication_status:
         min_hist = df_raw['fecha_dt'].min().date()
         max_hist = df_raw['fecha_dt'].max().date()
 
-        # En iPhone, colocamos los selectores en 2 columnas compactas
         col_pA, col_pB = st.columns(2)
 
         with col_pA:
@@ -194,7 +279,6 @@ elif authentication_status:
             f_inicio_b = st.date_input("Inicio B", value=pd.to_datetime("2025-09-08").date(), min_value=min_hist, max_value=max_hist, key="pb_start")
             f_fin_b = st.date_input("Fin B", value=pd.to_datetime("2025-09-14").date(), min_value=min_hist, max_value=max_hist, key="pb_end")
 
-        # Filtrar DataFrames
         df_pa = df_base[(df_base['fecha_dt'].dt.date >= f_inicio_a) & (df_base['fecha_dt'].dt.date <= f_fin_a)]
         df_pb = df_base[(df_base['fecha_dt'].dt.date >= f_inicio_b) & (df_base['fecha_dt'].dt.date <= f_fin_b)]
 
@@ -205,7 +289,6 @@ elif authentication_status:
 
         st.markdown("---")
 
-        # Tarjetas comparativas con Deltas
         st.markdown("##### 📊 Resultado General del Comparativo")
         comp_col1, comp_col2 = st.columns(2)
 
@@ -218,16 +301,14 @@ elif authentication_status:
             label=f"Periodo B ({f_inicio_b.strftime('%d/%m')} - {f_fin_b.strftime('%d/%m')})",
             value=f"{cnt_pb:,} tickets",
             delta=f"{diff_abs:+} tickets ({diff_pct:+.1f}%)",
-            delta_color="inverse"  # En salud/reclamos, un aumento suele ser alerta (rojo) y reducción verde
+            delta_color="inverse"
         )
 
-        # Gráfico comparativo de barras agrupadas por Especialidades Top 5
         st.markdown("##### 🩺 Comparativa por Top 5 Especialidades")
         
         top_esp_a = df_pa['ESPECIALIDAD_CATEGORIA'].value_counts().head(5)
         top_esp_b = df_pb['ESPECIALIDAD_CATEGORIA'].value_counts().head(5)
         
-        # Combinar índices para el gráfico
         esp_combinadas = list(set(top_esp_a.index).union(set(top_esp_b.index)))
         
         df_graf_comp = pd.DataFrame({
@@ -247,10 +328,11 @@ elif authentication_status:
             margin=dict(l=5, r=5, t=10, b=10),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
-        st.plotly_chart(fig_comp_esp, use_container_width=True, config={'displayModeBar': False})
+        fig_comp_esp = deshabilitar_zoom_tactil(fig_comp_esp)
+        st.plotly_chart(fig_comp_esp, use_container_width=True, config=CONFIG_PLOTLY_MOBILE)
 
     # -----------------------------------------------------------------------------
-    # PESTAÑA 3: DETALLE
+    # PESTAÑA 4: DETALLE
     # -----------------------------------------------------------------------------
     with tab_detalle:
         st.subheader("📋 Resumen por Unidad de Asignación")
