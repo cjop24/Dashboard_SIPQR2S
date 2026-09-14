@@ -26,7 +26,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 2. AUTENTICACIÓN DE USUARIOS (streamlit-authenticator v0.2.3)
+# 2. AUTENTICACIÓN DE USUARIOS
 # -----------------------------------------------------------------------------
 with open('config.yaml') as file:
     config = yaml.load(file, Loader=SafeLoader)
@@ -38,12 +38,17 @@ authenticator = stauth.Authenticate(
     config['cookie']['expiry_days']
 )
 
-# Se debe pasar 'main' como argumento de posición en la v0.2.3
-name, authentication_status, username = authenticator.login('main')
+# Renderizado de la pantalla de inicio de sesión
+authenticator.login('main')
+
+# Lectura directa del estado en sesión
+authentication_status = st.session_state.get("authentication_status")
+name = st.session_state.get("name")
+username = st.session_state.get("username")
 
 if authentication_status == False:
     st.error("Usuario o contraseña incorrectos")
-elif authentication_status == None:
+elif authentication_status is None:
     st.warning("Por favor ingrese sus credenciales para acceder al sistema")
 
 elif authentication_status:
