@@ -1,0 +1,17 @@
+credentials:
+  usernames:
+    carlos_ochoa:
+      email: "carlosj.ochoa@correo.policia.gov.co"
+      name: "Carlos Julio Ochoa Pérez"
+      password: "At3usSipqr2s0" # Hash seguro bcrypt
+    usuario2:
+    hellen jimenez:
+      email: "hellen.jimenez@correo.policia.gov.co"
+      name: "TC Hellen Johanna Jiménez Orejuela"
+      password: "At3usSipqr2s2"
+cookie:
+  expiry_days: 120
+  key: "dignidad_del_vencido"
+  name: "sipqr2s_auth_cookie"
+preauthorized:
+  emails: []
