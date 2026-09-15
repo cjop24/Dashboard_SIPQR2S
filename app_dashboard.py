@@ -341,7 +341,7 @@ elif authentication_status:
         st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # -----------------------------------------------------------------------------
-        # SECCIÓN DINÁMICA DE UPRES APILADO (TOP 1 BASE -> TOP 2 -> TOP 3 -> OTROS EN PUNTA)
+        # SECCIÓN DINÁMICA DE UPRES APILADO (TOP 3 INDEPENDIENTE POR UPRES + TOTAL VISIBLE)
         # -----------------------------------------------------------------------------
         st.subheader("🏢 Distribución por UPRES (Top 10)")
         
@@ -351,30 +351,48 @@ elif authentication_status:
             horizontal=True
         )
 
+        # 1. Obtener las 10 UPRES principales
         top_10_upres = df_base['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index
         df_g2 = df_base[df_base['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
 
         col_target = 'ESPECIALIDAD_CATEGORIA' if dim_apilamiento == "Categoría Salud" else col_mot_esp
 
-        # 1. Obtener los 3 ítems con mayor frecuencia
-        top_3_items = df_g2[col_target].value_counts().head(3).index.tolist()
+        # 2. Contar frecuencias locales por UPRES
+        conteo_local = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_target]).size().reset_index(name='Cant_Local')
 
-        # 2. Asignar elementos fuera del Top 3 a "OTROS"
-        df_g2['Grupo_Consolidado'] = df_g2[col_target].apply(
-            lambda x: x if x in top_3_items else "OTROS"
+        # 3. Calcular el Top 3 local de cada UPRES de forma independiente
+        conteo_local['Rank_Local'] = conteo_local.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(
+            method='first', ascending=False
         )
 
-        # 3. Agrupar y abreviar etiquetas sin recortar
+        top_3_locales = conteo_local[conteo_local['Rank_Local'] <= 3].copy()
+        top_3_locales['Es_Top3_Local'] = True
+
+        # 4. Cruzar con el DataFrame para asignar "OTROS" solo si no es Top 3 local
+        df_g2 = pd.merge(
+            df_g2,
+            top_3_locales[['UNIDAD DE ASIGNACIÓN', col_target, 'Es_Top3_Local']],
+            on=['UNIDAD DE ASIGNACIÓN', col_target],
+            how='left'
+        )
+
+        df_g2['Grupo_Consolidado'] = df_g2.apply(
+            lambda r: r[col_target] if r['Es_Top3_Local'] == True else "OTROS",
+            axis=1
+        )
+
+        # 5. Agrupar y abreviar
         df_stack = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', 'Grupo_Consolidado']).size().reset_index(name='Cantidad')
         df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
         df_stack['Grupo_fmt'] = df_stack['Grupo_Consolidado'].apply(
             lambda x: "OTROS" if x == "OTROS" else acortar_texto_abreviado(x)
         )
 
-        # 4. ORDEN DE APILAMIENTO INVERSO: OTROS -> Top 3 -> Top 2 -> Top 1
-        # Esto ubica al Top 1 en la base de la barra (izquierda) y a OTROS en la punta (extremo derecho)
-        top_3_fmt = [acortar_texto_abreviado(x) for x in top_3_items]
-        orden_apilado_inverso = ["OTROS"] + top_3_fmt[::-1]
+        # 6. Calcular total por UPRES para dibujarlo al final de la barra
+        df_totales = df_stack.groupby('UPRES_fmt')['Cantidad'].sum().reset_index(name='Total')
+
+        categorias_unicas = [c for c in df_stack['Grupo_fmt'].unique() if c != "OTROS"]
+        orden_apilado = ["OTROS"] + categorias_unicas
 
         fig_stack = px.bar(
             df_stack, 
@@ -382,20 +400,28 @@ elif authentication_status:
             x='Cantidad', 
             color='Grupo_fmt', 
             orientation='h',
-            category_orders={'Grupo_fmt': orden_apilado_inverso},
-            color_discrete_map={
-                top_3_fmt[0]: '#1b5e20',  # Top 1 (Verde oscuro en la base)
-                top_3_fmt[1]: '#2e7d32',  # Top 2 (Verde medio)
-                top_3_fmt[2]: '#43a047',  # Top 3 (Verde claro)
-                'OTROS': '#a5d6a7'        # OTROS (Verde suave en la punta derecha)
-            }
+            category_orders={'Grupo_fmt': orden_apilado}
         )
+
+        # 7. Capa de texto con el TOTAL al extremo derecho de cada barra
+        fig_stack.add_trace(
+            go.Scatter(
+                y=df_totales['UPRES_fmt'],
+                x=df_totales['Total'],
+                mode='text',
+                text=df_totales['Total'].apply(lambda v: f" <b>{v:,}</b>"),
+                textposition='middle right',
+                showlegend=False,
+                hoverinfo='skip'
+            )
+        )
+
         fig_stack.update_layout(
             barmode='stack',
             yaxis=dict(autorange="reversed"), 
             xaxis_title="", yaxis_title="", 
-            height=440, 
-            margin=dict(l=5, r=5, t=10, b=10),
+            height=460, 
+            margin=dict(l=5, r=40, t=10, b=10),
             legend=dict(
                 orientation="h", 
                 y=-0.25, 
