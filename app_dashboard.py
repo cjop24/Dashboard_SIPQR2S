@@ -51,7 +51,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Función para deshabilitar zooms molestos en interacción móvil
+# Función para fijar los ejes y deshabilitar gestos táctiles de zoom molesto en móviles
 def aplicar_touch_safe(fig):
     fig.update_xaxes(fixedrange=True)
     fig.update_yaxes(fixedrange=True)
@@ -106,7 +106,7 @@ CONFIG_PLOTLY_TOUCH = {
     'showAxisDragHandles': False
 }
 
-# Carga de GeoJSON con doble mecanismo de tolerancia a fallos por red
+# Carga de GeoJSON con fallback de URLs públicas estables
 @st.cache_data(ttl=86400)
 def cargar_geojson_colombia():
     urls = [
@@ -282,7 +282,7 @@ elif authentication_status:
         st.markdown("---")
 
         # -----------------------------------------------------------------------------
-        # MAPA COROPLÉTICO DE COLOMBIA CON FALLBACK SEGURO
+        # MAPA COROPLÉTICO EN DEGRADÉ VERDE DE COLOMBIA
         # -----------------------------------------------------------------------------
         st.subheader("🗺️ Intensidad de Reclamos por Departamento")
         
@@ -292,34 +292,23 @@ elif authentication_status:
         )
         df_mapa_dept = df_geo.groupby('NOMBRE_DPT')['Reclamos'].sum().reset_index()
 
-        if GEOJSON_COLOMBIA:
-            fig_mapa = px.choropleth(
-                df_mapa_dept,
-                geojson=GEOJSON_COLOMBIA,
-                locations='NOMBRE_DPT',
-                featureidkey="properties.NOMBRE_DPT",
-                color='Reclamos',
-                color_continuous_scale="Greens",
-                hover_name='NOMBRE_DPT',
-                hover_data={'Reclamos': ':,', 'NOMBRE_DPT': False}
-            )
-            fig_mapa.update_geos(fitbounds="locations", visible=False)
-            fig_mapa.update_traces(
-                hovertemplate="<b>%{hovertext}</b><br>Total Reclamos: <b>%{z:,}</b><extra></extra>"
-            )
-        else:
-            fig_mapa = px.bar(
-                df_mapa_dept.sort_values('Reclamos', ascending=False),
-                x='NOMBRE_DPT',
-                y='Reclamos',
-                text_auto=True,
-                color='Reclamos',
-                color_continuous_scale="Greens"
-            )
-            fig_mapa.update_layout(xaxis_title="", yaxis_title="")
+        fig_mapa = px.choropleth(
+            df_mapa_dept,
+            geojson=GEOJSON_COLOMBIA,
+            locations='NOMBRE_DPT',
+            featureidkey="properties.NOMBRE_DPT",
+            color='Reclamos',
+            color_continuous_scale="Greens",
+            hover_name='NOMBRE_DPT',
+            hover_data={'Reclamos': ':,', 'NOMBRE_DPT': False}
+        )
+        fig_mapa.update_geos(fitbounds="locations", visible=False)
+        fig_mapa.update_traces(
+            hovertemplate="<b>%{hovertext}</b><br>Total Reclamos: <b>%{z:,}</b><extra></extra>"
+        )
 
         fig_mapa.update_layout(
-            height=430,
+            height=440,
             margin=dict(l=0, r=0, t=10, b=0),
             coloraxis_colorbar=dict(title="", thickness=12, len=0.7)
         )
@@ -372,7 +361,7 @@ elif authentication_status:
         st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # -----------------------------------------------------------------------------
-        # SECCIÓN DINÁMICA DE UPRES APILADO
+        # SECCIÓN DINÁMICA DE UPRES APILADO (TOP 3 CONTRASTE CAFÉ/NEGRO/AMARILLO + OTROS VERDE)
         # -----------------------------------------------------------------------------
         st.subheader("🏢 Distribución por UPRES (Top 10)")
         
