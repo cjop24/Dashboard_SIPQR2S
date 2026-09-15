@@ -10,6 +10,7 @@ import yaml
 from yaml.loader import SafeLoader
 import re
 import json
+import os
 import requests
 
 # -----------------------------------------------------------------------------
@@ -22,7 +23,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS estilo iOS Card para mobile
 st.markdown("""
     <style>
     .main { padding: 0.5rem; }
@@ -105,10 +105,18 @@ CONFIG_PLOTLY_TOUCH = {
 }
 
 # -----------------------------------------------------------------------------
-# CARGA DE GEOJSON DE COLOMBIA CON PROXIES Y FALLBACKS
+# CARGA DE GEOJSON DE COLOMBIA (Prioridad Local -> Fallback Red)
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=86400)
 def cargar_geojson_colombia():
+    ruta_local = "colombia.geo.json"
+    if os.path.exists(ruta_local):
+        try:
+            with open(ruta_local, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+
     urls = [
         "https://cdn.jsdelivr.net/gh/MartaEliz/Colombia-GeoJSON@master/colombia.geo.json",
         "https://raw.githubusercontent.com/MartaEliz/Colombia-GeoJSON/master/colombia.geo.json",
@@ -275,7 +283,7 @@ elif authentication_status:
         st.markdown("---")
 
         # -----------------------------------------------------------------------------
-        # MAPA DE DEPARTAMENTOS DE COLOMBIA (COROPLÉTICO CON SILUETAS Y DEGRADÉ)
+        # MAPA DE DEPARTAMENTOS DE COLOMBIA (COROPLÉTICO GARANTIZADO)
         # -----------------------------------------------------------------------------
         st.subheader("🗺️ Intensidad de Reclamos por Departamento")
         
@@ -300,7 +308,6 @@ elif authentication_status:
                 hovertemplate="<b>%{hovertext}</b><br>Total Reclamos: <b>%{z:,}</b><extra></extra>"
             )
         else:
-            # Respaldo si no hay conexión a internet para descargar el GeoJSON
             fig_mapa = px.bar(
                 df_mapa_dept.sort_values('Reclamos', ascending=False),
                 x='NOMBRE_DPT', y='Reclamos', color='Reclamos',
