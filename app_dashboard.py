@@ -264,34 +264,54 @@ elif authentication_status:
         st.markdown("---")
 
         # -----------------------------------------------------------------------------
-        # MAPA COROPLÉTICO DE COLOMBIA (INTENSIDAD DE COLOR POR RECLAMOS Y HOVER)
+        # MAPA COROPLÉTICO DE COLOMBIA (COMPATIBILIDAD CON MULTIPLES VERSIONES DE PLOTLY)
         # -----------------------------------------------------------------------------
         st.subheader("🗺️ Intensidad de Reclamos por Departamento")
         
         df_geo = df_base.groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Reclamos')
-        
-        # Mapear los nombres de UPRES a los nombres de departamento estandarizados para el GeoJSON
         df_geo['Departamento'] = df_geo['UNIDAD DE ASIGNACIÓN'].apply(
             lambda u: next((v for k, v in MAPA_DEPTS_GEO.items() if k in str(u).upper()), 'Otros')
         )
-        
-        # Consolidador por Departamento estandarizado
         df_mapa_dept = df_geo.groupby('Departamento')['Reclamos'].sum().reset_index()
 
-        fig_mapa = px.choropleth_mapbox(
-            df_mapa_dept,
-            geojson=GEOJSON_COLOMBIA_DEPTS,
-            locations='Departamento',
-            featureidkey="properties.name",
-            color='Reclamos',
-            color_continuous_scale="Greens", # Gradiente verde: más oscuro = más reclamos
-            range_color=(0, df_mapa_dept['Reclamos'].max() if not df_mapa_dept.empty else 100),
-            mapbox_style="carto-positron",
-            zoom=4.2,
-            center={"lat": 4.5709, "lon": -74.2973},
-            opacity=0.75,
-            labels={'Reclamos': 'Total Reclamos'}
-        )
+        # Intentar renderizar con la API moderna de Plotly (choropleth_map / choropleth)
+        try:
+            if hasattr(px, 'choropleth_map'):
+                fig_mapa = px.choropleth_map(
+                    df_mapa_dept,
+                    geojson=GEOJSON_COLOMBIA_DEPTS,
+                    locations='Departamento',
+                    featureidkey="properties.name",
+                    color='Reclamos',
+                    color_continuous_scale="Greens",
+                    range_color=(0, df_mapa_dept['Reclamos'].max() if not df_mapa_dept.empty else 100),
+                    map_style="carto-positron",
+                    zoom=4.2,
+                    center={"lat": 4.5709, "lon": -74.2973},
+                    opacity=0.75
+                )
+            else:
+                fig_mapa = px.choropleth(
+                    df_mapa_dept,
+                    geojson=GEOJSON_COLOMBIA_DEPTS,
+                    locations='Departamento',
+                    featureidkey="properties.name",
+                    color='Reclamos',
+                    color_continuous_scale="Greens",
+                    range_color=(0, df_mapa_dept['Reclamos'].max() if not df_mapa_dept.empty else 100)
+                )
+                fig_mapa.update_geos(fitbounds="locations", visible=False)
+        except Exception:
+            # Fallback seguro a mapa Coroplético básico
+            fig_mapa = px.choropleth(
+                df_mapa_dept,
+                geojson=GEOJSON_COLOMBIA_DEPTS,
+                locations='Departamento',
+                featureidkey="properties.name",
+                color='Reclamos',
+                color_continuous_scale="Greens"
+            )
+            fig_mapa.update_geos(fitbounds="locations", visible=False)
         
         fig_mapa.update_traces(
             hovertemplate="<b>%{location}</b><br>Reclamos: %{z:,}<extra></extra>"
