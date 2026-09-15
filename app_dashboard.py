@@ -106,7 +106,7 @@ CONFIG_PLOTLY_TOUCH = {
     'showAxisDragHandles': False
 }
 
-# Carga de GeoJSON con doble mecanismo de tolerancia a fallos
+# Carga de GeoJSON con doble mecanismo de tolerancia a fallos por red
 @st.cache_data(ttl=86400)
 def cargar_geojson_colombia():
     urls = [
