@@ -55,18 +55,18 @@ def aplicar_touch_safe(fig):
     fig.update_yaxes(fixedrange=True)
     return fig
 
-# Función auxiliar para acortar textos eliminando preposiciones y aplicando abreviaturas
-def acortar_texto_abreviado(texto, max_len=25):
+# Función para acortar textos mediante abreviaturas y eliminación estricta de artículos/preposiciones
+def acortar_texto_abreviado(texto):
     if pd.isna(texto) or not texto:
         return "N/A"
     s = str(texto).upper().strip()
     
-    # 1. Eliminar preposiciones y conectores comunes
-    preposiciones = r'\b(DE|DEL|LA|EL|LOS|LAS|EN|POR|CON|SIN|PARA|SOBRE|ANTE|A|Y|O|U|AL)\b'
-    s = re.sub(preposiciones, ' ', s)
+    # 1. Eliminar artículos, preposiciones y conectores
+    preposiciones_y_articulos = r'\b(DE|DEL|LA|EL|LOS|LAS|EN|POR|CON|SIN|PARA|SOBRE|ANTE|A|Y|O|U|AL|UN|UNO|UNAS|UNOS|SU|SUS)\b'
+    s = re.sub(preposiciones_y_articulos, ' ', s)
     s = re.sub(r'\s+', ' ', s).strip()
     
-    # 2. Diccionario de abreviaturas corporativas y médicas
+    # 2. Reemplazo por abreviaturas corporativas y médicas
     abrev = {
         'INSATISFACCION': 'INSATISF.',
         'INSATISFACCIÓN': 'INSATISF.',
@@ -84,16 +84,22 @@ def acortar_texto_abreviado(texto, max_len=25):
         'ESPECIALIDADES': 'ESPEC.',
         'PROCEDIMIENTOS': 'PROCED.',
         'INFRAESTRUCTURA': 'INFRAESTR.',
-        'OPORTUNIDAD': 'OPORT.'
+        'OPORTUNIDAD': 'OPORT.',
+        'SERVICIO': 'SERV.',
+        'SERVICIOS': 'SERV.',
+        'SOLICITUD': 'SOLICIT.',
+        'SOLICITUDES': 'SOLICIT.',
+        'PRESTACION': 'PREST.',
+        'PRESTACIÓN': 'PREST.',
+        'USUARIO': 'USUAR.',
+        'USUARIOS': 'USUAR.'
     }
     
     words = s.split()
     words_clean = [abrev.get(w, w) for w in words]
-    res = " ".join(words_clean)
     
-    if len(res) > max_len:
-        return res[:max_len-3] + "..."
-    return res
+    # Retorna la cadena completa abreviada sin truncamientos ni "..."
+    return " ".join(words_clean)
 
 CONFIG_PLOTLY_TOUCH = {
     'displayModeBar': False,
@@ -102,7 +108,7 @@ CONFIG_PLOTLY_TOUCH = {
     'showAxisDragHandles': False
 }
 
-# Coordenadas geográficas aproximadas para UPRES en Colombia (Distribución por departamentos)
+# Coordenadas geográficas para UPRES en Colombia
 GEO_DEPARTAMENTOS_COL = {
     'BOGOTA': [4.6097, -74.0817], 'BOGOTÁ': [4.6097, -74.0817], 'ANTIOQUIA': [6.2442, -75.5812],
     'VALLE': [3.4516, -76.5320], 'VALLE DEL CAUCA': [3.4516, -76.5320], 'ATLANTICO': [10.9685, -74.7813],
@@ -185,7 +191,6 @@ elif authentication_status:
     max_f = df_raw['fecha_dt'].max().date() if not df_raw.empty else None
     rango_fechas = st.sidebar.date_input("1. Rango de Fecha de Creación", value=(min_f, max_f), min_value=min_f, max_value=max_f) if min_f else []
 
-    # Filtrar dataset intermedio por fecha para condicionar Categoría Salud y Motivo Específico
     df_temp_fecha = df_raw.copy()
     if len(rango_fechas) == 2:
         df_temp_fecha = df_temp_fecha[(df_temp_fecha['fecha_dt'].dt.date >= rango_fechas[0]) & (df_temp_fecha['fecha_dt'].dt.date <= rango_fechas[1])]
@@ -198,12 +203,12 @@ elif authentication_status:
     lista_rases = sorted([x for x in df_raw['RASES'].dropna().unique() if str(x).strip() != ''])
     sel_rases = st.sidebar.multiselect("3. RASES", options=lista_rases)
 
-    # 4. Categoría Salud (Organizada de mayor a menor frecuencia sin números en la opción)
+    # 4. Categoría Salud (Organizada de mayor a menor frecuencia)
     cat_ordenadas = df_temp_fecha['ESPECIALIDAD_CATEGORIA'].value_counts().index.tolist()
     cat_ordenadas = [c for c in cat_ordenadas if str(c).strip() != '']
     sel_cat = st.sidebar.multiselect("4. Categoría Salud", options=cat_ordenadas, placeholder="Seleccione categoría...")
 
-    # 5. Motivo Específico (Organizado de mayor a menor frecuencia igual que Categoría Salud)
+    # 5. Motivo Específico (Organizado de mayor a menor frecuencia)
     col_mot_esp = 'MOTIVO ESPECÍFICO' if 'MOTIVO ESPECÍFICO' in df_raw.columns else 'MOTIVO GENERAL'
     motivos_ordenados = df_temp_fecha[col_mot_esp].value_counts().index.tolist()
     motivos_ordenados = [m for m in motivos_ordenados if str(m).strip() != '']
@@ -232,7 +237,7 @@ elif authentication_status:
     with tab_ind:
         st.caption("Consola Ejecutiva de Atención al Usuario")
 
-        # Cálculo de métricas para Tarjetas KPI
+        # Tarjetas KPI
         top_upres_s = df_base['UNIDAD DE ASIGNACIÓN'].value_counts()
         top_upres_nom = top_upres_s.index[0] if not top_upres_s.empty else "N/A"
         top_upres_val = top_upres_s.iloc[0] if not top_upres_s.empty else 0
@@ -245,22 +250,20 @@ elif authentication_status:
         top_dia_nom = top_dia_s.index[0] if not top_dia_s.empty else "N/A"
         top_dia_val = top_dia_s.iloc[0] if not top_dia_s.empty else 0
 
-        # Tarjetas 1 y 2
         k1, k2 = st.columns(2)
         k1.metric("Total SIPQR2S País", f"{len(df_base):,}")
         k1_cat = df_base['ESPECIALIDAD_CATEGORIA'].value_counts()
         cat_top_name = k1_cat.index[0] if not k1_cat.empty else "N/A"
-        k2.metric("Categoría con más SIPQR2S", acortar_texto_abreviado(cat_top_name, 22), delta=f"{k1_cat.iloc[0] if not k1_cat.empty else 0:,} tickets", delta_color="off")
+        k2.metric("Categoría con más SIPQR2S", acortar_texto_abreviado(cat_top_name), delta=f"{k1_cat.iloc[0] if not k1_cat.empty else 0:,} tickets", delta_color="off")
 
-        # Tarjetas 3, 4 y 5
         k3, k4, k5 = st.columns(3)
-        k3.metric("UPRES con más SIPQR2S", acortar_texto_abreviado(top_upres_nom, 18), delta=f"{top_upres_val:,} tickets", delta_color="off")
-        k4.metric("RASES con más SIPQR2S", acortar_texto_abreviado(top_rases_nom, 18), delta=f"{top_rases_val:,} tickets", delta_color="off")
+        k3.metric("UPRES con más SIPQR2S", acortar_texto_abreviado(top_upres_nom), delta=f"{top_upres_val:,} tickets", delta_color="off")
+        k4.metric("RASES con más SIPQR2S", acortar_texto_abreviado(top_rases_nom), delta=f"{top_rases_val:,} tickets", delta_color="off")
         k5.metric("Día con más SIPQR2S", f"{top_dia_nom}", delta=f"{top_dia_val:,} tickets", delta_color="off")
 
         st.markdown("---")
 
-        # Gráfico 1: Mapa Geográfico Político de Colombia por UPRES (Carto-Positron sin relieve)
+        # Gráfico 1: Mapa Geográfico de Colombia por UPRES
         st.subheader("🗺️ Distribución Geográfica SIPQR2S por UPRES")
         df_geo = df_base.groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Cantidad')
         
@@ -274,7 +277,7 @@ elif authentication_status:
                     matched = True
                     break
             if not matched:
-                lats.append(4.6097)  # Bogotá por defecto
+                lats.append(4.6097)
                 lons.append(-74.0817)
 
         df_geo['lat'] = lats
@@ -291,19 +294,17 @@ elif authentication_status:
             color_continuous_scale=px.colors.sequential.Greens,
             zoom=4.5,
             center={"lat": 4.5709, "lon": -74.2973},
-            map_style="carto-positron"  # Capa de distribución política clara y limpia sin relieve
+            map_style="carto-positron"
         )
         fig_mapa.update_layout(height=380, margin=dict(l=0, r=0, t=10, b=0))
         st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # Gráfico 2: SIPQR2S por Día con Puntos y Línea de Tendencia
+        # Gráfico 2: SIPQR2S por Día con Tendencia
         st.subheader("📈 Comportamiento Diario de SIPQR2S")
         df_dia = df_base.groupby(['fecha_dt', 'fecha_corta']).size().reset_index(name='Cantidad').sort_values('fecha_dt')
         
         if not df_dia.empty:
             fig_dia = go.Figure()
-            
-            # Puntos y línea principal de observaciones
             fig_dia.add_trace(go.Scatter(
                 x=df_dia['fecha_corta'],
                 y=df_dia['Cantidad'],
@@ -313,7 +314,6 @@ elif authentication_status:
                 marker=dict(size=6, color='#1b5e20')
             ))
             
-            # Cálculo de línea de tendencia (regresión lineal simple)
             if len(df_dia) > 1:
                 x_vals = np.arange(len(df_dia))
                 y_vals = df_dia['Cantidad'].values
@@ -329,9 +329,7 @@ elif authentication_status:
                 ))
             
             fig_dia.update_layout(
-                xaxis_title="",
-                yaxis_title="",
-                height=300,
+                xaxis_title="", yaxis_title="", height=300,
                 margin=dict(l=5, r=5, t=10, b=10),
                 legend=dict(orientation="h", y=1.1, x=0.8)
             )
@@ -341,32 +339,65 @@ elif authentication_status:
         st.subheader("📍 SIPQR2S por RASES")
         df_g1 = df_base['RASES'].value_counts().reset_index()
         df_g1.columns = ['RASES', 'Cantidad']
-        df_g1['RASES_fmt'] = df_g1['RASES'].apply(lambda x: acortar_texto_abreviado(x, max_len=20))
+        df_g1['RASES_fmt'] = df_g1['RASES'].apply(acortar_texto_abreviado)
         fig1 = px.bar(df_g1, x='RASES_fmt', y='Cantidad', text_auto=True, color_discrete_sequence=['#2e7d32'])
         fig1.update_layout(xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10))
         st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # Gráfico 4: SIPQR2S por UPRES (Top 10)
-        st.subheader("🏢 SIPQR2S por UPRES (Top 10)")
-        df_g2 = df_base['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).reset_index()
-        df_g2.columns = ['UPRES', 'Cantidad']
-        df_g2['UPRES_fmt'] = df_g2['UPRES'].apply(lambda x: acortar_texto_abreviado(x, max_len=22))
-        fig2 = px.bar(df_g2, y='UPRES_fmt', x='Cantidad', orientation='h', text_auto=True, color_discrete_sequence=['#388e3c'])
-        fig2.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=350, margin=dict(l=5, r=5, t=10, b=10))
+        # Gráfico 4: SIPQR2S por UPRES apilado por Categoría Salud (Top 10 UPRES)
+        st.subheader("🏢 SIPQR2S por UPRES apilado por Categoría Salud (Top 10)")
+        top_10_upres = df_base['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index
+        df_g2 = df_base[df_base['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)]
+        
+        df_stack_cat = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', 'ESPECIALIDAD_CATEGORIA']).size().reset_index(name='Cantidad')
+        df_stack_cat['UPRES_fmt'] = df_stack_cat['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+        df_stack_cat['Cat_fmt'] = df_stack_cat['ESPECIALIDAD_CATEGORIA'].apply(acortar_texto_abreviado)
+
+        fig2 = px.bar(
+            df_stack_cat, 
+            y='UPRES_fmt', 
+            x='Cantidad', 
+            color='Cat_fmt', 
+            orientation='h',
+            color_discrete_sequence=px.colors.qualitative.Prism
+        )
+        fig2.update_layout(
+            barmode='stack',
+            yaxis=dict(autorange="reversed"), 
+            xaxis_title="", yaxis_title="", 
+            height=420, 
+            margin=dict(l=5, r=5, t=10, b=10),
+            legend=dict(orientation="h", y=-0.2, title=None)
+        )
         st.plotly_chart(aplicar_touch_safe(fig2), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # Gráfico 5: SIPQR2S por Categoría Salud (Top 10)
-        st.subheader("🩺 SIPQR2S por Categoría Salud (Top 10)")
-        df_g3 = df_base['ESPECIALIDAD_CATEGORIA'].value_counts().head(10).reset_index()
-        df_g3.columns = ['Categoría', 'Cantidad']
-        df_g3['Cat_fmt'] = df_g3['Categoría'].apply(lambda x: acortar_texto_abreviado(x, max_len=22))
-        fig3 = px.bar(df_g3, y='Cat_fmt', x='Cantidad', orientation='h', text_auto=True, color_discrete_sequence=['#43a047'])
-        fig3.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=350, margin=dict(l=5, r=5, t=10, b=10))
+        # Gráfico 5: SIPQR2S por UPRES apilado por Motivo Específico (Top 10 UPRES)
+        st.subheader("📋 SIPQR2S por UPRES apilado por Motivo Específico (Top 10)")
+        df_stack_mot = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_mot_esp]).size().reset_index(name='Cantidad')
+        df_stack_mot['UPRES_fmt'] = df_stack_mot['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+        df_stack_mot['Motivo_fmt'] = df_stack_mot[col_mot_esp].apply(acortar_texto_abreviado)
+
+        fig3 = px.bar(
+            df_stack_mot, 
+            y='UPRES_fmt', 
+            x='Cantidad', 
+            color='Motivo_fmt', 
+            orientation='h',
+            color_discrete_sequence=px.colors.qualitative.Safe
+        )
+        fig3.update_layout(
+            barmode='stack',
+            yaxis=dict(autorange="reversed"), 
+            xaxis_title="", yaxis_title="", 
+            height=420, 
+            margin=dict(l=5, r=5, t=10, b=10),
+            legend=dict(orientation="h", y=-0.2, title=None)
+        )
         st.plotly_chart(aplicar_touch_safe(fig3), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         st.markdown("---")
 
-        # Gráficos de Torta de Porcentajes (Tipo de Solicitud y Medio de Recepción)
+        # Gráficos de Torta de Porcentajes
         col_t1, col_t2 = st.columns(2)
 
         with col_t1:
