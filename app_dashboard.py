@@ -106,39 +106,19 @@ CONFIG_PLOTLY_TOUCH = {
     'showAxisDragHandles': False
 }
 
-# Carga de GeoJSON con fallback de URLs públicas estables
-@st.cache_data(ttl=86400)
-def cargar_geojson_colombia():
-    urls = [
-        "https://raw.githubusercontent.com/MartaEliz/Colombia-GeoJSON/master/colombia.geo.json",
-        "https://raw.githubusercontent.com/john-guerra/colombia_geojson/master/colombia.geo.json"
-    ]
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    for u in urls:
-        try:
-            r = requests.get(u, headers=headers, timeout=5)
-            if r.status_code == 200:
-                return r.json()
-        except Exception:
-            continue
-    return None
-
-GEOJSON_COLOMBIA = cargar_geojson_colombia()
-
-# Mapeo estandarizado de UPRES hacia el GeoJSON de Departamentos
-MAPA_DEPTS_GEO = {
-    'BOGOTA': 'BOGOTA', 'BOGOTÁ': 'BOGOTA', 'CUNDINAMARCA': 'CUNDINAMARCA',
-    'ANTIOQUIA': 'ANTIOQUIA', 'VALLE': 'VALLE DEL CAUCA', 'VALLE DEL CAUCA': 'VALLE DEL CAUCA',
-    'ATLANTICO': 'ATLANTICO', 'ATLÁNTICO': 'ATLANTICO', 'SANTANDER': 'SANTANDER',
-    'BOLIVAR': 'BOLIVAR', 'BOLÍVAR': 'BOLIVAR', 'BOYACA': 'BOYACA', 'BOYACÁ': 'BOYACA',
-    'CALDAS': 'CALDAS', 'CAUCA': 'CAUCA', 'CESAR': 'CESAR', 'CORDOBA': 'CORDOBA', 'CÓRDOBA': 'CORDOBA',
-    'HUILA': 'HUILA', 'MAGDALENA': 'MAGDALENA', 'META': 'META', 'NARIÑO': 'NARIÑO',
-    'NORTE DE SANTANDER': 'NORTE DE SANTANDER', 'QUINDIO': 'QUINDIO', 'QUINDÍO': 'QUINDIO',
-    'RISARALDA': 'RISARALDA', 'TOLIMA': 'TOLIMA', 'AMAZONAS': 'AMAZONAS', 'ARAUCA': 'ARAUCA',
-    'CASANARE': 'CASANARE', 'CHOCO': 'CHOCO', 'CHOCÓ': 'CHOCO', 'GUAINIA': 'GUAINIA', 'GUAINÍA': 'GUAINIA',
-    'GUAVIARE': 'GUAVIARE', 'LA GUAJIRA': 'LA GUAJIRA', 'PUTUMAYO': 'PUTUMAYO',
-    'SAN ANDRES': 'SAN ANDRES', 'SAN ANDRÉS': 'SAN ANDRES',
-    'SUCRE': 'SUCRE', 'VAUPES': 'VAUPES', 'VAUPÉS': 'VAUPES', 'VICHADA': 'VICHADA'
+# Coordenadas geográficas estandarizadas por departamento para visualización en mapa
+GEO_DEPARTAMENTOS_COL = {
+    'BOGOTA': [4.6097, -74.0817], 'BOGOTÁ': [4.6097, -74.0817], 'ANTIOQUIA': [6.2442, -75.5812],
+    'VALLE': [3.4516, -76.5320], 'VALLE DEL CAUCA': [3.4516, -76.5320], 'ATLANTICO': [10.9685, -74.7813],
+    'CUNDINAMARCA': [4.6097, -74.0817], 'SANTANDER': [7.1254, -73.1198], 'BOLIVAR': [10.3997, -75.5144],
+    'BOYACA': [5.5353, -73.3678], 'CALDAS': [5.0689, -75.5174], 'CAUCA': [2.4448, -76.6147],
+    'CESAR': [10.4631, -73.2532], 'CORDOBA': [8.7479, -75.8814], 'HUILA': [2.9273, -75.2819],
+    'MAGDALENA': [11.2408, -74.1990], 'META': [4.1420, -73.6266], 'NARIÑO': [1.2136, -77.2811],
+    'NORTE DE SANTANDER': [7.8939, -72.5078], 'QUINDIO': [4.5339, -75.6811], 'RISARALDA': [4.8133, -75.6961],
+    'TOLIMA': [4.4389, -75.2322], 'AMAZONAS': [-4.2153, -69.9406], 'ARAUCA': [7.0847, -70.7591],
+    'CASANARE': [5.3378, -72.3959], 'CHOCO': [5.6947, -76.6611], 'GUAINIA': [2.5819, -67.5819],
+    'GUAVIARE': [2.5648, -72.6459], 'LA GUAJIRA': [11.5444, -72.9072], 'PUTUMAYO': [1.1496, -76.6461],
+    'SAN ANDRES': [12.5847, -81.7006], 'SUCRE': [9.3047, -75.3978], 'VAUPES': [1.1983, -70.1733], 'VICHADA': [4.4234, -67.9239]
 }
 
 # -----------------------------------------------------------------------------
@@ -282,29 +262,52 @@ elif authentication_status:
         st.markdown("---")
 
         # -----------------------------------------------------------------------------
-        # MAPA COROPLÉTICO EN DEGRADÉ VERDE DE COLOMBIA
+        # MAPA GEOGRÁFICO DE INTENSIDAD DE RECLAMOS POR COLOMBIA
         # -----------------------------------------------------------------------------
         st.subheader("🗺️ Intensidad de Reclamos por Departamento")
         
         df_geo = df_base.groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Reclamos')
-        df_geo['NOMBRE_DPT'] = df_geo['UNIDAD DE ASIGNACIÓN'].apply(
-            lambda u: next((v for k, v in MAPA_DEPTS_GEO.items() if k in str(u).upper()), 'OTRO')
-        )
-        df_mapa_dept = df_geo.groupby('NOMBRE_DPT')['Reclamos'].sum().reset_index()
+        
+        lats, lons = [], []
+        for u in df_geo['UNIDAD DE ASIGNACIÓN']:
+            matched = False
+            for dep, coords in GEO_DEPARTAMENTOS_COL.items():
+                if dep in str(u).upper():
+                    lats.append(coords[0])
+                    lons.append(coords[1])
+                    matched = True
+                    break
+            if not matched:
+                lats.append(4.6097)
+                lons.append(-74.0817)
 
-        fig_mapa = px.choropleth(
-            df_mapa_dept,
-            geojson=GEOJSON_COLOMBIA,
-            locations='NOMBRE_DPT',
-            featureidkey="properties.NOMBRE_DPT",
+        df_geo['lat'] = lats
+        df_geo['lon'] = lons
+        
+        fig_mapa = px.scatter_geo(
+            df_geo, 
+            lat='lat', 
+            lon='lon', 
+            size='Reclamos', 
+            hover_name='UNIDAD DE ASIGNACIÓN',
+            hover_data={'Reclamos': ':,', 'lat': False, 'lon': False},
             color='Reclamos',
             color_continuous_scale="Greens",
-            hover_name='NOMBRE_DPT',
-            hover_data={'Reclamos': ':,', 'NOMBRE_DPT': False}
+            scope="south america",
+            center={"lat": 4.5709, "lon": -74.2973}
         )
-        fig_mapa.update_geos(fitbounds="locations", visible=False)
+        
+        fig_mapa.update_geos(
+            fitbounds="locations",
+            visible=False,
+            showcountries=True,
+            countrycolor="#e5e7eb",
+            showland=True,
+            landcolor="#f8fafc"
+        )
+        
         fig_mapa.update_traces(
-            hovertemplate="<b>%{hovertext}</b><br>Total Reclamos: <b>%{z:,}</b><extra></extra>"
+            hovertemplate="<b>%{hovertext}</b><br>Total Reclamos: <b>%{marker.size:,}</b><extra></extra>"
         )
 
         fig_mapa.update_layout(
