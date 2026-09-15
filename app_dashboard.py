@@ -104,19 +104,23 @@ CONFIG_PLOTLY_TOUCH = {
     'showAxisDragHandles': False
 }
 
-# Coordenadas geográficas para UPRES en Colombia
-GEO_DEPARTAMENTOS_COL = {
-    'BOGOTA': [4.6097, -74.0817], 'BOGOTÁ': [4.6097, -74.0817], 'ANTIOQUIA': [6.2442, -75.5812],
-    'VALLE': [3.4516, -76.5320], 'VALLE DEL CAUCA': [3.4516, -76.5320], 'ATLANTICO': [10.9685, -74.7813],
-    'CUNDINAMARCA': [4.6097, -74.0817], 'SANTANDER': [7.1254, -73.1198], 'BOLIVAR': [10.3997, -75.5144],
-    'BOYACA': [5.5353, -73.3678], 'CALDAS': [5.0689, -75.5174], 'CAUCA': [2.4448, -76.6147],
-    'CESAR': [10.4631, -73.2532], 'CORDOBA': [8.7479, -75.8814], 'HUILA': [2.9273, -75.2819],
-    'MAGDALENA': [11.2408, -74.1990], 'META': [4.1420, -73.6266], 'NARIÑO': [1.2136, -77.2811],
-    'NORTE DE SANTANDER': [7.8939, -72.5078], 'QUINDIO': [4.5339, -75.6811], 'RISARALDA': [4.8133, -75.6961],
-    'TOLIMA': [4.4389, -75.2322], 'AMAZONAS': [-4.2153, -69.9406], 'ARAUCA': [7.0847, -70.7591],
-    'CASANARE': [5.3378, -72.3959], 'CHOCO': [5.6947, -76.6611], 'GUAINIA': [2.5819, -67.5819],
-    'GUAVIARE': [2.5648, -72.6459], 'LA GUAJIRA': [11.5444, -72.9072], 'PUTUMAYO': [1.1496, -76.6461],
-    'SAN ANDRES': [12.5847, -81.7006], 'SUCRE': [9.3047, -75.3978], 'VAUPES': [1.1983, -70.1733], 'VICHADA': [4.4234, -67.9239]
+# GeoJSON público con las fronteras poligonales de los Departamentos de Colombia
+GEOJSON_COLOMBIA_DEPTS = "https://raw.githubusercontent.com/mledoze/countries/master/data/col.geo.json"
+
+# Mapeo de estandarización de nombres de UPRES/Departamentos para coincidir con el GeoJSON
+MAPA_DEPTS_GEO = {
+    'BOGOTA': 'Bogotá', 'BOGOTÁ': 'Bogotá', 'CUNDINAMARCA': 'Cundinamarca',
+    'ANTIOQUIA': 'Antioquia', 'VALLE': 'Valle del Cauca', 'VALLE DEL CAUCA': 'Valle del Cauca',
+    'ATLANTICO': 'Atlántico', 'ATLÁNTICO': 'Atlántico', 'SANTANDER': 'Santander',
+    'BOLIVAR': 'Bolívar', 'BOLÍVAR': 'Bolívar', 'BOYACA': 'Boyacá', 'BOYACÁ': 'Boyacá',
+    'CALDAS': 'Caldas', 'CAUCA': 'Cauca', 'CESAR': 'Cesar', 'CORDOBA': 'Córdoba', 'CÓRDOBA': 'Córdoba',
+    'HUILA': 'Huila', 'MAGDALENA': 'Magdalena', 'META': 'Meta', 'NARIÑO': 'Nariño',
+    'NORTE DE SANTANDER': 'Norte de Santander', 'QUINDIO': 'Quindío', 'QUINDÍO': 'Quindío',
+    'RISARALDA': 'Risaralda', 'TOLIMA': 'Tolima', 'AMAZONAS': 'Amazonas', 'ARAUCA': 'Arauca',
+    'CASANARE': 'Casanare', 'CHOCO': 'Chocó', 'CHOCÓ': 'Chocó', 'GUAINIA': 'Guainía', 'GUAINÍA': 'Guainía',
+    'GUAVIARE': 'Guaviare', 'LA GUAJIRA': 'La Guajira', 'PUTUMAYO': 'Putumayo',
+    'SAN ANDRES': 'San Andrés y Providencia', 'SAN ANDRÉS': 'San Andrés y Providencia',
+    'SUCRE': 'Sucre', 'VAUPES': 'Vaupés', 'VAUPÉS': 'Vaupés', 'VICHADA': 'Vichada'
 }
 
 # -----------------------------------------------------------------------------
@@ -259,40 +263,40 @@ elif authentication_status:
 
         st.markdown("---")
 
-        # Gráfico 1: Mapa Geográfico de Colombia por UPRES
-        st.subheader("🗺️ Distribución Geográfica SIPQR2S por UPRES")
-        df_geo = df_base.groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Cantidad')
+        # -----------------------------------------------------------------------------
+        # MAPA COROPLÉTICO DE COLOMBIA (INTENSIDAD DE COLOR POR RECLAMOS Y HOVER)
+        # -----------------------------------------------------------------------------
+        st.subheader("🗺️ Intensidad de Reclamos por Departamento")
         
-        lats, lons = [], []
-        for u in df_geo['UNIDAD DE ASIGNACIÓN']:
-            matched = False
-            for dep, coords in GEO_DEPARTAMENTOS_COL.items():
-                if dep in str(u).upper():
-                    lats.append(coords[0])
-                    lons.append(coords[1])
-                    matched = True
-                    break
-            if not matched:
-                lats.append(4.6097)
-                lons.append(-74.0817)
-
-        df_geo['lat'] = lats
-        df_geo['lon'] = lons
+        df_geo = df_base.groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Reclamos')
         
-        fig_mapa = px.scatter_map(
-            df_geo, 
-            lat='lat', 
-            lon='lon', 
-            size='Cantidad', 
-            hover_name='UNIDAD DE ASIGNACIÓN',
-            hover_data={'Cantidad': True, 'lat': False, 'lon': False},
-            color='Cantidad',
-            color_continuous_scale=px.colors.sequential.Greens,
-            zoom=4.5,
-            center={"lat": 4.5709, "lon": -74.2973},
-            map_style="carto-positron"
+        # Mapear los nombres de UPRES a los nombres de departamento estandarizados para el GeoJSON
+        df_geo['Departamento'] = df_geo['UNIDAD DE ASIGNACIÓN'].apply(
+            lambda u: next((v for k, v in MAPA_DEPTS_GEO.items() if k in str(u).upper()), 'Otros')
         )
-        fig_mapa.update_layout(height=380, margin=dict(l=0, r=0, t=10, b=0))
+        
+        # Consolidador por Departamento estandarizado
+        df_mapa_dept = df_geo.groupby('Departamento')['Reclamos'].sum().reset_index()
+
+        fig_mapa = px.choropleth_mapbox(
+            df_mapa_dept,
+            geojson=GEOJSON_COLOMBIA_DEPTS,
+            locations='Departamento',
+            featureidkey="properties.name",
+            color='Reclamos',
+            color_continuous_scale="Greens", # Gradiente verde: más oscuro = más reclamos
+            range_color=(0, df_mapa_dept['Reclamos'].max() if not df_mapa_dept.empty else 100),
+            mapbox_style="carto-positron",
+            zoom=4.2,
+            center={"lat": 4.5709, "lon": -74.2973},
+            opacity=0.75,
+            labels={'Reclamos': 'Total Reclamos'}
+        )
+        
+        fig_mapa.update_traces(
+            hovertemplate="<b>%{location}</b><br>Reclamos: %{z:,}<extra></extra>"
+        )
+        fig_mapa.update_layout(height=420, margin=dict(l=0, r=0, t=10, b=0))
         st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # Gráfico 2: SIPQR2S por Día con Tendencia
@@ -341,7 +345,7 @@ elif authentication_status:
         st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # -----------------------------------------------------------------------------
-        # SECCIÓN DINÁMICA DE UPRES APILADO (TOP 3 INDEPENDIENTE POR UPRES + TOTAL VISIBLE)
+        # SECCIÓN DINÁMICA DE UPRES APILADO (PALETA DE CONTRASTE CAFÉ, NEGRO, AMARILLO + OTROS VERDE)
         # -----------------------------------------------------------------------------
         st.subheader("🏢 Distribución por UPRES (Top 10)")
         
@@ -351,16 +355,15 @@ elif authentication_status:
             horizontal=True
         )
 
-        # 1. Obtener las 10 UPRES principales
         top_10_upres = df_base['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index
         df_g2 = df_base[df_base['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
 
         col_target = 'ESPECIALIDAD_CATEGORIA' if dim_apilamiento == "Categoría Salud" else col_mot_esp
 
-        # 2. Contar frecuencias locales por UPRES
+        # 1. Contar frecuencias locales por UPRES
         conteo_local = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_target]).size().reset_index(name='Cant_Local')
 
-        # 3. Calcular el Top 3 local de cada UPRES de forma independiente
+        # 2. Calcular el Top 3 local de cada UPRES independientemente
         conteo_local['Rank_Local'] = conteo_local.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(
             method='first', ascending=False
         )
@@ -368,7 +371,7 @@ elif authentication_status:
         top_3_locales = conteo_local[conteo_local['Rank_Local'] <= 3].copy()
         top_3_locales['Es_Top3_Local'] = True
 
-        # 4. Cruzar con el DataFrame para asignar "OTROS" solo si no es Top 3 local
+        # 3. Cruzar con el DataFrame principal para asignar "OTROS" fuera del Top 3 local
         df_g2 = pd.merge(
             df_g2,
             top_3_locales[['UNIDAD DE ASIGNACIÓN', col_target, 'Es_Top3_Local']],
@@ -381,18 +384,25 @@ elif authentication_status:
             axis=1
         )
 
-        # 5. Agrupar y abreviar
+        # 4. Agrupar y abreviar
         df_stack = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', 'Grupo_Consolidado']).size().reset_index(name='Cantidad')
         df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
         df_stack['Grupo_fmt'] = df_stack['Grupo_Consolidado'].apply(
             lambda x: "OTROS" if x == "OTROS" else acortar_texto_abreviado(x)
         )
 
-        # 6. Calcular total por UPRES para dibujarlo al final de la barra
+        # 5. Calcular total acumulado por UPRES para mostrar el valor al final de la barra
         df_totales = df_stack.groupby('UPRES_fmt')['Cantidad'].sum().reset_index(name='Total')
 
         categorias_unicas = [c for c in df_stack['Grupo_fmt'].unique() if c != "OTROS"]
         orden_apilado = ["OTROS"] + categorias_unicas
+
+        # Paleta de contraste dinámico: Café, Negro, Amarillo para Top 3 + Verde Suave para OTROS
+        paleta_contraste = ['#5d4037', '#212121', '#fbc02d', '#8d6e63', '#424242', '#f57f17']
+        color_map = {'OTROS': '#a5d6a7'} # "OTROS" conserva el verde institucional
+        
+        for idx, cat in enumerate(categorias_unicas):
+            color_map[cat] = paleta_contraste[idx % len(paleta_contraste)]
 
         fig_stack = px.bar(
             df_stack, 
@@ -400,10 +410,11 @@ elif authentication_status:
             x='Cantidad', 
             color='Grupo_fmt', 
             orientation='h',
-            category_orders={'Grupo_fmt': orden_apilado}
+            category_orders={'Grupo_fmt': orden_apilado},
+            color_discrete_map=color_map
         )
 
-        # 7. Capa de texto con el TOTAL al extremo derecho de cada barra
+        # Capa de texto con el TOTAL al extremo derecho de cada barra
         fig_stack.add_trace(
             go.Scatter(
                 y=df_totales['UPRES_fmt'],
