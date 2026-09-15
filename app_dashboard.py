@@ -23,6 +23,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# Estilos CSS estilo iOS Card para mobile
 st.markdown("""
     <style>
     .main { padding: 0.5rem; }
@@ -51,11 +52,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Función para deshabilitar zooms molestos en interacción móvil
 def aplicar_touch_safe(fig):
     fig.update_xaxes(fixedrange=True)
     fig.update_yaxes(fixedrange=True)
     return fig
 
+# Función para acortar textos mediante abreviaturas
 def acortar_texto_abreviado(texto):
     if pd.isna(texto) or not texto:
         return "N/A"
@@ -105,7 +108,7 @@ CONFIG_PLOTLY_TOUCH = {
 }
 
 # -----------------------------------------------------------------------------
-# CARGA DE GEOJSON DE COLOMBIA (Prioridad Local -> Fallback Red)
+# CARGA DE GEOJSON DE COLOMBIA (Prioridad Archivo Local -> Fallback Red CDN)
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=86400)
 def cargar_geojson_colombia():
@@ -283,7 +286,7 @@ elif authentication_status:
         st.markdown("---")
 
         # -----------------------------------------------------------------------------
-        # MAPA DE DEPARTAMENTOS DE COLOMBIA (COROPLÉTICO GARANTIZADO)
+        # MAPA COROPLÉTICO CON POLÍGONOS DE COLOMBIA
         # -----------------------------------------------------------------------------
         st.subheader("🗺️ Intensidad de Reclamos por Departamento")
         
@@ -461,7 +464,6 @@ elif authentication_status:
 
         st.markdown("---")
 
-        # Gráficos de Torta de Porcentajes
         col_t1, col_t2 = st.columns(2)
 
         with col_t1:
