@@ -9,9 +9,6 @@ import streamlit_authenticator as stauth
 import yaml
 from yaml.loader import SafeLoader
 import re
-import json
-import os
-import requests
 
 # -----------------------------------------------------------------------------
 # 1. CONFIGURACIÓN RESPONSIVA (Mobile-First / iOS Friendly)
@@ -52,13 +49,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Función para deshabilitar zooms molestos en interacción móvil
+# Función para fijar los ejes y deshabilitar gestos táctiles de zoom molesto en móviles
 def aplicar_touch_safe(fig):
     fig.update_xaxes(fixedrange=True)
     fig.update_yaxes(fixedrange=True)
     return fig
 
-# Función para acortar textos mediante abreviaturas
+# Función para acortar textos mediante abreviaturas y eliminación estricta de artículos/preposiciones
 def acortar_texto_abreviado(texto):
     if pd.isna(texto) or not texto:
         return "N/A"
@@ -107,49 +104,19 @@ CONFIG_PLOTLY_TOUCH = {
     'showAxisDragHandles': False
 }
 
-# -----------------------------------------------------------------------------
-# CARGA DE GEOJSON DE COLOMBIA (Prioridad Archivo Local -> Fallback Red CDN)
-# -----------------------------------------------------------------------------
-@st.cache_data(ttl=86400)
-def cargar_geojson_colombia():
-    ruta_local = "colombia.geo.json"
-    if os.path.exists(ruta_local):
-        try:
-            with open(ruta_local, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            pass
-
-    urls = [
-        "https://cdn.jsdelivr.net/gh/MartaEliz/Colombia-GeoJSON@master/colombia.geo.json",
-        "https://raw.githubusercontent.com/MartaEliz/Colombia-GeoJSON/master/colombia.geo.json",
-        "https://raw.githubusercontent.com/john-guerra/colombia_geojson/master/colombia.geo.json"
-    ]
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    for u in urls:
-        try:
-            r = requests.get(u, headers=headers, timeout=5)
-            if r.status_code == 200:
-                return r.json()
-        except Exception:
-            continue
-    return None
-
-GEOJSON_COLOMBIA = cargar_geojson_colombia()
-
-MAPA_DEPTS_GEO = {
-    'BOGOTA': 'BOGOTA', 'BOGOTÁ': 'BOGOTA', 'CUNDINAMARCA': 'CUNDINAMARCA',
-    'ANTIOQUIA': 'ANTIOQUIA', 'VALLE': 'VALLE DEL CAUCA', 'VALLE DEL CAUCA': 'VALLE DEL CAUCA',
-    'ATLANTICO': 'ATLANTICO', 'ATLÁNTICO': 'ATLANTICO', 'SANTANDER': 'SANTANDER',
-    'BOLIVAR': 'BOLIVAR', 'BOLÍVAR': 'BOLIVAR', 'BOYACA': 'BOYACA', 'BOYACÁ': 'BOYACA',
-    'CALDAS': 'CALDAS', 'CAUCA': 'CAUCA', 'CESAR': 'CESAR', 'CORDOBA': 'CORDOBA', 'CÓRDOBA': 'CORDOBA',
-    'HUILA': 'HUILA', 'MAGDALENA': 'MAGDALENA', 'META': 'META', 'NARIÑO': 'NARIÑO',
-    'NORTE DE SANTANDER': 'NORTE DE SANTANDER', 'QUINDIO': 'QUINDIO', 'QUINDÍO': 'QUINDIO',
-    'RISARALDA': 'RISARALDA', 'TOLIMA': 'TOLIMA', 'AMAZONAS': 'AMAZONAS', 'ARAUCA': 'ARAUCA',
-    'CASANARE': 'CASANARE', 'CHOCO': 'CHOCO', 'CHOCÓ': 'CHOCO', 'GUAINIA': 'GUAINIA', 'GUAINÍA': 'GUAINIA',
-    'GUAVIARE': 'GUAVIARE', 'LA GUAJIRA': 'LA GUAJIRA', 'PUTUMAYO': 'PUTUMAYO',
-    'SAN ANDRES': 'SAN ANDRES', 'SAN ANDRÉS': 'SAN ANDRES',
-    'SUCRE': 'SUCRE', 'VAUPES': 'VAUPES', 'VAUPÉS': 'VAUPES', 'VICHADA': 'VICHADA'
+# Coordenadas geográficas para UPRES en Colombia
+GEO_DEPARTAMENTOS_COL = {
+    'BOGOTA': [4.6097, -74.0817], 'BOGOTÁ': [4.6097, -74.0817], 'ANTIOQUIA': [6.2442, -75.5812],
+    'VALLE': [3.4516, -76.5320], 'VALLE DEL CAUCA': [3.4516, -76.5320], 'ATLANTICO': [10.9685, -74.7813],
+    'CUNDINAMARCA': [4.6097, -74.0817], 'SANTANDER': [7.1254, -73.1198], 'BOLIVAR': [10.3997, -75.5144],
+    'BOYACA': [5.5353, -73.3678], 'CALDAS': [5.0689, -75.5174], 'CAUCA': [2.4448, -76.6147],
+    'CESAR': [10.4631, -73.2532], 'CORDOBA': [8.7479, -75.8814], 'HUILA': [2.9273, -75.2819],
+    'MAGDALENA': [11.2408, -74.1990], 'META': [4.1420, -73.6266], 'NARIÑO': [1.2136, -77.2811],
+    'NORTE DE SANTANDER': [7.8939, -72.5078], 'QUINDIO': [4.5339, -75.6811], 'RISARALDA': [4.8133, -75.6961],
+    'TOLIMA': [4.4389, -75.2322], 'AMAZONAS': [-4.2153, -69.9406], 'ARAUCA': [7.0847, -70.7591],
+    'CASANARE': [5.3378, -72.3959], 'CHOCO': [5.6947, -76.6611], 'GUAINIA': [2.5819, -67.5819],
+    'GUAVIARE': [2.5648, -72.6459], 'LA GUAJIRA': [11.5444, -72.9072], 'PUTUMAYO': [1.1496, -76.6461],
+    'SAN ANDRES': [12.5847, -81.7006], 'SUCRE': [9.3047, -75.3978], 'VAUPES': [1.1983, -70.1733], 'VICHADA': [4.4234, -67.9239]
 }
 
 # -----------------------------------------------------------------------------
@@ -215,6 +182,7 @@ elif authentication_status:
     st.sidebar.markdown("---")
     st.sidebar.header("🔍 Filtros de Control")
 
+    # 1. Rango de Fecha de Creación
     min_f = df_raw['fecha_dt'].min().date() if not df_raw.empty else None
     max_f = df_raw['fecha_dt'].max().date() if not df_raw.empty else None
     rango_fechas = st.sidebar.date_input("1. Rango de Fecha de Creación", value=(min_f, max_f), min_value=min_f, max_value=max_f) if min_f else []
@@ -223,21 +191,26 @@ elif authentication_status:
     if len(rango_fechas) == 2:
         df_temp_fecha = df_temp_fecha[(df_temp_fecha['fecha_dt'].dt.date >= rango_fechas[0]) & (df_temp_fecha['fecha_dt'].dt.date <= rango_fechas[1])]
 
+    # 2. UPRES
     lista_unidades = sorted([x for x in df_raw['UNIDAD DE ASIGNACIÓN'].dropna().unique() if str(x).strip() != ''])
     sel_unidades = st.sidebar.multiselect("2. UPRES", options=lista_unidades)
 
+    # 3. RASES
     lista_rases = sorted([x for x in df_raw['RASES'].dropna().unique() if str(x).strip() != ''])
     sel_rases = st.sidebar.multiselect("3. RASES", options=lista_rases)
 
+    # 4. Categoría Salud
     cat_ordenadas = df_temp_fecha['ESPECIALIDAD_CATEGORIA'].value_counts().index.tolist()
     cat_ordenadas = [c for c in cat_ordenadas if str(c).strip() != '']
     sel_cat = st.sidebar.multiselect("4. Categoría Salud", options=cat_ordenadas, placeholder="Seleccione categoría...")
 
+    # 5. Motivo Específico
     col_mot_esp = 'MOTIVO ESPECÍFICO' if 'MOTIVO ESPECÍFICO' in df_raw.columns else 'MOTIVO GENERAL'
     motivos_ordenados = df_temp_fecha[col_mot_esp].value_counts().index.tolist()
     motivos_ordenados = [m for m in motivos_ordenados if str(m).strip() != '']
     sel_motivos = st.sidebar.multiselect("5. Motivo Específico", options=motivos_ordenados, placeholder="Seleccione motivo...")
 
+    # Aplicar filtrado final
     df_base = df_raw.copy()
     if len(rango_fechas) == 2:
         df_base = df_base[(df_base['fecha_dt'].dt.date >= rango_fechas[0]) & (df_base['fecha_dt'].dt.date <= rango_fechas[1])]
@@ -260,6 +233,7 @@ elif authentication_status:
     with tab_ind:
         st.caption("Consola Ejecutiva de Atención al Usuario")
 
+        # Tarjetas KPI
         top_upres_s = df_base['UNIDAD DE ASIGNACIÓN'].value_counts()
         top_upres_nom = top_upres_s.index[0] if not top_upres_s.empty else "N/A"
         top_upres_val = top_upres_s.iloc[0] if not top_upres_s.empty else 0
@@ -285,44 +259,40 @@ elif authentication_status:
 
         st.markdown("---")
 
-        # -----------------------------------------------------------------------------
-        # MAPA COROPLÉTICO CON POLÍGONOS DE COLOMBIA
-        # -----------------------------------------------------------------------------
-        st.subheader("🗺️ Intensidad de Reclamos por Departamento")
+        # Gráfico 1: Mapa Geográfico de Colombia por UPRES
+        st.subheader("🗺️ Distribución Geográfica SIPQR2S por UPRES")
+        df_geo = df_base.groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Cantidad')
         
-        df_geo = df_base.groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Reclamos')
-        df_geo['NOMBRE_DPT'] = df_geo['UNIDAD DE ASIGNACIÓN'].apply(
-            lambda u: next((v for k, v in MAPA_DEPTS_GEO.items() if k in str(u).upper()), 'OTRO')
+        lats, lons = [], []
+        for u in df_geo['UNIDAD DE ASIGNACIÓN']:
+            matched = False
+            for dep, coords in GEO_DEPARTAMENTOS_COL.items():
+                if dep in str(u).upper():
+                    lats.append(coords[0])
+                    lons.append(coords[1])
+                    matched = True
+                    break
+            if not matched:
+                lats.append(4.6097)
+                lons.append(-74.0817)
+
+        df_geo['lat'] = lats
+        df_geo['lon'] = lons
+        
+        fig_mapa = px.scatter_map(
+            df_geo, 
+            lat='lat', 
+            lon='lon', 
+            size='Cantidad', 
+            hover_name='UNIDAD DE ASIGNACIÓN',
+            hover_data={'Cantidad': True, 'lat': False, 'lon': False},
+            color='Cantidad',
+            color_continuous_scale=px.colors.sequential.Greens,
+            zoom=4.5,
+            center={"lat": 4.5709, "lon": -74.2973},
+            map_style="carto-positron"
         )
-        df_mapa_dept = df_geo.groupby('NOMBRE_DPT')['Reclamos'].sum().reset_index()
-
-        if GEOJSON_COLOMBIA:
-            fig_mapa = px.choropleth(
-                df_mapa_dept,
-                geojson=GEOJSON_COLOMBIA,
-                locations='NOMBRE_DPT',
-                featureidkey="properties.NOMBRE_DPT",
-                color='Reclamos',
-                color_continuous_scale="Greens",
-                hover_name='NOMBRE_DPT'
-            )
-            fig_mapa.update_geos(fitbounds="locations", visible=False)
-            fig_mapa.update_traces(
-                hovertemplate="<b>%{hovertext}</b><br>Total Reclamos: <b>%{z:,}</b><extra></extra>"
-            )
-        else:
-            fig_mapa = px.bar(
-                df_mapa_dept.sort_values('Reclamos', ascending=False),
-                x='NOMBRE_DPT', y='Reclamos', color='Reclamos',
-                color_continuous_scale="Greens"
-            )
-
-        fig_mapa.update_layout(
-            height=440,
-            margin=dict(l=0, r=0, t=10, b=0),
-            coloraxis_colorbar=dict(title="", thickness=12, len=0.7)
-        )
-
+        fig_mapa.update_layout(height=380, margin=dict(l=0, r=0, t=10, b=0))
         st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # Gráfico 2: SIPQR2S por Día con Tendencia
@@ -371,7 +341,7 @@ elif authentication_status:
         st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # -----------------------------------------------------------------------------
-        # SECCIÓN DINÁMICA DE UPRES APILADO
+        # SECCIÓN DINÁMICA DE UPRES APILADO (TOP 3 INDEPENDIENTE POR UPRES + TOTAL VISIBLE)
         # -----------------------------------------------------------------------------
         st.subheader("🏢 Distribución por UPRES (Top 10)")
         
@@ -381,13 +351,16 @@ elif authentication_status:
             horizontal=True
         )
 
+        # 1. Obtener las 10 UPRES principales
         top_10_upres = df_base['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index
         df_g2 = df_base[df_base['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
 
         col_target = 'ESPECIALIDAD_CATEGORIA' if dim_apilamiento == "Categoría Salud" else col_mot_esp
 
+        # 2. Contar frecuencias locales por UPRES
         conteo_local = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_target]).size().reset_index(name='Cant_Local')
 
+        # 3. Calcular el Top 3 local de cada UPRES de forma independiente
         conteo_local['Rank_Local'] = conteo_local.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(
             method='first', ascending=False
         )
@@ -395,6 +368,7 @@ elif authentication_status:
         top_3_locales = conteo_local[conteo_local['Rank_Local'] <= 3].copy()
         top_3_locales['Es_Top3_Local'] = True
 
+        # 4. Cruzar con el DataFrame para asignar "OTROS" solo si no es Top 3 local
         df_g2 = pd.merge(
             df_g2,
             top_3_locales[['UNIDAD DE ASIGNACIÓN', col_target, 'Es_Top3_Local']],
@@ -407,22 +381,18 @@ elif authentication_status:
             axis=1
         )
 
+        # 5. Agrupar y abreviar
         df_stack = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', 'Grupo_Consolidado']).size().reset_index(name='Cantidad')
         df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
         df_stack['Grupo_fmt'] = df_stack['Grupo_Consolidado'].apply(
             lambda x: "OTROS" if x == "OTROS" else acortar_texto_abreviado(x)
         )
 
+        # 6. Calcular total por UPRES para dibujarlo al final de la barra
         df_totales = df_stack.groupby('UPRES_fmt')['Cantidad'].sum().reset_index(name='Total')
 
         categorias_unicas = [c for c in df_stack['Grupo_fmt'].unique() if c != "OTROS"]
         orden_apilado = ["OTROS"] + categorias_unicas
-
-        paleta_contraste = ['#5d4037', '#212121', '#fbc02d', '#8d6e63', '#424242', '#f57f17']
-        color_map = {'OTROS': '#a5d6a7'}
-        
-        for idx, cat in enumerate(categorias_unicas):
-            color_map[cat] = paleta_contraste[idx % len(paleta_contraste)]
 
         fig_stack = px.bar(
             df_stack, 
@@ -430,10 +400,10 @@ elif authentication_status:
             x='Cantidad', 
             color='Grupo_fmt', 
             orientation='h',
-            category_orders={'Grupo_fmt': orden_apilado},
-            color_discrete_map=color_map
+            category_orders={'Grupo_fmt': orden_apilado}
         )
 
+        # 7. Capa de texto con el TOTAL al extremo derecho de cada barra
         fig_stack.add_trace(
             go.Scatter(
                 y=df_totales['UPRES_fmt'],
@@ -464,6 +434,7 @@ elif authentication_status:
 
         st.markdown("---")
 
+        # Gráficos de Torta de Porcentajes
         col_t1, col_t2 = st.columns(2)
 
         with col_t1:
