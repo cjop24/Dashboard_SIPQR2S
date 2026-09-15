@@ -97,8 +97,6 @@ def acortar_texto_abreviado(texto):
     
     words = s.split()
     words_clean = [abrev.get(w, w) for w in words]
-    
-    # Retorna la cadena completa abreviada sin truncamientos ni "..."
     return " ".join(words_clean)
 
 CONFIG_PLOTLY_TOUCH = {
@@ -344,56 +342,54 @@ elif authentication_status:
         fig1.update_layout(xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10))
         st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # Gráfico 4: SIPQR2S por UPRES apilado por Categoría Salud (Top 10 UPRES)
-        st.subheader("🏢 SIPQR2S por UPRES apilado por Categoría Salud (Top 10)")
+        # -----------------------------------------------------------------------------
+        # SECCIÓN DINÁMICA DE UPRES APILADO (SELECTOR EN MÓVIL)
+        # -----------------------------------------------------------------------------
+        st.subheader("🏢 Distribución por UPRES (Top 10)")
+        
+        dim_apilamiento = st.radio(
+            "Seleccione dimensión de apilamiento:",
+            ["Categoría Salud", "Motivo Específico"],
+            horizontal=True
+        )
+
         top_10_upres = df_base['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index
         df_g2 = df_base[df_base['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)]
-        
-        df_stack_cat = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', 'ESPECIALIDAD_CATEGORIA']).size().reset_index(name='Cantidad')
-        df_stack_cat['UPRES_fmt'] = df_stack_cat['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
-        df_stack_cat['Cat_fmt'] = df_stack_cat['ESPECIALIDAD_CATEGORIA'].apply(acortar_texto_abreviado)
 
-        fig2 = px.bar(
-            df_stack_cat, 
+        if dim_apilamiento == "Categoría Salud":
+            df_stack = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', 'ESPECIALIDAD_CATEGORIA']).size().reset_index(name='Cantidad')
+            df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+            df_stack['Grupo_fmt'] = df_stack['ESPECIALIDAD_CATEGORIA'].apply(acortar_texto_abreviado)
+            palette = px.colors.qualitative.Prism
+        else:
+            df_stack = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_mot_esp]).size().reset_index(name='Cantidad')
+            df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+            df_stack['Grupo_fmt'] = df_stack[col_mot_esp].apply(acortar_texto_abreviado)
+            palette = px.colors.qualitative.Safe
+
+        fig_stack = px.bar(
+            df_stack, 
             y='UPRES_fmt', 
             x='Cantidad', 
-            color='Cat_fmt', 
+            color='Grupo_fmt', 
             orientation='h',
-            color_discrete_sequence=px.colors.qualitative.Prism
+            color_discrete_sequence=palette
         )
-        fig2.update_layout(
+        fig_stack.update_layout(
             barmode='stack',
             yaxis=dict(autorange="reversed"), 
             xaxis_title="", yaxis_title="", 
-            height=420, 
+            height=440, 
             margin=dict(l=5, r=5, t=10, b=10),
-            legend=dict(orientation="h", y=-0.2, title=None)
+            legend=dict(
+                orientation="h", 
+                y=-0.25, 
+                x=0,
+                title=None,
+                font=dict(size=10)
+            )
         )
-        st.plotly_chart(aplicar_touch_safe(fig2), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
-
-        # Gráfico 5: SIPQR2S por UPRES apilado por Motivo Específico (Top 10 UPRES)
-        st.subheader("📋 SIPQR2S por UPRES apilado por Motivo Específico (Top 10)")
-        df_stack_mot = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_mot_esp]).size().reset_index(name='Cantidad')
-        df_stack_mot['UPRES_fmt'] = df_stack_mot['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
-        df_stack_mot['Motivo_fmt'] = df_stack_mot[col_mot_esp].apply(acortar_texto_abreviado)
-
-        fig3 = px.bar(
-            df_stack_mot, 
-            y='UPRES_fmt', 
-            x='Cantidad', 
-            color='Motivo_fmt', 
-            orientation='h',
-            color_discrete_sequence=px.colors.qualitative.Safe
-        )
-        fig3.update_layout(
-            barmode='stack',
-            yaxis=dict(autorange="reversed"), 
-            xaxis_title="", yaxis_title="", 
-            height=420, 
-            margin=dict(l=5, r=5, t=10, b=10),
-            legend=dict(orientation="h", y=-0.2, title=None)
-        )
-        st.plotly_chart(aplicar_touch_safe(fig3), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+        st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         st.markdown("---")
 
