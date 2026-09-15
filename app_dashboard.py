@@ -9,6 +9,8 @@ import streamlit_authenticator as stauth
 import yaml
 from yaml.loader import SafeLoader
 import re
+import json
+import urllib.request
 
 # -----------------------------------------------------------------------------
 # 1. CONFIGURACIÓN RESPONSIVA (Mobile-First / iOS Friendly)
@@ -49,13 +51,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Función para fijar los ejes y deshabilitar gestos táctiles de zoom molesto en móviles
+# Función para deshabilitar zooms molestos en interacción móvil
 def aplicar_touch_safe(fig):
     fig.update_xaxes(fixedrange=True)
     fig.update_yaxes(fixedrange=True)
     return fig
 
-# Función para acortar textos mediante abreviaturas y eliminación estricta de artículos/preposiciones
+# Función para acortar textos mediante abreviaturas
 def acortar_texto_abreviado(texto):
     if pd.isna(texto) or not texto:
         return "N/A"
@@ -104,23 +106,29 @@ CONFIG_PLOTLY_TOUCH = {
     'showAxisDragHandles': False
 }
 
-# GeoJSON público con las fronteras poligonales de los Departamentos de Colombia
-GEOJSON_COLOMBIA_DEPTS = "https://raw.githubusercontent.com/mledoze/countries/master/data/col.geo.json"
+# Carga en caché del GeoJSON oficial de Departamentos de Colombia
+@st.cache_data(ttl=86400)
+def cargar_geojson_colombia():
+    url = "https://raw.githubusercontent.com/MartaEliz/Colombia-GeoJSON/master/colombia.geo.json"
+    with urllib.request.urlopen(url) as response:
+        return json.loads(response.read().decode())
 
-# Mapeo de estandarización de nombres de UPRES/Departamentos para coincidir con el GeoJSON
+GEOJSON_COLOMBIA = cargar_geojson_colombia()
+
+# Mapeo estandarizado de UPRES hacia el GeoJSON de Departamentos
 MAPA_DEPTS_GEO = {
-    'BOGOTA': 'Bogotá', 'BOGOTÁ': 'Bogotá', 'CUNDINAMARCA': 'Cundinamarca',
-    'ANTIOQUIA': 'Antioquia', 'VALLE': 'Valle del Cauca', 'VALLE DEL CAUCA': 'Valle del Cauca',
-    'ATLANTICO': 'Atlántico', 'ATLÁNTICO': 'Atlántico', 'SANTANDER': 'Santander',
-    'BOLIVAR': 'Bolívar', 'BOLÍVAR': 'Bolívar', 'BOYACA': 'Boyacá', 'BOYACÁ': 'Boyacá',
-    'CALDAS': 'Caldas', 'CAUCA': 'Cauca', 'CESAR': 'Cesar', 'CORDOBA': 'Córdoba', 'CÓRDOBA': 'Córdoba',
-    'HUILA': 'Huila', 'MAGDALENA': 'Magdalena', 'META': 'Meta', 'NARIÑO': 'Nariño',
-    'NORTE DE SANTANDER': 'Norte de Santander', 'QUINDIO': 'Quindío', 'QUINDÍO': 'Quindío',
-    'RISARALDA': 'Risaralda', 'TOLIMA': 'Tolima', 'AMAZONAS': 'Amazonas', 'ARAUCA': 'Arauca',
-    'CASANARE': 'Casanare', 'CHOCO': 'Chocó', 'CHOCÓ': 'Chocó', 'GUAINIA': 'Guainía', 'GUAINÍA': 'Guainía',
-    'GUAVIARE': 'Guaviare', 'LA GUAJIRA': 'La Guajira', 'PUTUMAYO': 'Putumayo',
-    'SAN ANDRES': 'San Andrés y Providencia', 'SAN ANDRÉS': 'San Andrés y Providencia',
-    'SUCRE': 'Sucre', 'VAUPES': 'Vaupés', 'VAUPÉS': 'Vaupés', 'VICHADA': 'Vichada'
+    'BOGOTA': 'BOGOTA', 'BOGOTÁ': 'BOGOTA', 'CUNDINAMARCA': 'CUNDINAMARCA',
+    'ANTIOQUIA': 'ANTIOQUIA', 'VALLE': 'VALLE DEL CAUCA', 'VALLE DEL CAUCA': 'VALLE DEL CAUCA',
+    'ATLANTICO': 'ATLANTICO', 'ATLÁNTICO': 'ATLANTICO', 'SANTANDER': 'SANTANDER',
+    'BOLIVAR': 'BOLIVAR', 'BOLÍVAR': 'BOLIVAR', 'BOYACA': 'BOYACA', 'BOYACÁ': 'BOYACA',
+    'CALDAS': 'CALDAS', 'CAUCA': 'CAUCA', 'CESAR': 'CESAR', 'CORDOBA': 'CORDOBA', 'CÓRDOBA': 'CORDOBA',
+    'HUILA': 'HUILA', 'MAGDALENA': 'MAGDALENA', 'META': 'META', 'NARIÑO': 'NARIÑO',
+    'NORTE DE SANTANDER': 'NORTE DE SANTANDER', 'QUINDIO': 'QUINDIO', 'QUINDÍO': 'QUINDIO',
+    'RISARALDA': 'RISARALDA', 'TOLIMA': 'TOLIMA', 'AMAZONAS': 'AMAZONAS', 'ARAUCA': 'ARAUCA',
+    'CASANARE': 'CASANARE', 'CHOCO': 'CHOCO', 'CHOCÓ': 'CHOCO', 'GUAINIA': 'GUAINIA', 'GUAINÍA': 'GUAINIA',
+    'GUAVIARE': 'GUAVIARE', 'LA GUAJIRA': 'LA GUAJIRA', 'PUTUMAYO': 'PUTUMAYO',
+    'SAN ANDRES': 'SAN ANDRES', 'SAN ANDRÉS': 'SAN ANDRES',
+    'SUCRE': 'SUCRE', 'VAUPES': 'VAUPES', 'VAUPÉS': 'VAUPES', 'VICHADA': 'VICHADA'
 }
 
 # -----------------------------------------------------------------------------
@@ -264,59 +272,49 @@ elif authentication_status:
         st.markdown("---")
 
         # -----------------------------------------------------------------------------
-        # MAPA COROPLÉTICO DE COLOMBIA (COMPATIBILIDAD CON MULTIPLES VERSIONES DE PLOTLY)
+        # MAPA COROPLÉTICO DE COLOMBIA (COLOR DEGRADÉ VERDE Y DATO AL RECORRER/TOCAR)
         # -----------------------------------------------------------------------------
         st.subheader("🗺️ Intensidad de Reclamos por Departamento")
         
         df_geo = df_base.groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Reclamos')
-        df_geo['Departamento'] = df_geo['UNIDAD DE ASIGNACIÓN'].apply(
-            lambda u: next((v for k, v in MAPA_DEPTS_GEO.items() if k in str(u).upper()), 'Otros')
-        )
-        df_mapa_dept = df_geo.groupby('Departamento')['Reclamos'].sum().reset_index()
-
-        # Intentar renderizar con la API moderna de Plotly (choropleth_map / choropleth)
-        try:
-            if hasattr(px, 'choropleth_map'):
-                fig_mapa = px.choropleth_map(
-                    df_mapa_dept,
-                    geojson=GEOJSON_COLOMBIA_DEPTS,
-                    locations='Departamento',
-                    featureidkey="properties.name",
-                    color='Reclamos',
-                    color_continuous_scale="Greens",
-                    range_color=(0, df_mapa_dept['Reclamos'].max() if not df_mapa_dept.empty else 100),
-                    map_style="carto-positron",
-                    zoom=4.2,
-                    center={"lat": 4.5709, "lon": -74.2973},
-                    opacity=0.75
-                )
-            else:
-                fig_mapa = px.choropleth(
-                    df_mapa_dept,
-                    geojson=GEOJSON_COLOMBIA_DEPTS,
-                    locations='Departamento',
-                    featureidkey="properties.name",
-                    color='Reclamos',
-                    color_continuous_scale="Greens",
-                    range_color=(0, df_mapa_dept['Reclamos'].max() if not df_mapa_dept.empty else 100)
-                )
-                fig_mapa.update_geos(fitbounds="locations", visible=False)
-        except Exception:
-            # Fallback seguro a mapa Coroplético básico
-            fig_mapa = px.choropleth(
-                df_mapa_dept,
-                geojson=GEOJSON_COLOMBIA_DEPTS,
-                locations='Departamento',
-                featureidkey="properties.name",
-                color='Reclamos',
-                color_continuous_scale="Greens"
-            )
-            fig_mapa.update_geos(fitbounds="locations", visible=False)
         
-        fig_mapa.update_traces(
-            hovertemplate="<b>%{location}</b><br>Reclamos: %{z:,}<extra></extra>"
+        # Mapeo a nombres exactos del GeoJSON
+        df_geo['NOMBRE_DPT'] = df_geo['UNIDAD DE ASIGNACIÓN'].apply(
+            lambda u: next((v for k, v in MAPA_DEPTS_GEO.items() if k in str(u).upper()), 'OTRO')
         )
-        fig_mapa.update_layout(height=420, margin=dict(l=0, r=0, t=10, b=0))
+        
+        df_mapa_dept = df_geo.groupby('NOMBRE_DPT')['Reclamos'].sum().reset_index()
+
+        fig_mapa = px.choropleth(
+            df_mapa_dept,
+            geojson=GEOJSON_COLOMBIA,
+            locations='NOMBRE_DPT',
+            featureidkey="properties.NOMBRE_DPT",
+            color='Reclamos',
+            color_continuous_scale="Greens",
+            hover_name='NOMBRE_DPT',
+            hover_data={'Reclamos': ':,', 'NOMBRE_DPT': False}
+        )
+
+        fig_mapa.update_geos(
+            fitbounds="locations",
+            visible=False
+        )
+
+        fig_mapa.update_traces(
+            hovertemplate="<b>%{hovertext}</b><br>Total Reclamos: <b>%{z:,}</b><extra></extra>"
+        )
+
+        fig_mapa.update_layout(
+            height=430,
+            margin=dict(l=0, r=0, t=10, b=0),
+            coloraxis_colorbar=dict(
+                title="",
+                thickness=12,
+                len=0.7
+            )
+        )
+
         st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # Gráfico 2: SIPQR2S por Día con Tendencia
@@ -365,7 +363,7 @@ elif authentication_status:
         st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # -----------------------------------------------------------------------------
-        # SECCIÓN DINÁMICA DE UPRES APILADO (PALETA DE CONTRASTE CAFÉ, NEGRO, AMARILLO + OTROS VERDE)
+        # SECCIÓN DINÁMICA DE UPRES APILADO (TOP 3 CONTRASTE CAFÉ/NEGRO/AMARILLO + OTROS VERDE)
         # -----------------------------------------------------------------------------
         st.subheader("🏢 Distribución por UPRES (Top 10)")
         
@@ -419,7 +417,7 @@ elif authentication_status:
 
         # Paleta de contraste dinámico: Café, Negro, Amarillo para Top 3 + Verde Suave para OTROS
         paleta_contraste = ['#5d4037', '#212121', '#fbc02d', '#8d6e63', '#424242', '#f57f17']
-        color_map = {'OTROS': '#a5d6a7'} # "OTROS" conserva el verde institucional
+        color_map = {'OTROS': '#a5d6a7'} # "OTROS" conserva el verde suave
         
         for idx, cat in enumerate(categorias_unicas):
             color_map[cat] = paleta_contraste[idx % len(paleta_contraste)]
