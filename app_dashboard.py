@@ -61,12 +61,10 @@ def acortar_texto_abreviado(texto):
         return "N/A"
     s = str(texto).upper().strip()
     
-    # 1. Eliminar artículos, preposiciones y conectores
     preposiciones_y_articulos = r'\b(DE|DEL|LA|EL|LOS|LAS|EN|POR|CON|SIN|PARA|SOBRE|ANTE|A|Y|O|U|AL|UN|UNO|UNAS|UNOS|SU|SUS)\b'
     s = re.sub(preposiciones_y_articulos, ' ', s)
     s = re.sub(r'\s+', ' ', s).strip()
     
-    # 2. Reemplazo por abreviaturas corporativas y médicas
     abrev = {
         'INSATISFACCION': 'INSATISF.',
         'INSATISFACCIÓN': 'INSATISF.',
@@ -343,7 +341,7 @@ elif authentication_status:
         st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # -----------------------------------------------------------------------------
-        # SECCIÓN DINÁMICA DE UPRES APILADO (SELECTOR EN MÓVIL)
+        # SECCIÓN DINÁMICA DE UPRES APILADO (TOP 3 + OTROS AL FINAL)
         # -----------------------------------------------------------------------------
         st.subheader("🏢 Distribución por UPRES (Top 10)")
         
@@ -354,18 +352,28 @@ elif authentication_status:
         )
 
         top_10_upres = df_base['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index
-        df_g2 = df_base[df_base['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)]
+        df_g2 = df_base[df_base['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
 
-        if dim_apilamiento == "Categoría Salud":
-            df_stack = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', 'ESPECIALIDAD_CATEGORIA']).size().reset_index(name='Cantidad')
-            df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
-            df_stack['Grupo_fmt'] = df_stack['ESPECIALIDAD_CATEGORIA'].apply(acortar_texto_abreviado)
-            palette = px.colors.qualitative.Prism
-        else:
-            df_stack = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_mot_esp]).size().reset_index(name='Cantidad')
-            df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
-            df_stack['Grupo_fmt'] = df_stack[col_mot_esp].apply(acortar_texto_abreviado)
-            palette = px.colors.qualitative.Safe
+        col_target = 'ESPECIALIDAD_CATEGORIA' if dim_apilamiento == "Categoría Salud" else col_mot_esp
+
+        # 1. Obtener las 3 categorías/motivos principales en general
+        top_3_items = df_g2[col_target].value_counts().head(3).index.tolist()
+
+        # 2. Reemplazar los elementos fuera del Top 3 por "OTROS"
+        df_g2['Grupo_Consolidado'] = df_g2[col_target].apply(
+            lambda x: x if x in top_3_items else "OTROS"
+        )
+
+        # 3. Agrupar datos por UPRES y por el grupo consolidado
+        df_stack = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', 'Grupo_Consolidado']).size().reset_index(name='Cantidad')
+        df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+        df_stack['Grupo_fmt'] = df_stack['Grupo_Consolidado'].apply(
+            lambda x: "OTROS" if x == "OTROS" else acortar_texto_abreviado(x)
+        )
+
+        # 4. Establecer orden explícito: Top 3 en orden descendente y "OTROS" estrictamente al final
+        top_3_fmt = [acortar_texto_abreviado(x) for x in top_3_items]
+        orden_categorias = top_3_fmt + ["OTROS"]
 
         fig_stack = px.bar(
             df_stack, 
@@ -373,7 +381,13 @@ elif authentication_status:
             x='Cantidad', 
             color='Grupo_fmt', 
             orientation='h',
-            color_discrete_sequence=palette
+            category_orders={'Grupo_fmt': orden_categorias},
+            color_discrete_map={
+                orden_categorias[0]: '#1b5e20',
+                orden_categorias[1]: '#2e7d32',
+                orden_categorias[2]: '#43a047',
+                'OTROS': '#a5d6a7'  # Tono más claro para diferenciar el bloque "OTROS"
+            }
         )
         fig_stack.update_layout(
             barmode='stack',
