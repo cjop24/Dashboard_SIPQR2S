@@ -10,7 +10,7 @@ import yaml
 from yaml.loader import SafeLoader
 import re
 import json
-import urllib.request
+import requests
 
 # -----------------------------------------------------------------------------
 # 1. CONFIGURACIÓN RESPONSIVA (Mobile-First / iOS Friendly)
@@ -106,12 +106,22 @@ CONFIG_PLOTLY_TOUCH = {
     'showAxisDragHandles': False
 }
 
-# Carga en caché del GeoJSON oficial de Departamentos de Colombia
+# Carga de GeoJSON con doble mecanismo de tolerancia a fallos
 @st.cache_data(ttl=86400)
 def cargar_geojson_colombia():
-    url = "https://raw.githubusercontent.com/MartaEliz/Colombia-GeoJSON/master/colombia.geo.json"
-    with urllib.request.urlopen(url) as response:
-        return json.loads(response.read().decode())
+    urls = [
+        "https://raw.githubusercontent.com/MartaEliz/Colombia-GeoJSON/master/colombia.geo.json",
+        "https://raw.githubusercontent.com/john-guerra/colombia_geojson/master/colombia.geo.json"
+    ]
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    for u in urls:
+        try:
+            r = requests.get(u, headers=headers, timeout=5)
+            if r.status_code == 200:
+                return r.json()
+        except Exception:
+            continue
+    return None
 
 GEOJSON_COLOMBIA = cargar_geojson_colombia()
 
@@ -272,47 +282,46 @@ elif authentication_status:
         st.markdown("---")
 
         # -----------------------------------------------------------------------------
-        # MAPA COROPLÉTICO DE COLOMBIA (COLOR DEGRADÉ VERDE Y DATO AL RECORRER/TOCAR)
+        # MAPA COROPLÉTICO DE COLOMBIA CON FALLBACK SEGURO
         # -----------------------------------------------------------------------------
         st.subheader("🗺️ Intensidad de Reclamos por Departamento")
         
         df_geo = df_base.groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Reclamos')
-        
-        # Mapeo a nombres exactos del GeoJSON
         df_geo['NOMBRE_DPT'] = df_geo['UNIDAD DE ASIGNACIÓN'].apply(
             lambda u: next((v for k, v in MAPA_DEPTS_GEO.items() if k in str(u).upper()), 'OTRO')
         )
-        
         df_mapa_dept = df_geo.groupby('NOMBRE_DPT')['Reclamos'].sum().reset_index()
 
-        fig_mapa = px.choropleth(
-            df_mapa_dept,
-            geojson=GEOJSON_COLOMBIA,
-            locations='NOMBRE_DPT',
-            featureidkey="properties.NOMBRE_DPT",
-            color='Reclamos',
-            color_continuous_scale="Greens",
-            hover_name='NOMBRE_DPT',
-            hover_data={'Reclamos': ':,', 'NOMBRE_DPT': False}
-        )
-
-        fig_mapa.update_geos(
-            fitbounds="locations",
-            visible=False
-        )
-
-        fig_mapa.update_traces(
-            hovertemplate="<b>%{hovertext}</b><br>Total Reclamos: <b>%{z:,}</b><extra></extra>"
-        )
+        if GEOJSON_COLOMBIA:
+            fig_mapa = px.choropleth(
+                df_mapa_dept,
+                geojson=GEOJSON_COLOMBIA,
+                locations='NOMBRE_DPT',
+                featureidkey="properties.NOMBRE_DPT",
+                color='Reclamos',
+                color_continuous_scale="Greens",
+                hover_name='NOMBRE_DPT',
+                hover_data={'Reclamos': ':,', 'NOMBRE_DPT': False}
+            )
+            fig_mapa.update_geos(fitbounds="locations", visible=False)
+            fig_mapa.update_traces(
+                hovertemplate="<b>%{hovertext}</b><br>Total Reclamos: <b>%{z:,}</b><extra></extra>"
+            )
+        else:
+            fig_mapa = px.bar(
+                df_mapa_dept.sort_values('Reclamos', ascending=False),
+                x='NOMBRE_DPT',
+                y='Reclamos',
+                text_auto=True,
+                color='Reclamos',
+                color_continuous_scale="Greens"
+            )
+            fig_mapa.update_layout(xaxis_title="", yaxis_title="")
 
         fig_mapa.update_layout(
             height=430,
             margin=dict(l=0, r=0, t=10, b=0),
-            coloraxis_colorbar=dict(
-                title="",
-                thickness=12,
-                len=0.7
-            )
+            coloraxis_colorbar=dict(title="", thickness=12, len=0.7)
         )
 
         st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
@@ -363,7 +372,7 @@ elif authentication_status:
         st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # -----------------------------------------------------------------------------
-        # SECCIÓN DINÁMICA DE UPRES APILADO (TOP 3 CONTRASTE CAFÉ/NEGRO/AMARILLO + OTROS VERDE)
+        # SECCIÓN DINÁMICA DE UPRES APILADO
         # -----------------------------------------------------------------------------
         st.subheader("🏢 Distribución por UPRES (Top 10)")
         
@@ -378,10 +387,8 @@ elif authentication_status:
 
         col_target = 'ESPECIALIDAD_CATEGORIA' if dim_apilamiento == "Categoría Salud" else col_mot_esp
 
-        # 1. Contar frecuencias locales por UPRES
         conteo_local = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_target]).size().reset_index(name='Cant_Local')
 
-        # 2. Calcular el Top 3 local de cada UPRES independientemente
         conteo_local['Rank_Local'] = conteo_local.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(
             method='first', ascending=False
         )
@@ -389,7 +396,6 @@ elif authentication_status:
         top_3_locales = conteo_local[conteo_local['Rank_Local'] <= 3].copy()
         top_3_locales['Es_Top3_Local'] = True
 
-        # 3. Cruzar con el DataFrame principal para asignar "OTROS" fuera del Top 3 local
         df_g2 = pd.merge(
             df_g2,
             top_3_locales[['UNIDAD DE ASIGNACIÓN', col_target, 'Es_Top3_Local']],
@@ -402,22 +408,19 @@ elif authentication_status:
             axis=1
         )
 
-        # 4. Agrupar y abreviar
         df_stack = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', 'Grupo_Consolidado']).size().reset_index(name='Cantidad')
         df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
         df_stack['Grupo_fmt'] = df_stack['Grupo_Consolidado'].apply(
             lambda x: "OTROS" if x == "OTROS" else acortar_texto_abreviado(x)
         )
 
-        # 5. Calcular total acumulado por UPRES para mostrar el valor al final de la barra
         df_totales = df_stack.groupby('UPRES_fmt')['Cantidad'].sum().reset_index(name='Total')
 
         categorias_unicas = [c for c in df_stack['Grupo_fmt'].unique() if c != "OTROS"]
         orden_apilado = ["OTROS"] + categorias_unicas
 
-        # Paleta de contraste dinámico: Café, Negro, Amarillo para Top 3 + Verde Suave para OTROS
         paleta_contraste = ['#5d4037', '#212121', '#fbc02d', '#8d6e63', '#424242', '#f57f17']
-        color_map = {'OTROS': '#a5d6a7'} # "OTROS" conserva el verde suave
+        color_map = {'OTROS': '#a5d6a7'}
         
         for idx, cat in enumerate(categorias_unicas):
             color_map[cat] = paleta_contraste[idx % len(paleta_contraste)]
@@ -432,7 +435,6 @@ elif authentication_status:
             color_discrete_map=color_map
         )
 
-        # Capa de texto con el TOTAL al extremo derecho de cada barra
         fig_stack.add_trace(
             go.Scatter(
                 y=df_totales['UPRES_fmt'],
