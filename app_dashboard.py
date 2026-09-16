@@ -411,6 +411,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         fig_comp_dia = go.Figure()
 
+        # Traza diaria Periodo A (Delgada y Punteada)
         fig_comp_dia.add_trace(go.Scatter(
             x=df_dia_a['Dia_Relativo'],
             y=df_dia_a['Periodo A'],
@@ -422,6 +423,20 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             marker=dict(size=5)
         ))
 
+        # Tendencia Periodo A (Gruesa)
+        if len(df_dia_a) > 1:
+            x_a = df_dia_a['Dia_Relativo'].values
+            y_a = df_dia_a['Periodo A'].values
+            m_a, b_a = np.polyfit(x_a, y_a, 1)
+            fig_comp_dia.add_trace(go.Scatter(
+                x=df_dia_a['Dia_Relativo'],
+                y=m_a * x_a + b_a,
+                mode='lines',
+                name='Tendencia Periodo A',
+                line=dict(color='#1b5e20', width=3.5)
+            ))
+
+        # Traza diaria Periodo B (Delgada y Punteada)
         fig_comp_dia.add_trace(go.Scatter(
             x=df_dia_b['Dia_Relativo'],
             y=df_dia_b['Periodo B'],
@@ -433,12 +448,25 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             marker=dict(size=5)
         ))
 
+        # Tendencia Periodo B (Gruesa)
+        if len(df_dia_b) > 1:
+            x_b = df_dia_b['Dia_Relativo'].values
+            y_b = df_dia_b['Periodo B'].values
+            m_b, b_b = np.polyfit(x_b, y_b, 1)
+            fig_comp_dia.add_trace(go.Scatter(
+                x=df_dia_b['Dia_Relativo'],
+                y=m_b * x_b + b_b,
+                mode='lines',
+                name='Tendencia Periodo B',
+                line=dict(color='#d32f2f', width=3.5)
+            ))
+
         fig_comp_dia.update_layout(
             xaxis_title="Día del Rango (1, 2, 3...)",
             yaxis_title="Cantidad de Tickets",
             height=320,
             margin=dict(l=5, r=5, t=10, b=10),
-            legend=dict(orientation="h", y=1.1, x=0.3)
+            legend=dict(orientation="h", y=1.1, x=0.1)
         )
         st.plotly_chart(aplicar_touch_safe(fig_comp_dia), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
