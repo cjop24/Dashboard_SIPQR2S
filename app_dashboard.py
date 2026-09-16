@@ -79,6 +79,10 @@ st.markdown("""
 # -----------------------------------------------------------------------------
 ARCH_PREFERENCIAS = "preferencias_usuario.json"
 
+# Mapeo de colores global para comparativas
+COLOR_PERIODO_A = '#2e7d32'  # Verde RASES
+COLOR_PERIODO_B = '#c62828'  # Rojo RASES
+
 def cargar_preferencias():
     if os.path.exists(ARCH_PREFERENCIAS):
         try:
@@ -309,7 +313,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
             y=df_dia['Cantidad'],
             mode='lines+markers',
             name='Tickets Diarios',
-            line=dict(color='#2e7d32', width=1, dash='dot'),
+            line=dict(color=COLOR_PERIODO_A, width=1, dash='dot'),
             marker=dict(size=5, color='#1b5e20')
         ))
         
@@ -324,7 +328,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
                 y=trend_line,
                 mode='lines',
                 name='Tendencia Periodo',
-                line=dict(color='#d32f2f', width=3.5)
+                line=dict(color=COLOR_PERIODO_B, width=3.5)
             ))
         
         fig_dia.update_layout(
@@ -338,7 +342,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
     df_g1 = df_base['RASES'].value_counts().reset_index()
     df_g1.columns = ['RASES', 'Cantidad']
     df_g1['RASES_fmt'] = df_g1['RASES'].apply(acortar_texto_abreviado)
-    fig1 = px.bar(df_g1, x='RASES_fmt', y='Cantidad', text_auto=True, color_discrete_sequence=['#2e7d32'])
+    fig1 = px.bar(df_g1, x='RASES_fmt', y='Cantidad', text_auto=True, color_discrete_sequence=[COLOR_PERIODO_A])
     fig1.update_layout(xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10))
     st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
@@ -411,7 +415,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         fig_comp_dia = go.Figure()
 
-        # Traza diaria Periodo A (Delgada y Punteada)
+        # Traza diaria Periodo A
         fig_comp_dia.add_trace(go.Scatter(
             x=df_dia_a['Dia_Relativo'],
             y=df_dia_a['Periodo A'],
@@ -419,11 +423,11 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             name='Periodo A',
             customdata=df_dia_a['fecha_corta'],
             hovertemplate="<b>Periodo A</b><br>Fecha: %{customdata}<br>Día %{x}: %{y} tickets<extra></extra>",
-            line=dict(color='#1b5e20', width=1, dash='dot'),
+            line=dict(color=COLOR_PERIODO_A, width=1, dash='dot'),
             marker=dict(size=5)
         ))
 
-        # Tendencia Periodo A (Gruesa)
+        # Tendencia Periodo A
         if len(df_dia_a) > 1:
             x_a = df_dia_a['Dia_Relativo'].values
             y_a = df_dia_a['Periodo A'].values
@@ -433,10 +437,10 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
                 y=m_a * x_a + b_a,
                 mode='lines',
                 name='Tendencia Periodo A',
-                line=dict(color='#1b5e20', width=3.5)
+                line=dict(color=COLOR_PERIODO_A, width=3.5)
             ))
 
-        # Traza diaria Periodo B (Delgada y Punteada)
+        # Traza diaria Periodo B
         fig_comp_dia.add_trace(go.Scatter(
             x=df_dia_b['Dia_Relativo'],
             y=df_dia_b['Periodo B'],
@@ -444,11 +448,11 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             name='Periodo B',
             customdata=df_dia_b['fecha_corta'],
             hovertemplate="<b>Periodo B</b><br>Fecha: %{customdata}<br>Día %{x}: %{y} tickets<extra></extra>",
-            line=dict(color='#d32f2f', width=1, dash='dot'),
+            line=dict(color=COLOR_PERIODO_B, width=1, dash='dot'),
             marker=dict(size=5)
         ))
 
-        # Tendencia Periodo B (Gruesa)
+        # Tendencia Periodo B
         if len(df_dia_b) > 1:
             x_b = df_dia_b['Dia_Relativo'].values
             y_b = df_dia_b['Periodo B'].values
@@ -458,7 +462,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
                 y=m_b * x_b + b_b,
                 mode='lines',
                 name='Tendencia Periodo B',
-                line=dict(color='#d32f2f', width=3.5)
+                line=dict(color=COLOR_PERIODO_B, width=3.5)
             ))
 
         fig_comp_dia.update_layout(
@@ -469,6 +473,9 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             legend=dict(orientation="h", y=1.1, x=0.1)
         )
         st.plotly_chart(aplicar_touch_safe(fig_comp_dia), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
+        # Mapa de colores unificado para comparativas de barras
+        mapa_color_comp = {'Periodo A': COLOR_PERIODO_A, 'Periodo B': COLOR_PERIODO_B}
 
         st.subheader("Comparativo por RASES")
         df_r_a = df_a['RASES'].value_counts().reset_index()
@@ -484,7 +491,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         fig_comp_rases = px.bar(
             df_comp_rases, x='RASES_fmt', y='Cantidad', color='Periodo', barmode='group',
-            text_auto=True, color_discrete_map={'Periodo A': '#2e7d32', 'Periodo B': '#c62828'}
+            text_auto=True, color_discrete_map=mapa_color_comp
         )
         fig_comp_rases.update_layout(xaxis_title="", yaxis_title="", height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_rases), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
@@ -502,7 +509,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         fig_comp_upres = px.bar(
             df_comp_upres, y='UPRES_fmt', x='Cantidad', color='Periodo', barmode='group', orientation='h',
-            text_auto=True, color_discrete_map={'Periodo A': '#388e3c', 'Periodo B': '#e53935'}
+            text_auto=True, color_discrete_map=mapa_color_comp
         )
         fig_comp_upres.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=420, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_upres), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
@@ -520,7 +527,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         fig_comp_cat = px.bar(
             df_comp_cat, y='Cat_fmt', x='Cantidad', color='Periodo', barmode='group', orientation='h',
-            text_auto=True, color_discrete_map={'Periodo A': '#43a047', 'Periodo B': '#ef5350'}
+            text_auto=True, color_discrete_map=mapa_color_comp
         )
         fig_comp_cat.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=420, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_cat), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
@@ -538,7 +545,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         fig_comp_mot = px.bar(
             df_comp_mot, y='Mot_fmt', x='Cantidad', color='Periodo', barmode='group', orientation='h',
-            text_auto=True, color_discrete_map={'Periodo A': '#1b5e20', 'Periodo B': '#b71c1c'}
+            text_auto=True, color_discrete_map=mapa_color_comp
         )
         fig_comp_mot.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=420, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_mot), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
@@ -555,7 +562,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             df_ts_comp = pd.merge(df_ts_a, df_ts_b, on='Tipo', how='outer').fillna(0)
             df_ts_melt = df_ts_comp.melt(id_vars=['Tipo'], value_vars=['Periodo A', 'Periodo B'], var_name='Periodo', value_name='Cantidad')
             
-            fig_comp_ts = px.bar(df_ts_melt, x='Cantidad', y='Tipo', color='Periodo', barmode='group', orientation='h', text_auto=True, color_discrete_map={'Periodo A': '#66bb6a', 'Periodo B': '#ff7043'})
+            fig_comp_ts = px.bar(df_ts_melt, x='Cantidad', y='Tipo', color='Periodo', barmode='group', orientation='h', text_auto=True, color_discrete_map=mapa_color_comp)
             fig_comp_ts.update_layout(yaxis=dict(autorange="reversed"), height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.2))
             st.plotly_chart(aplicar_touch_safe(fig_comp_ts), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
@@ -570,7 +577,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             df_mr_comp = pd.merge(df_mr_a, df_mr_b, on='Medio', how='outer').fillna(0)
             df_mr_melt = df_mr_comp.melt(id_vars=['Medio'], value_vars=['Periodo A', 'Periodo B'], var_name='Periodo', value_name='Cantidad')
             
-            fig_comp_mr = px.bar(df_mr_melt, x='Cantidad', y='Medio', color='Periodo', barmode='group', orientation='h', text_auto=True, color_discrete_map={'Periodo A': '#81c784', 'Periodo B': '#ff8a65'})
+            fig_comp_mr = px.bar(df_mr_melt, x='Cantidad', y='Medio', color='Periodo', barmode='group', orientation='h', text_auto=True, color_discrete_map=mapa_color_comp)
             fig_comp_mr.update_layout(yaxis=dict(autorange="reversed"), height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.2))
             st.plotly_chart(aplicar_touch_safe(fig_comp_mr), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
     else:
