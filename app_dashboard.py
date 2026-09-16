@@ -123,139 +123,11 @@ GEO_DEPARTAMENTOS_COL = {
     'SAN ANDRES': [12.5847, -81.7006], 'SUCRE': [9.3047, -75.3978], 'VAUPES': [1.1983, -70.1733], 'VICHADA': [4.4234, -67.9239]
 }
 
-# -----------------------------------------------------------------------------
-# 3. MÓDULOS DE RENDERIZADO (VISTAS MODULARES)
-# -----------------------------------------------------------------------------
-def render_tab_individual(df_base_global, col_mot_esp):
-    st.caption("Consola Ejecutiva de Atención al Usuario - Periodo Único")
-
-    min_f = df_base_global['fecha_dt'].min().date() if not df_base_global.empty else None
-    max_f = df_base_global['fecha_dt'].max().date() if not df_base_global.empty else None
-    rango_fechas_ind = st.date_input("Rango de Fecha de Creación (Análisis Individual)", value=(min_f, max_f), min_value=min_f, max_value=max_f) if min_f else []
-
-    df_base = df_base_global.copy()
-    if len(rango_fechas_ind) == 2:
-        df_base = df_base[(df_base['fecha_dt'].dt.date >= rango_fechas_ind[0]) & (df_base['fecha_dt'].dt.date <= rango_fechas_ind[1])]
-
-    top_upres_s = df_base['UNIDAD DE ASIGNACIÓN'].value_counts()
-    top_upres_nom = top_upres_s.index[0] if not top_upres_s.empty else "N/A"
-    top_upres_val = top_upres_s.iloc[0] if not top_upres_s.empty else 0
-
-    top_rases_s = df_base['RASES'].value_counts()
-    top_rases_nom = top_rases_s.index[0] if not top_rases_s.empty else "N/A"
-    top_rases_val = top_rases_s.iloc[0] if not top_rases_s.empty else 0
-
-    top_dia_s = df_base['fecha_corta'].value_counts()
-    top_dia_nom = top_dia_s.index[0] if not top_dia_s.empty else "N/A"
-    top_dia_val = top_dia_s.iloc[0] if not top_dia_s.empty else 0
-
-    k1, k2 = st.columns(2)
-    k1.metric("Total SIPQR2S País", f"{len(df_base):,}")
-    k1_cat = df_base['ESPECIALIDAD_CATEGORIA'].value_counts()
-    cat_top_name = k1_cat.index[0] if not k1_cat.empty else "N/A"
-    k2.metric("Categoría con más SIPQR2S", acortar_texto_abreviado(cat_top_name), delta=f"{k1_cat.iloc[0] if not k1_cat.empty else 0:,} tickets", delta_color="off")
-
-    k3, k4, k5 = st.columns(3)
-    k3.metric("UPRES con más SIPQR2S", acortar_texto_abreviado(top_upres_nom), delta=f"{top_upres_val:,} tickets", delta_color="off")
-    k4.metric("RASES con más SIPQR2S", acortar_texto_abreviado(top_rases_nom), delta=f"{top_rases_val:,} tickets", delta_color="off")
-    k5.metric("Día con más SIPQR2S", f"{top_dia_nom}", delta=f"{top_dia_val:,} tickets", delta_color="off")
-
-    st.markdown("---")
-
-    st.subheader("🗺️ Distribución Geográfica SIPQR2S por UPRES")
-    df_geo = df_base.groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Cantidad')
+def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
+    st.subheader(titulo_grafico)
     
-    lats, lons = [], []
-    for u in df_geo['UNIDAD DE ASIGNACIÓN']:
-        matched = False
-        for dep, coords in GEO_DEPARTAMENTOS_COL.items():
-            if dep in str(u).upper():
-                lats.append(coords[0])
-                lons.append(coords[1])
-                matched = True
-                break
-        if not matched:
-            lats.append(4.6097)
-            lons.append(-74.0817)
-
-    df_geo['lat'] = lats
-    df_geo['lon'] = lons
-    
-    fig_mapa = px.scatter_map(
-        df_geo, 
-        lat='lat', 
-        lon='lon', 
-        size='Cantidad', 
-        hover_name='UNIDAD DE ASIGNACIÓN',
-        hover_data={'Cantidad': True, 'lat': False, 'lon': False},
-        color='Cantidad',
-        color_continuous_scale=px.colors.sequential.Greens,
-        zoom=4.5,
-        center={"lat": 4.5709, "lon": -74.2973},
-        map_style="carto-positron"
-    )
-    fig_mapa.update_layout(height=380, margin=dict(l=0, r=0, t=10, b=0))
-    st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
-
-    st.subheader("📈 Comportamiento Diario de SIPQR2S")
-    df_dia = df_base.groupby(['fecha_dt', 'fecha_corta']).size().reset_index(name='Cantidad').sort_values('fecha_dt')
-    
-    if not df_dia.empty:
-        fig_dia = go.Figure()
-        fig_dia.add_trace(go.Scatter(
-            x=df_dia['fecha_corta'],
-            y=df_dia['Cantidad'],
-            mode='lines+markers',
-            name='Tickets Diarios',
-            line=dict(color='#2e7d32', width=2),
-            marker=dict(size=6, color='#1b5e20')
-        ))
-        
-        if len(df_dia) > 1:
-            x_vals = np.arange(len(df_dia))
-            y_vals = df_dia['Cantidad'].values
-            m, b = np.polyfit(x_vals, y_vals, 1)
-            trend_line = m * x_vals + b
-            
-            fig_dia.add_trace(go.Scatter(
-                x=df_dia['fecha_corta'],
-                y=trend_line,
-                mode='lines',
-                name='Tendencia Periodo',
-                line=dict(color='#d32f2f', width=2, dash='dash')
-            ))
-        
-        fig_dia.update_layout(
-            xaxis_title="", yaxis_title="", height=300,
-            margin=dict(l=5, r=5, t=10, b=10),
-            legend=dict(orientation="h", y=1.1, x=0.8)
-        )
-        st.plotly_chart(aplicar_touch_safe(fig_dia), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
-
-    st.subheader("📍 SIPQR2S por RASES")
-    df_g1 = df_base['RASES'].value_counts().reset_index()
-    df_g1.columns = ['RASES', 'Cantidad']
-    df_g1['RASES_fmt'] = df_g1['RASES'].apply(acortar_texto_abreviado)
-    fig1 = px.bar(df_g1, x='RASES_fmt', y='Cantidad', text_auto=True, color_discrete_sequence=['#2e7d32'])
-    fig1.update_layout(xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10))
-    st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
-
-    # -----------------------------------------------------------------------------
-    # SECCIÓN DINÁMICA DE UPRES APILADO (COLOR DE OTROS EN VERDE Y TOP 1-3 CONTRASTE)
-    # -----------------------------------------------------------------------------
-    st.subheader("🏢 Distribución por UPRES (Top 10)")
-    
-    dim_apilamiento = st.radio(
-        "Seleccione dimensión de apilamiento:",
-        ["Categoría Salud", "Motivo Específico"],
-        horizontal=True,
-        key="rad_ind"
-    )
-
     top_10_upres = df_base['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index
     df_g2 = df_base[df_base['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
-
-    col_target = 'ESPECIALIDAD_CATEGORIA' if dim_apilamiento == "Categoría Salud" else col_mot_esp
 
     conteo_local = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_target]).size().reset_index(name='Cant_Local')
     conteo_local['Rank_Local'] = conteo_local.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(method='first', ascending=False)
@@ -278,7 +150,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
         '#2b2d42', '#d4a373', '#52b788', '#003049'
     ]
     
-    color_map = {'OTROS': '#a5d6a7'}  # Verde institucional suave para "OTROS"
+    color_map = {'OTROS': '#a5d6a7'}
     for idx, cat in enumerate(categorias_unicas):
         color_map[cat] = paleta_contraste[idx % len(paleta_contraste)]
 
@@ -313,10 +185,131 @@ def render_tab_individual(df_base_global, col_mot_esp):
     )
     st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
+# -----------------------------------------------------------------------------
+# 3. MÓDULOS DE RENDERIZADO
+# -----------------------------------------------------------------------------
+def render_tab_individual(df_base_global, col_mot_esp):
+    st.caption("Consola Ejecutiva de Atención al Usuario - Periodo Único")
+
+    min_f = df_base_global['fecha_dt'].min().date() if not df_base_global.empty else None
+    max_f = df_base_global['fecha_dt'].max().date() if not df_base_global.empty else None
+    rango_fechas_ind = st.date_input("Rango de Fecha de Creación (Análisis Individual)", value=(min_f, max_f), min_value=min_f, max_value=max_f) if min_f else []
+
+    df_base = df_base_global.copy()
+    if len(rango_fechas_ind) == 2:
+        df_base = df_base[(df_base['fecha_dt'].dt.date >= rango_fechas_ind[0]) & (df_base['fecha_dt'].dt.date <= rango_fechas_ind[1])]
+
+    top_upres_s = df_base['UNIDAD DE ASIGNACIÓN'].value_counts()
+    top_upres_nom = top_upres_s.index[0] if not top_upres_s.empty else "N/A"
+    top_upres_val = top_upres_s.iloc[0] if not top_upres_s.empty else 0
+
+    top_rases_s = df_base['RASES'].value_counts()
+    top_rases_nom = top_rases_s.index[0] if not top_rases_s.empty else "N/A"
+    top_rases_val = top_rases_s.iloc[0] if not top_rases_s.empty else 0
+
+    top_dia_s = df_base['fecha_corta'].value_counts()
+    top_dia_nom = top_dia_s.index[0] if not top_dia_s.empty else "N/A"
+    top_dia_val = top_dia_s.iloc[0] if not top_dia_s.empty else 0
+
+    k1, k2 = st.columns(2)
+    k1.metric("Total SIPQR2S", f"{len(df_base):,}")
+    k1_cat = df_base['ESPECIALIDAD_CATEGORIA'].value_counts()
+    cat_top_name = k1_cat.index[0] if not k1_cat.empty else "N/A"
+    k2.metric("Categoría con más SIPQR2S", acortar_texto_abreviado(cat_top_name), delta=f"{k1_cat.iloc[0] if not k1_cat.empty else 0:,} tickets", delta_color="off")
+
+    k3, k4, k5 = st.columns(3)
+    k3.metric("UPRES con más SIPQR2S", acortar_texto_abreviado(top_upres_nom), delta=f"{top_upres_val:,} tickets", delta_color="off")
+    k4.metric("RASES con más SIPQR2S", acortar_texto_abreviado(top_rases_nom), delta=f"{top_rases_val:,} tickets", delta_color="off")
+    k5.metric("Día con más SIPQR2S", f"{top_dia_nom}", delta=f"{top_dia_val:,} tickets", delta_color="off")
+
+    st.markdown("---")
+
+    st.subheader("MAPA: Distribución Geográfica SIPQR2S por UPRES")
+    df_geo = df_base.groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Cantidad')
+    
+    lats, lons = [], []
+    for u in df_geo['UNIDAD DE ASIGNACIÓN']:
+        matched = False
+        for dep, coords in GEO_DEPARTAMENTOS_COL.items():
+            if dep in str(u).upper():
+                lats.append(coords[0])
+                lons.append(coords[1])
+                matched = True
+                break
+        if not matched:
+            lats.append(4.6097)
+            lons.append(-74.0817)
+
+    df_geo['lat'] = lats
+    df_geo['lon'] = lons
+    
+    fig_mapa = px.scatter_map(
+        df_geo, 
+        lat='lat', 
+        lon='lon', 
+        size='Cantidad', 
+        hover_name='UNIDAD DE ASIGNACIÓN',
+        hover_data={'Cantidad': True, 'lat': False, 'lon': False},
+        color='Cantidad',
+        color_continuous_scale=px.colors.sequential.Greens,
+        zoom=4.5,
+        center={"lat": 4.5709, "lon": -74.2973},
+        map_style="carto-positron"
+    )
+    fig_mapa.update_layout(height=380, margin=dict(l=0, r=0, t=10, b=0))
+    st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
+    st.subheader("Comportamiento Diario de SIPQR2S")
+    df_dia = df_base.groupby(['fecha_dt', 'fecha_corta']).size().reset_index(name='Cantidad').sort_values('fecha_dt')
+    
+    if not df_dia.empty:
+        fig_dia = go.Figure()
+        fig_dia.add_trace(go.Scatter(
+            x=df_dia['fecha_corta'],
+            y=df_dia['Cantidad'],
+            mode='lines+markers',
+            name='Tickets Diarios',
+            line=dict(color='#2e7d32', width=2),
+            marker=dict(size=6, color='#1b5e20')
+        ))
+        
+        if len(df_dia) > 1:
+            x_vals = np.arange(len(df_dia))
+            y_vals = df_dia['Cantidad'].values
+            m, b = np.polyfit(x_vals, y_vals, 1)
+            trend_line = m * x_vals + b
+            
+            fig_dia.add_trace(go.Scatter(
+                x=df_dia['fecha_corta'],
+                y=trend_line,
+                mode='lines',
+                name='Tendencia Periodo',
+                line=dict(color='#d32f2f', width=2, dash='dash')
+            ))
+        
+        fig_dia.update_layout(
+            xaxis_title="", yaxis_title="", height=300,
+            margin=dict(l=5, r=5, t=10, b=10),
+            legend=dict(orientation="h", y=1.1, x=0.8)
+        )
+        st.plotly_chart(aplicar_touch_safe(fig_dia), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
+    st.subheader("SIPQR2S por RASES")
+    df_g1 = df_base['RASES'].value_counts().reset_index()
+    df_g1.columns = ['RASES', 'Cantidad']
+    df_g1['RASES_fmt'] = df_g1['RASES'].apply(acortar_texto_abreviado)
+    fig1 = px.bar(df_g1, x='RASES_fmt', y='Cantidad', text_auto=True, color_discrete_sequence=['#2e7d32'])
+    fig1.update_layout(xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10))
+    st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
+    # Renderizado directo de ambos gráficos apilados sin radio buttons
+    generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES (Top 10) - Categoría Salud")
+    generar_grafico_upres_apilado(df_base, col_mot_esp, "Distribución por UPRES (Top 10) - Motivo Específico")
+
     st.markdown("---")
     col_t1, col_t2 = st.columns(2)
     with col_t1:
-        st.subheader("🍰 Porcentaje (%) por Tipo de Solicitud")
+        st.subheader("Porcentaje (%) por Tipo de Solicitud")
         df_pie_sol = df_base['Tipo de Solicitud'].value_counts().reset_index()
         df_pie_sol.columns = ['Tipo', 'Cantidad']
         fig_pie1 = px.pie(df_pie_sol, values='Cantidad', names='Tipo', hole=0.4, color_discrete_sequence=px.colors.sequential.Greens_r)
@@ -324,7 +317,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
         st.plotly_chart(aplicar_touch_safe(fig_pie1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     with col_t2:
-        st.subheader("🍩 Porcentaje (%) por Medio de Recepción")
+        st.subheader("Porcentaje (%) por Medio de Recepción")
         df_pie_med = df_base['Medio de Recepción'].value_counts().reset_index()
         df_pie_med.columns = ['Medio', 'Cantidad']
         fig_pie2 = px.pie(df_pie_med, values='Cantidad', names='Medio', hole=0.4, color_discrete_sequence=px.colors.sequential.YlGn_r)
@@ -332,7 +325,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
         st.plotly_chart(aplicar_touch_safe(fig_pie2), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 
-def render_tab_comparativo(df_base_global):
+def render_tab_comparativo(df_base_global, col_mot_esp):
     st.caption("Comparación Analítica Cruzada entre dos Ventanas de Tiempo")
 
     min_hist = df_base_global['fecha_dt'].min().date() if not df_base_global.empty else None
@@ -340,10 +333,10 @@ def render_tab_comparativo(df_base_global):
 
     col_p1, col_p2 = st.columns(2)
     with col_p1:
-        st.markdown("### 🅰️ Periodo A (Base)")
+        st.markdown("### Periodo A (Base)")
         rango_a = st.date_input("Seleccione Rango A", value=(min_hist, min_hist + pd.Timedelta(days=30)) if min_hist else [], min_value=min_hist, max_value=max_hist, key="rango_a")
     with col_p2:
-        st.markdown("### 🅱️ Periodo B (Comparado)")
+        st.markdown("### Periodo B (Comparado)")
         rango_b = st.date_input("Seleccione Rango B", value=(max_hist - pd.Timedelta(days=30), max_hist) if max_hist else [], min_value=min_hist, max_value=max_hist, key="rango_b")
 
     if len(rango_a) == 2 and len(rango_b) == 2:
@@ -355,7 +348,7 @@ def render_tab_comparativo(df_base_global):
         diff_pct = ((diff_abs / tot_a) * 100) if tot_a > 0 else 0.0
 
         st.markdown("---")
-        st.subheader("📊 Indicadores Comparativos Generales")
+        st.subheader("Indicadores Comparativos Generales")
         kc1, kc2, kc3 = st.columns(3)
         kc1.metric("Total Periodo A", f"{tot_a:,}")
         kc2.metric("Total Periodo B", f"{tot_b:,}")
@@ -368,7 +361,7 @@ def render_tab_comparativo(df_base_global):
 
         st.markdown("---")
 
-        st.subheader("📈 Comparativo de Tendencia Diario")
+        st.subheader("Comparativo de Tendencia Diario")
         df_dia_a = df_a.groupby('fecha_corta').size().reset_index(name='Periodo A')
         df_dia_b = df_b.groupby('fecha_corta').size().reset_index(name='Periodo B')
 
@@ -378,7 +371,7 @@ def render_tab_comparativo(df_base_global):
         fig_comp_dia.update_layout(xaxis_title="", yaxis_title="Cantidad de Tickets", height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_dia), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        st.subheader("📍 Comparativo por RASES")
+        st.subheader("Comparativo por RASES")
         df_r_a = df_a['RASES'].value_counts().reset_index()
         df_r_a.columns = ['RASES', 'Cantidad']
         df_r_a['Periodo'] = 'Periodo A'
@@ -397,7 +390,7 @@ def render_tab_comparativo(df_base_global):
         fig_comp_rases.update_layout(xaxis_title="", yaxis_title="", height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_rases), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        st.subheader("🏢 Comparativo Top 10 UPRES")
+        st.subheader("Comparativo Top 10 UPRES")
         top_upres_comp = pd.concat([df_a, df_b])['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index
         df_u_a = df_a[df_a['UNIDAD DE ASIGNACIÓN'].isin(top_upres_comp)].groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Cantidad')
         df_u_a['Periodo'] = 'Periodo A'
@@ -415,7 +408,8 @@ def render_tab_comparativo(df_base_global):
         fig_comp_upres.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=420, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_upres), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        st.subheader("🩺 Comparativo por Categoría Salud")
+        # Gráfico Comparativo 1: Categoría Salud
+        st.subheader("Comparativo por Categoría Salud")
         top_cat_comp = pd.concat([df_a, df_b])['ESPECIALIDAD_CATEGORIA'].value_counts().head(10).index
         df_c_a = df_a[df_a['ESPECIALIDAD_CATEGORIA'].isin(top_cat_comp)].groupby('ESPECIALIDAD_CATEGORIA').size().reset_index(name='Cantidad')
         df_c_a['Periodo'] = 'Periodo A'
@@ -433,9 +427,28 @@ def render_tab_comparativo(df_base_global):
         fig_comp_cat.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=420, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_cat), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
+        # Gráfico Comparativo 2: Motivo Específico
+        st.subheader("Comparativo por Motivo Específico")
+        top_mot_comp = pd.concat([df_a, df_b])[col_mot_esp].value_counts().head(10).index
+        df_m_a = df_a[df_a[col_mot_esp].isin(top_mot_comp)].groupby(col_mot_esp).size().reset_index(name='Cantidad')
+        df_m_a['Periodo'] = 'Periodo A'
+
+        df_m_b = df_b[df_b[col_mot_esp].isin(top_mot_comp)].groupby(col_mot_esp).size().reset_index(name='Cantidad')
+        df_m_b['Periodo'] = 'Periodo B'
+
+        df_comp_mot = pd.concat([df_m_a, df_m_b])
+        df_comp_mot['Mot_fmt'] = df_comp_mot[col_mot_esp].apply(acortar_texto_abreviado)
+
+        fig_comp_mot = px.bar(
+            df_comp_mot, y='Mot_fmt', x='Cantidad', color='Periodo', barmode='group', orientation='h',
+            text_auto=True, color_discrete_map={'Periodo A': '#1b5e20', 'Periodo B': '#b71c1c'}
+        )
+        fig_comp_mot.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=420, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15, x=0.3))
+        st.plotly_chart(aplicar_touch_safe(fig_comp_mot), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
         col_cp1, col_cp2 = st.columns(2)
         with col_cp1:
-            st.subheader("🍰 Tipo de Solicitud")
+            st.subheader("Tipo de Solicitud")
             df_ts_a = df_a['Tipo de Solicitud'].value_counts().reset_index()
             df_ts_a.columns = ['Tipo', 'Periodo A']
             
@@ -450,7 +463,7 @@ def render_tab_comparativo(df_base_global):
             st.plotly_chart(aplicar_touch_safe(fig_comp_ts), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         with col_cp2:
-            st.subheader("🍩 Medio de Recepción")
+            st.subheader("Medio de Recepción")
             df_mr_a = df_a['Medio de Recepción'].value_counts().reset_index()
             df_mr_a.columns = ['Medio', 'Periodo A']
             
@@ -561,7 +574,7 @@ elif authentication_status:
         render_tab_individual(df_base_global, col_mot_esp)
 
     with tab_comp:
-        render_tab_comparativo(df_base_global)
+        render_tab_comparativo(df_base_global, col_mot_esp)
 
     with tab_det:
         st.subheader("📋 Consolidado de Datos")
