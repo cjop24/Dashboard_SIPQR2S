@@ -381,9 +381,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         st.markdown("---")
 
-        # -----------------------------------------------------------------------------
-        # TENDENCIA DIARIA SUPERPUESTA POR DÍAS RELATIVOS
-        # -----------------------------------------------------------------------------
         st.subheader("Comparativo de Tendencia Diario")
 
         df_dia_a = df_a.groupby('fecha_corta').size().reset_index(name='Periodo A')
@@ -628,4 +625,26 @@ elif authentication_status:
 
     with tab_det:
         st.subheader("📋 Consolidado de Datos")
-        st.dataframe(df_base_global[['RASES', 'UNIDAD DE ASIGNACIÓN', 'ESPECIALIDAD_CATEGORIA', 'Tipo de Solicitud', 'Medio de Recepción']].head(100), use_container_width=True)
+        
+        # Identificar la columna de Ticket
+        col_ticket = 'Ticket' if 'Ticket' in df_base_global.columns else ('ticket' if 'ticket' in df_base_global.columns else 'Consecutivo Ticket')
+        
+        # Lista de columnas a desplegar incluyendo Ticket y Motivo Específico
+        cols_detalle = [
+            col_ticket,
+            'fecha_corta',
+            'RASES', 
+            'UNIDAD DE ASIGNACIÓN', 
+            'ESPECIALIDAD_CATEGORIA', 
+            col_mot_esp,
+            'Tipo de Solicitud', 
+            'Medio de Recepción'
+        ]
+        
+        cols_validas = [c for c in cols_detalle if c in df_base_global.columns]
+        
+        st.dataframe(
+            df_base_global[cols_validas].head(100), 
+            use_container_width=True,
+            hide_index=True
+        )
