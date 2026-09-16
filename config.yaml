@@ -7,7 +7,12 @@ credentials:
     hellen_jimenez:
       email: "hellen.jimenez@correo.policia.gov.co"
       name: "jefeAteus"
-      password: "$2b$12$5fpRQL.NkL6BZ9pI19Qg2eKOUxyhzQArTqnaSva/QvGRcc04.YdHG" # Hash bcrypt para At3usSipqr2s2
+      password: "$2b$12$i1iDoHKybOe5yrQkc7fEDOxfqJBWWivq3PCjy3dMzR6ECUspWc2se" # Hash bcrypt para At3usSipqr2s2
+    paula_giraldo:
+      email: "paula.giraldo@correo.policia.gov.co"
+      name: "Responsable SIPQR2S"
+      password: "$2b$12$2lkuqvs3yHAGHhD3iAhPV.gqi/RDvv/Y2FPH.UQOkVYSMwXyXulZ6" # Hash bcrypt para At3usSipqr2s3
+
 cookie:
   expiry_days: 120
   key: "dignidad_del_vencido"
