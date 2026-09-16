@@ -309,8 +309,8 @@ def render_tab_individual(df_base_global, col_mot_esp):
             y=df_dia['Cantidad'],
             mode='lines+markers',
             name='Tickets Diarios',
-            line=dict(color='#2e7d32', width=2),
-            marker=dict(size=6, color='#1b5e20')
+            line=dict(color='#2e7d32', width=1, dash='dot'),
+            marker=dict(size=5, color='#1b5e20')
         ))
         
         if len(df_dia) > 1:
@@ -324,7 +324,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
                 y=trend_line,
                 mode='lines',
                 name='Tendencia Periodo',
-                line=dict(color='#d32f2f', width=2, dash='dash')
+                line=dict(color='#d32f2f', width=3.5)
             ))
         
         fig_dia.update_layout(
@@ -418,7 +418,8 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             name='Periodo A',
             customdata=df_dia_a['fecha_corta'],
             hovertemplate="<b>Periodo A</b><br>Fecha: %{customdata}<br>Día %{x}: %{y} tickets<extra></extra>",
-            line=dict(color='#1b5e20', width=2)
+            line=dict(color='#1b5e20', width=1, dash='dot'),
+            marker=dict(size=5)
         ))
 
         fig_comp_dia.add_trace(go.Scatter(
@@ -428,7 +429,8 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             name='Periodo B',
             customdata=df_dia_b['fecha_corta'],
             hovertemplate="<b>Periodo B</b><br>Fecha: %{customdata}<br>Día %{x}: %{y} tickets<extra></extra>",
-            line=dict(color='#d32f2f', width=2)
+            line=dict(color='#d32f2f', width=1, dash='dot'),
+            marker=dict(size=5)
         ))
 
         fig_comp_dia.update_layout(
