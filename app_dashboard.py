@@ -124,7 +124,7 @@ GEO_DEPARTAMENTOS_COL = {
 }
 
 # -----------------------------------------------------------------------------
-# 3. MÓDULOS DE RENDERIZADO (VISTAS MODULARES CORREGIDAS)
+# 3. MÓDULOS DE RENDERIZADO (VISTAS MODULARES)
 # -----------------------------------------------------------------------------
 def render_tab_individual(df_base_global, col_mot_esp):
     st.caption("Consola Ejecutiva de Atención al Usuario - Periodo Único")
@@ -240,7 +240,11 @@ def render_tab_individual(df_base_global, col_mot_esp):
     fig1.update_layout(xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10))
     st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
+    # -----------------------------------------------------------------------------
+    # SECCIÓN DINÁMICA DE UPRES APILADO (COLOR DE OTROS EN VERDE Y TOP 1-3 CONTRASTE)
+    # -----------------------------------------------------------------------------
     st.subheader("🏢 Distribución por UPRES (Top 10)")
+    
     dim_apilamiento = st.radio(
         "Seleccione dimensión de apilamiento:",
         ["Categoría Salud", "Motivo Específico"],
@@ -250,6 +254,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     top_10_upres = df_base['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index
     df_g2 = df_base[df_base['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
+
     col_target = 'ESPECIALIDAD_CATEGORIA' if dim_apilamiento == "Categoría Salud" else col_mot_esp
 
     conteo_local = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_target]).size().reset_index(name='Cant_Local')
@@ -268,9 +273,44 @@ def render_tab_individual(df_base_global, col_mot_esp):
     categorias_unicas = [c for c in df_stack['Grupo_fmt'].unique() if c != "OTROS"]
     orden_apilado = ["OTROS"] + categorias_unicas
 
-    fig_stack = px.bar(df_stack, y='UPRES_fmt', x='Cantidad', color='Grupo_fmt', orientation='h', category_orders={'Grupo_fmt': orden_apilado})
-    fig_stack.add_trace(go.Scatter(y=df_totales['UPRES_fmt'], x=df_totales['Total'], mode='text', text=df_totales['Total'].apply(lambda v: f" <b>{v:,}</b>"), textposition='middle right', showlegend=False, hoverinfo='skip'))
-    fig_stack.update_layout(barmode='stack', yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=460, margin=dict(l=5, r=40, t=10, b=10), legend=dict(orientation="h", y=-0.25, x=0, title=None, font=dict(size=10)))
+    paleta_contraste = [
+        '#1b4332', '#2d6a4f', '#40916c', '#1d3557', 
+        '#2b2d42', '#d4a373', '#52b788', '#003049'
+    ]
+    
+    color_map = {'OTROS': '#a5d6a7'}  # Verde institucional suave para "OTROS"
+    for idx, cat in enumerate(categorias_unicas):
+        color_map[cat] = paleta_contraste[idx % len(paleta_contraste)]
+
+    fig_stack = px.bar(
+        df_stack, 
+        y='UPRES_fmt', 
+        x='Cantidad', 
+        color='Grupo_fmt', 
+        orientation='h', 
+        category_orders={'Grupo_fmt': orden_apilado},
+        color_discrete_map=color_map
+    )
+    
+    fig_stack.add_trace(go.Scatter(
+        y=df_totales['UPRES_fmt'], 
+        x=df_totales['Total'], 
+        mode='text', 
+        text=df_totales['Total'].apply(lambda v: f" <b>{v:,}</b>"), 
+        textposition='middle right', 
+        showlegend=False, 
+        hoverinfo='skip'
+    ))
+    
+    fig_stack.update_layout(
+        barmode='stack', 
+        yaxis=dict(autorange="reversed"), 
+        xaxis_title="", 
+        yaxis_title="", 
+        height=460, 
+        margin=dict(l=5, r=40, t=10, b=10), 
+        legend=dict(orientation="h", y=-0.25, x=0, title=None, font=dict(size=10))
+    )
     st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     st.markdown("---")
