@@ -1,4 +1,5 @@
 import os
+import json
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -76,6 +77,25 @@ st.markdown("""
 # -----------------------------------------------------------------------------
 # 2. FUNCIONES AUXILIARES Y FORMATO
 # -----------------------------------------------------------------------------
+ARCH_PREFERENCIAS = "preferencias_usuario.json"
+
+def cargar_preferencias():
+    if os.path.exists(ARCH_PREFERENCIAS):
+        try:
+            with open(ARCH_PREFERENCIAS, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def guardar_preferencias(data):
+    try:
+        with open(ARCH_PREFERENCIAS, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
+
 def aplicar_touch_safe(fig):
     fig.update_xaxes(fixedrange=True)
     fig.update_yaxes(fixedrange=True)
@@ -582,6 +602,22 @@ elif authentication_status:
         st.error(f"Error conectando a la base de datos: {e}")
         st.stop()
 
+    # Cargar preferencias guardadas al inicio de la sesión
+    prefs = cargar_preferencias()
+
+    if "sel_unidades" not in st.session_state:
+        st.session_state["sel_unidades"] = prefs.get("sel_unidades", [])
+    if "sel_rases" not in st.session_state:
+        st.session_state["sel_rases"] = prefs.get("sel_rases", [])
+    if "sel_cat" not in st.session_state:
+        st.session_state["sel_cat"] = prefs.get("sel_cat", [])
+    if "sel_motivos" not in st.session_state:
+        st.session_state["sel_motivos"] = prefs.get("sel_motivos", [])
+    if "sel_tipos" not in st.session_state:
+        st.session_state["sel_tipos"] = prefs.get("sel_tipos", [])
+    if "sel_medios" not in st.session_state:
+        st.session_state["sel_medios"] = prefs.get("sel_medios", [])
+
     # Sidebar Global
     st.sidebar.write(f"👤 **{name}**")
     authenticator.logout('Cerrar Sesión', 'sidebar')
@@ -589,19 +625,54 @@ elif authentication_status:
     st.sidebar.header("🔍 Filtros Globales de Control")
 
     lista_unidades = sorted([x for x in df_raw['UNIDAD DE ASIGNACIÓN'].dropna().unique() if str(x).strip() != ''])
-    sel_unidades = st.sidebar.multiselect("UPRES", options=lista_unidades)
+    sel_unidades = st.sidebar.multiselect("UPRES", options=lista_unidades, key="sel_unidades")
 
     lista_rases = sorted([x for x in df_raw['RASES'].dropna().unique() if str(x).strip() != ''])
-    sel_rases = st.sidebar.multiselect("RASES", options=lista_rases)
+    sel_rases = st.sidebar.multiselect("RASES", options=lista_rases, key="sel_rases")
 
     cat_ordenadas = df_raw['ESPECIALIDAD_CATEGORIA'].value_counts().index.tolist()
     cat_ordenadas = [c for c in cat_ordenadas if str(c).strip() != '']
-    sel_cat = st.sidebar.multiselect("Categoría Salud", options=cat_ordenadas, placeholder="Seleccione categoría...")
+    sel_cat = st.sidebar.multiselect("Categoría Salud", options=cat_ordenadas, placeholder="Seleccione categoría...", key="sel_cat")
 
     col_mot_esp = 'MOTIVO ESPECÍFICO' if 'MOTIVO ESPECÍFICO' in df_raw.columns else 'MOTIVO GENERAL'
     motivos_ordenados = df_raw[col_mot_esp].value_counts().index.tolist()
     motivos_ordenados = [m for m in motivos_ordenados if str(m).strip() != '']
-    sel_motivos = st.sidebar.multiselect("Motivo Específico", options=motivos_ordenados, placeholder="Seleccione motivo...")
+    sel_motivos = st.sidebar.multiselect("Motivo Específico", options=motivos_ordenados, placeholder="Seleccione motivo...", key="sel_motivos")
+
+    lista_tipos = sorted([x for x in df_raw['Tipo de Solicitud'].dropna().unique() if str(x).strip() != ''])
+    sel_tipos = st.sidebar.multiselect("Tipo de Solicitud", options=lista_tipos, key="sel_tipos")
+
+    lista_medios = sorted([x for x in df_raw['Medio de Recepción'].dropna().unique() if str(x).strip() != ''])
+    sel_medios = st.sidebar.multiselect("Medio de Recepción", options=lista_medios, key="sel_medios")
+
+    st.sidebar.markdown("---")
+    col_btn1, col_btn2 = st.sidebar.columns(2)
+
+    with col_btn1:
+        if st.button("💾 Guardar", use_container_width=True, help="Guarda la configuración actual de filtros"):
+            data_to_save = {
+                "sel_unidades": st.session_state.get("sel_unidades", []),
+                "sel_rases": st.session_state.get("sel_rases", []),
+                "sel_cat": st.session_state.get("sel_cat", []),
+                "sel_motivos": st.session_state.get("sel_motivos", []),
+                "sel_tipos": st.session_state.get("sel_tipos", []),
+                "sel_medios": st.session_state.get("sel_medios", [])
+            }
+            if guardar_preferencias(data_to_save):
+                st.sidebar.success("¡Filtros guardados!")
+            else:
+                st.sidebar.error("Error al guardar.")
+
+    with col_btn2:
+        if st.button("🔄 Restablecer", use_container_width=True, help="Limpia todos los filtros"):
+            st.session_state["sel_unidades"] = []
+            st.session_state["sel_rases"] = []
+            st.session_state["sel_cat"] = []
+            st.session_state["sel_motivos"] = []
+            st.session_state["sel_tipos"] = []
+            st.session_state["sel_medios"] = []
+            guardar_preferencias({})
+            st.rerun()
 
     df_base_global = df_raw.copy()
     if sel_unidades:
@@ -612,6 +683,10 @@ elif authentication_status:
         df_base_global = df_base_global[df_base_global['ESPECIALIDAD_CATEGORIA'].isin(sel_cat)]
     if sel_motivos:
         df_base_global = df_base_global[df_base_global[col_mot_esp].isin(sel_motivos)]
+    if sel_tipos:
+        df_base_global = df_base_global[df_base_global['Tipo de Solicitud'].isin(sel_tipos)]
+    if sel_medios:
+        df_base_global = df_base_global[df_base_global['Medio de Recepción'].isin(sel_medios)]
 
     # Renderizado Principal
     st.title("🛡️ SIPQR2S Sanidad")
