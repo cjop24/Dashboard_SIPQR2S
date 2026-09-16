@@ -5,3 +5,4 @@ sqlalchemy
 psycopg2-binary
 streamlit-authenticator==0.2.3
 pyyaml
+python-dotenv
