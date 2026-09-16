@@ -25,6 +25,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# Estilos CSS con Word-Wrap en Filtros Desplegables de la Barra Lateral
 st.markdown("""
     <style>
     .main { padding: 0.5rem; }
@@ -50,6 +51,25 @@ st.markdown("""
 
     h1 { font-size: 1.5rem !important; font-weight: 800; color: #0f172a; }
     h3 { font-size: 1.05rem !important; font-weight: 700; color: #1e293b; margin-top: 0.8rem; }
+
+    /* Ajuste para visualizar textos largos completos en los desplegables (Multiselect) */
+    div[data-baseweb="select"] ul {
+        max-width: 90vw !important;
+    }
+    div[data-baseweb="select"] li {
+        white-space: normal !important;
+        word-break: break-word !important;
+        line-height: 1.3 !important;
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+    }
+    div[data-baseweb="tag"] {
+        max-width: 100% !important;
+    }
+    div[data-baseweb="tag"] span {
+        white-space: normal !important;
+        word-break: break-word !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -302,9 +322,9 @@ def render_tab_individual(df_base_global, col_mot_esp):
     fig1.update_layout(xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10))
     st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    # Renderizado directo de ambos gráficos apilados sin radio buttons
-    generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES (Top 10) - Categoría Salud")
-    generar_grafico_upres_apilado(df_base, col_mot_esp, "Distribución por UPRES (Top 10) - Motivo Específico")
+    # 1. TÍTULOS ACTUALIZADOS A Top 3
+    generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES - Categoría Salud (Top 3)")
+    generar_grafico_upres_apilado(df_base, col_mot_esp, "Distribución por UPRES - Motivo Específico (Top 3)")
 
     st.markdown("---")
     col_t1, col_t2 = st.columns(2)
@@ -352,9 +372,11 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         kc1, kc2, kc3 = st.columns(3)
         kc1.metric("Total Periodo A", f"{tot_a:,}")
         kc2.metric("Total Periodo B", f"{tot_b:,}")
+        
+        # 2. MÉTRICA CORREGIDA: Mostrar la resta real (B - A) como valor principal
         kc3.metric(
             "Variación Periodo B vs A",
-            f"{tot_b:,}",
+            f"{diff_abs:+,}",
             delta=f"{diff_abs:+,} tickets ({diff_pct:+.1f}%)",
             delta_color="inverse"
         )
@@ -408,7 +430,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         fig_comp_upres.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=420, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_upres), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # Gráfico Comparativo 1: Categoría Salud
         st.subheader("Comparativo por Categoría Salud")
         top_cat_comp = pd.concat([df_a, df_b])['ESPECIALIDAD_CATEGORIA'].value_counts().head(10).index
         df_c_a = df_a[df_a['ESPECIALIDAD_CATEGORIA'].isin(top_cat_comp)].groupby('ESPECIALIDAD_CATEGORIA').size().reset_index(name='Cantidad')
@@ -427,7 +448,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         fig_comp_cat.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=420, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_cat), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # Gráfico Comparativo 2: Motivo Específico
         st.subheader("Comparativo por Motivo Específico")
         top_mot_comp = pd.concat([df_a, df_b])[col_mot_esp].value_counts().head(10).index
         df_m_a = df_a[df_a[col_mot_esp].isin(top_mot_comp)].groupby(col_mot_esp).size().reset_index(name='Cantidad')
@@ -554,6 +574,8 @@ elif authentication_status:
     col_mot_esp = 'MOTIVO ESPECÍFICO' if 'MOTIVO ESPECÍFICO' in df_raw.columns else 'MOTIVO GENERAL'
     motivos_ordenados = df_raw[col_mot_esp].value_counts().index.tolist()
     motivos_ordenados = [m for m in motivos_ordenados if str(m).strip() != '']
+    
+    # 3. FILTRO AJUSTADO CON CSS PARA VER NOMBRES LARGOS COMPLETOS
     sel_motivos = st.sidebar.multiselect("Motivo Específico", options=motivos_ordenados, placeholder="Seleccione motivo...")
 
     df_base_global = df_raw.copy()
