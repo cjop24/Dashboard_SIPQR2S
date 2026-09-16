@@ -322,7 +322,6 @@ def render_tab_individual(df_base_global, col_mot_esp):
     fig1.update_layout(xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10))
     st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    # 1. TÍTULOS ACTUALIZADOS A Top 3
     generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES - Categoría Salud (Top 3)")
     generar_grafico_upres_apilado(df_base, col_mot_esp, "Distribución por UPRES - Motivo Específico (Top 3)")
 
@@ -373,7 +372,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         kc1.metric("Total Periodo A", f"{tot_a:,}")
         kc2.metric("Total Periodo B", f"{tot_b:,}")
         
-        # 2. MÉTRICA CORREGIDA: Mostrar la resta real (B - A) como valor principal
         kc3.metric(
             "Variación Periodo B vs A",
             f"{diff_abs:+,}",
@@ -383,14 +381,46 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         st.markdown("---")
 
+        # -----------------------------------------------------------------------------
+        # TENDENCIA DIARIA SUPERPUESTA POR DÍAS RELATIVOS
+        # -----------------------------------------------------------------------------
         st.subheader("Comparativo de Tendencia Diario")
+
         df_dia_a = df_a.groupby('fecha_corta').size().reset_index(name='Periodo A')
         df_dia_b = df_b.groupby('fecha_corta').size().reset_index(name='Periodo B')
 
+        df_dia_a['Dia_Relativo'] = np.arange(1, len(df_dia_a) + 1)
+        df_dia_b['Dia_Relativo'] = np.arange(1, len(df_dia_b) + 1)
+
         fig_comp_dia = go.Figure()
-        fig_comp_dia.add_trace(go.Scatter(x=df_dia_a['fecha_corta'], y=df_dia_a['Periodo A'], mode='lines+markers', name='Periodo A', line=dict(color='#1b5e20', width=2)))
-        fig_comp_dia.add_trace(go.Scatter(x=df_dia_b['fecha_corta'], y=df_dia_b['Periodo B'], mode='lines+markers', name='Periodo B', line=dict(color='#d32f2f', width=2)))
-        fig_comp_dia.update_layout(xaxis_title="", yaxis_title="Cantidad de Tickets", height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
+
+        fig_comp_dia.add_trace(go.Scatter(
+            x=df_dia_a['Dia_Relativo'],
+            y=df_dia_a['Periodo A'],
+            mode='lines+markers',
+            name='Periodo A',
+            customdata=df_dia_a['fecha_corta'],
+            hovertemplate="<b>Periodo A</b><br>Fecha: %{customdata}<br>Día %{x}: %{y} tickets<extra></extra>",
+            line=dict(color='#1b5e20', width=2)
+        ))
+
+        fig_comp_dia.add_trace(go.Scatter(
+            x=df_dia_b['Dia_Relativo'],
+            y=df_dia_b['Periodo B'],
+            mode='lines+markers',
+            name='Periodo B',
+            customdata=df_dia_b['fecha_corta'],
+            hovertemplate="<b>Periodo B</b><br>Fecha: %{customdata}<br>Día %{x}: %{y} tickets<extra></extra>",
+            line=dict(color='#d32f2f', width=2)
+        ))
+
+        fig_comp_dia.update_layout(
+            xaxis_title="Día del Rango (1, 2, 3...)",
+            yaxis_title="Cantidad de Tickets",
+            height=320,
+            margin=dict(l=5, r=5, t=10, b=10),
+            legend=dict(orientation="h", y=1.1, x=0.3)
+        )
         st.plotly_chart(aplicar_touch_safe(fig_comp_dia), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         st.subheader("Comparativo por RASES")
@@ -574,8 +604,6 @@ elif authentication_status:
     col_mot_esp = 'MOTIVO ESPECÍFICO' if 'MOTIVO ESPECÍFICO' in df_raw.columns else 'MOTIVO GENERAL'
     motivos_ordenados = df_raw[col_mot_esp].value_counts().index.tolist()
     motivos_ordenados = [m for m in motivos_ordenados if str(m).strip() != '']
-    
-    # 3. FILTRO AJUSTADO CON CSS PARA VER NOMBRES LARGOS COMPLETOS
     sel_motivos = st.sidebar.multiselect("Motivo Específico", options=motivos_ordenados, placeholder="Seleccione motivo...")
 
     df_base_global = df_raw.copy()
