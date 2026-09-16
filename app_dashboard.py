@@ -602,8 +602,19 @@ elif authentication_status:
         st.error(f"Error conectando a la base de datos: {e}")
         st.stop()
 
-    # Cargar preferencias guardadas al inicio de la sesión
+    # -----------------------------------------------------------------------------
+    # GESTIÓN DE ESTADO Y PREFERENCIAS
+    # -----------------------------------------------------------------------------
     prefs = cargar_preferencias()
+
+    def restablecer_filtros_callback():
+        st.session_state["sel_unidades"] = []
+        st.session_state["sel_rases"] = []
+        st.session_state["sel_cat"] = []
+        st.session_state["sel_motivos"] = []
+        st.session_state["sel_tipos"] = []
+        st.session_state["sel_medios"] = []
+        guardar_preferencias({})
 
     if "sel_unidades" not in st.session_state:
         st.session_state["sel_unidades"] = prefs.get("sel_unidades", [])
@@ -664,15 +675,12 @@ elif authentication_status:
                 st.sidebar.error("Error al guardar.")
 
     with col_btn2:
-        if st.button("🔄 Restablecer", use_container_width=True, help="Limpia todos los filtros"):
-            st.session_state["sel_unidades"] = []
-            st.session_state["sel_rases"] = []
-            st.session_state["sel_cat"] = []
-            st.session_state["sel_motivos"] = []
-            st.session_state["sel_tipos"] = []
-            st.session_state["sel_medios"] = []
-            guardar_preferencias({})
-            st.rerun()
+        st.button(
+            "🔄 Restablecer", 
+            use_container_width=True, 
+            help="Limpia todos los filtros",
+            on_click=restablecer_filtros_callback
+        )
 
     df_base_global = df_raw.copy()
     if sel_unidades:
