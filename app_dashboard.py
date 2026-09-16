@@ -12,7 +12,7 @@ from yaml.loader import SafeLoader
 import re
 from dotenv import load_dotenv
 
-# Cargar variables de entorno desde el archivo .env local
+# Cargar variables de entorno desde .env local
 load_dotenv()
 
 # -----------------------------------------------------------------------------
@@ -124,7 +124,7 @@ GEO_DEPARTAMENTOS_COL = {
 }
 
 # -----------------------------------------------------------------------------
-# 3. MÓDULOS DE RENDERIZADO (VISTAS MODULARES)
+# 3. MÓDULOS DE RENDERIZADO (VISTAS MODULARES CORREGIDAS)
 # -----------------------------------------------------------------------------
 def render_tab_individual(df_base_global, col_mot_esp):
     st.caption("Consola Ejecutiva de Atención al Usuario - Periodo Único")
@@ -298,7 +298,6 @@ def render_tab_comparativo(df_base_global):
     min_hist = df_base_global['fecha_dt'].min().date() if not df_base_global.empty else None
     max_hist = df_base_global['fecha_dt'].max().date() if not df_base_global.empty else None
 
-    # Controladores de Fecha Independientes (Periodo A vs Periodo B)
     col_p1, col_p2 = st.columns(2)
     with col_p1:
         st.markdown("### 🅰️ Periodo A (Base)")
@@ -329,7 +328,6 @@ def render_tab_comparativo(df_base_global):
 
         st.markdown("---")
 
-        # 1. Comportamiento Diario Comparado
         st.subheader("📈 Comparativo de Tendencia Diario")
         df_dia_a = df_a.groupby('fecha_corta').size().reset_index(name='Periodo A')
         df_dia_b = df_b.groupby('fecha_corta').size().reset_index(name='Periodo B')
@@ -340,7 +338,6 @@ def render_tab_comparativo(df_base_global):
         fig_comp_dia.update_layout(xaxis_title="", yaxis_title="Cantidad de Tickets", height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_dia), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # 2. Comparativo por RASES
         st.subheader("📍 Comparativo por RASES")
         df_r_a = df_a['RASES'].value_counts().reset_index()
         df_r_a.columns = ['RASES', 'Cantidad']
@@ -360,7 +357,6 @@ def render_tab_comparativo(df_base_global):
         fig_comp_rases.update_layout(xaxis_title="", yaxis_title="", height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_rases), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # 3. Comparativo por UPRES (Top 10)
         st.subheader("🏢 Comparativo Top 10 UPRES")
         top_upres_comp = pd.concat([df_a, df_b])['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index
         df_u_a = df_a[df_a['UNIDAD DE ASIGNACIÓN'].isin(top_upres_comp)].groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Cantidad')
@@ -379,7 +375,6 @@ def render_tab_comparativo(df_base_global):
         fig_comp_upres.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=420, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_upres), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # 4. Comparativo por Categoría Salud
         st.subheader("🩺 Comparativo por Categoría Salud")
         top_cat_comp = pd.concat([df_a, df_b])['ESPECIALIDAD_CATEGORIA'].value_counts().head(10).index
         df_c_a = df_a[df_a['ESPECIALIDAD_CATEGORIA'].isin(top_cat_comp)].groupby('ESPECIALIDAD_CATEGORIA').size().reset_index(name='Cantidad')
@@ -398,24 +393,33 @@ def render_tab_comparativo(df_base_global):
         fig_comp_cat.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=420, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_cat), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # 5. Comparativo por Tipo de Solicitud y Medio de Recepción
         col_cp1, col_cp2 = st.columns(2)
         with col_cp1:
             st.subheader("🍰 Tipo de Solicitud")
-            df_ts_a = df_a['Tipo de Solicitud'].value_counts().reset_index(name='Periodo A').rename(columns={'index': 'Tipo'})
-            df_ts_b = df_b['Tipo de Solicitud'].value_counts().reset_index(name='Periodo B').rename(columns={'index': 'Tipo'})
+            df_ts_a = df_a['Tipo de Solicitud'].value_counts().reset_index()
+            df_ts_a.columns = ['Tipo', 'Periodo A']
+            
+            df_ts_b = df_b['Tipo de Solicitud'].value_counts().reset_index()
+            df_ts_b.columns = ['Tipo', 'Periodo B']
+            
             df_ts_comp = pd.merge(df_ts_a, df_ts_b, on='Tipo', how='outer').fillna(0)
             df_ts_melt = df_ts_comp.melt(id_vars=['Tipo'], value_vars=['Periodo A', 'Periodo B'], var_name='Periodo', value_name='Cantidad')
+            
             fig_comp_ts = px.bar(df_ts_melt, x='Cantidad', y='Tipo', color='Periodo', barmode='group', orientation='h', text_auto=True, color_discrete_map={'Periodo A': '#66bb6a', 'Periodo B': '#ff7043'})
             fig_comp_ts.update_layout(yaxis=dict(autorange="reversed"), height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.2))
             st.plotly_chart(aplicar_touch_safe(fig_comp_ts), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         with col_cp2:
             st.subheader("🍩 Medio de Recepción")
-            df_mr_a = df_a['Medio de Recepción'].value_counts().reset_index(name='Periodo A').rename(columns={'index': 'Medio'})
-            df_mr_b = df_b['Medio de Recepción'].value_counts().reset_index(name='Periodo B').rename(columns={'index': 'Medio'})
+            df_mr_a = df_a['Medio de Recepción'].value_counts().reset_index()
+            df_mr_a.columns = ['Medio', 'Periodo A']
+            
+            df_mr_b = df_b['Medio de Recepción'].value_counts().reset_index()
+            df_mr_b.columns = ['Medio', 'Periodo B']
+            
             df_mr_comp = pd.merge(df_mr_a, df_mr_b, on='Medio', how='outer').fillna(0)
             df_mr_melt = df_mr_comp.melt(id_vars=['Medio'], value_vars=['Periodo A', 'Periodo B'], var_name='Periodo', value_name='Cantidad')
+            
             fig_comp_mr = px.bar(df_mr_melt, x='Cantidad', y='Medio', color='Periodo', barmode='group', orientation='h', text_auto=True, color_discrete_map={'Periodo A': '#81c784', 'Periodo B': '#ff8a65'})
             fig_comp_mr.update_layout(yaxis=dict(autorange="reversed"), height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.2))
             st.plotly_chart(aplicar_touch_safe(fig_comp_mr), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
