@@ -169,7 +169,6 @@ GEO_DEPARTAMENTOS_COL = {
 def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     st.subheader(titulo_grafico)
     
-    # 1. Filtrar registros con datos válidos
     df_filtrado = df_base.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
     df_filtrado = df_filtrado[
         (df_filtrado['UNIDAD DE ASIGNACIÓN'].astype(str).str.strip() != '') &
@@ -180,22 +179,18 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
         st.info("No hay datos disponibles para generar esta gráfica.")
         return
 
-    # 2. Obtener las 10 UPRES principales ordenadas de mayor a menor volumen
     top_10_upres = df_filtrado['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index.tolist()
     df_g2 = df_filtrado[df_filtrado['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
 
-    # 3. Calcular el ranking Top 5 local dentro de cada UPRES (Sin incluir "OTROS")
     conteo_local = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant_Local')
     conteo_local['Rank_Local'] = conteo_local.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(method='first', ascending=False)
     
     top_5_locales = conteo_local[conteo_local['Rank_Local'] <= 5].copy()
 
-    # 4. Agrupar y formatear textos
     df_stack = top_5_locales.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True)['Cant_Local'].sum().reset_index(name='Cantidad')
     df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
     df_stack['Grupo_fmt'] = df_stack[col_target].apply(acortar_texto_abreviado)
     
-    # Ordenamiento de UPRES: De menor a mayor (de arriba hacia abajo en el eje Y)
     upres_ordenadas_fmt = [acortar_texto_abreviado(u) for u in top_10_upres]
     df_totales = df_stack.groupby('UPRES_fmt', observed=True)['Cantidad'].sum().reset_index(name='Total')
 
@@ -217,7 +212,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
         color='Grupo_fmt', 
         orientation='h', 
         category_orders={
-            'UPRES_fmt': upres_ordenadas_fmt,  # Muestra de menor (arriba) a mayor (abajo)
+            'UPRES_fmt': upres_ordenadas_fmt,
             'Grupo_fmt': categorias_unicas
         },
         color_discrete_map=color_map
@@ -279,7 +274,7 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
 
     top_5_upres = totales_upres.sort_values('Total_Top5', ascending=False).head(5)['UNIDAD DE ASIGNACIÓN'].tolist()
 
-    # 5. Construir dataset apilado detallado (Top 1 al Top 5) para ambos periodos
+    # 5. Construir dataset apilado detallado garantizando el orden de izquierda a derecha (Top 1 a Top 5)
     def procesar_periodo_top(df_in, etiqueta_periodo):
         df_sub = df_in[df_in['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)].copy()
         conteo = df_sub.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cantidad')
@@ -288,45 +283,71 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
         top_local['Top_Etiqueta'] = top_local['Rank'].astype(int).apply(lambda r: f"Top {r}")
         top_local['Periodo'] = etiqueta_periodo
         top_local['UPRES_fmt'] = top_local['UNIDAD DE ASIGNACIÓN'].apply(lambda x: str(acortar_texto_abreviado(x)))
+        top_local['Categoria_fmt'] = top_local[col_target].apply(lambda x: str(acortar_texto_abreviado(x)))
         return top_local
 
     df_stack_a = procesar_periodo_top(df_a_clean, 'Periodo A')
     df_stack_b = procesar_periodo_top(df_b_clean, 'Periodo B')
-    df_stack_total = pd.concat([df_stack_a, df_stack_b])
 
-    # Orden del eje Y: de menor (arriba) a mayor (abajo) asegurando valores tipo str
     upres_ordenadas_fmt = [str(acortar_texto_abreviado(u)) for u in reversed(top_5_upres)]
+    
+    # Orden de apilado obligatorio de izquierda a derecha
+    orden_top = ['Top 1', 'Top 2', 'Top 3', 'Top 4', 'Top 5']
 
-    # 6. Crear gráfico usando px.bar para manejo automático seguro de category_orders
-    estilos_periodo = {
-        'Periodo A': '#f3f4f6',
-        'Periodo B': '#e5e7eb'
+    fig_comp = go.Figure()
+
+    # Mapeo de colores ejecutivos para las etiquetas Top 1 a Top 5
+    colores_top = {
+        'Top 1': '#1b4332',
+        'Top 2': '#2d6a4f',
+        'Top 3': '#40916c',
+        'Top 4': '#52b788',
+        'Top 5': '#74c69d'
     }
 
-    fig_comp = px.bar(
-        df_stack_total,
-        y='UPRES_fmt',
-        x='Cantidad',
-        color='Periodo',
-        barmode='stack',
-        orientation='h',
-        text='Top_Etiqueta',
-        category_orders={'UPRES_fmt': upres_ordenadas_fmt},
-        color_discrete_map=estilos_periodo
-    )
-
-    fig_comp.update_traces(
-        textposition='inside',
-        insidetextanchor='middle',
-        marker=dict(line=dict(color='#374151', width=1.5))
-    )
+    # Creación de trazas por cada nivel Top para asegurar el apilamiento de izquierda a derecha
+    for t in orden_top:
+        sub_a = df_stack_a[df_stack_a['Top_Etiqueta'] == t]
+        sub_b = df_stack_b[df_stack_b['Top_Etiqueta'] == t]
+        
+        # Barra superior: Periodo A (Verde RASES)
+        fig_comp.add_trace(go.Bar(
+            y=sub_a['UPRES_fmt'],
+            x=sub_a['Cantidad'],
+            name=f"{t} (Periodo A)",
+            orientation='h',
+            text=sub_a['Top_Etiqueta'],
+            textposition='inside',
+            insidetextanchor='middle',
+            customdata=sub_a[['Periodo', 'Categoria_fmt']],
+            hovertemplate="<b>%{y} - Periodo A</b><br>%{customdata[1]} (%{text}): %{x} tickets<extra></extra>",
+            marker=dict(color=colores_top[t], line=dict(color='#2e7d32', width=1.5)),
+            offsetgroup=0
+        ))
+        
+        # Barra inferior: Periodo B (Rojo RASES)
+        fig_comp.add_trace(go.Bar(
+            y=sub_b['UPRES_fmt'],
+            x=sub_b['Cantidad'],
+            name=f"{t} (Periodo B)",
+            orientation='h',
+            text=sub_b['Top_Etiqueta'],
+            textposition='inside',
+            insidetextanchor='middle',
+            customdata=sub_b[['Periodo', 'Categoria_fmt']],
+            hovertemplate="<b>%{y} - Periodo B</b><br>%{customdata[1]} (%{text}): %{x} tickets<extra></extra>",
+            marker=dict(color=colores_top[t], line=dict(color='#c62828', width=1.5)),
+            offsetgroup=1
+        ))
 
     fig_comp.update_layout(
+        barmode='stack',
+        yaxis=dict(categoryorder='array', categoryarray=upres_ordenadas_fmt),
         xaxis_title="",
         yaxis_title="",
-        height=420,
+        height=520,
         margin=dict(l=5, r=5, t=10, b=10),
-        legend=dict(orientation="h", y=-0.15, x=0.3, title=None)
+        showlegend=False
     )
     
     st.plotly_chart(aplicar_touch_safe(fig_comp), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
@@ -345,9 +366,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
     if len(rango_fechas_ind) == 2:
         df_base = df_base[(df_base['fecha_dt'].dt.date >= rango_fechas_ind[0]) & (df_base['fecha_dt'].dt.date <= rango_fechas_ind[1])]
 
-    # -----------------------------------------------------------------------------
-    # TARJETAS KPI
-    # -----------------------------------------------------------------------------
+    # Tarjetas KPI
     top_upres_s = df_base['UNIDAD DE ASIGNACIÓN'].dropna().value_counts()
     top_upres_nom = top_upres_s.index[0] if not top_upres_s.empty else "N/A"
     top_upres_val = top_upres_s.iloc[0] if not top_upres_s.empty else 0
@@ -410,14 +429,6 @@ def render_tab_individual(df_base_global, col_mot_esp):
     fig_mapa.update_layout(height=380, margin=dict(l=0, r=0, t=10, b=0))
     st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    # -----------------------------------------------------------------------------
-    # GRÁFICO INHABILITADO: Comportamiento Diario de SIPQR2S
-    # -----------------------------------------------------------------------------
-    # st.subheader("Comportamiento Diario de SIPQR2S")
-
-    # -----------------------------------------------------------------------------
-    # GRÁFICO: PQR2S POR RASES
-    # -----------------------------------------------------------------------------
     st.subheader("SIPQR2S por RASES")
     df_g1_raw = df_base['RASES'].dropna().value_counts().reset_index()
     df_g1_raw.columns = ['RASES', 'Cantidad']
@@ -428,9 +439,6 @@ def render_tab_individual(df_base_global, col_mot_esp):
     fig1.update_layout(xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10))
     st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    # -----------------------------------------------------------------------------
-    # GRÁFICO: PQR2S POR UPRES
-    # -----------------------------------------------------------------------------
     st.subheader("PQR2S por UPRES")
     df_u1_raw = df_base['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
     df_u1_raw.columns = ['UPRES', 'Cantidad']
@@ -447,9 +455,6 @@ def render_tab_individual(df_base_global, col_mot_esp):
     fig_upres_simple.update_layout(xaxis_title="", yaxis_title="", height=350, margin=dict(l=5, r=5, t=10, b=10))
     st.plotly_chart(aplicar_touch_safe(fig_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    # -----------------------------------------------------------------------------
-    # GRÁFICOS DE TORTA: REUBICADOS DEBAJO DE PQR2S POR UPRES
-    # -----------------------------------------------------------------------------
     st.markdown("---")
     col_t1, col_t2 = st.columns(2)
     with col_t1:
@@ -470,9 +475,6 @@ def render_tab_individual(df_base_global, col_mot_esp):
         fig_pie2.update_layout(height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15))
         st.plotly_chart(aplicar_touch_safe(fig_pie2), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    # -----------------------------------------------------------------------------
-    # DISTRIBUCIÓN POR UPRES (TOP 5 SIN OTROS) - ORDENADO DE MENOR A MAYOR
-    # -----------------------------------------------------------------------------
     generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES - Categoría Salud (Top 5)")
     generar_grafico_upres_apilado(df_base, col_mot_esp, "Distribución por UPRES - Motivo Específico (Top 5)")
 
@@ -514,16 +516,8 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         st.markdown("---")
 
-        # -----------------------------------------------------------------------------
-        # GRÁFICO INHABILITADO: Comparativo de Tendencia Diario
-        # -----------------------------------------------------------------------------
-        # st.subheader("Comparativo de Tendencia Diario")
-
         mapa_color_comp = {'Periodo A': COLOR_PERIODO_A, 'Periodo B': COLOR_PERIODO_B}
 
-        # -----------------------------------------------------------------------------
-        # COMPARATIVO POR RASES
-        # -----------------------------------------------------------------------------
         st.subheader("Comparativo por RASES")
         df_r_a = df_a['RASES'].dropna().value_counts().reset_index()
         df_r_a.columns = ['RASES', 'Cantidad']
@@ -544,9 +538,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         fig_comp_rases.update_layout(xaxis_title="", yaxis_title="", height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_rases), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # -----------------------------------------------------------------------------
-        # COMPARATIVO PQR2S POR UPRES
-        # -----------------------------------------------------------------------------
         st.subheader("Comparativo PQR2S por UPRES")
         df_u_comp_a = df_a['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
         df_u_comp_a.columns = ['UNIDAD DE ASIGNACIÓN', 'Cantidad']
@@ -567,9 +558,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         fig_comp_upres_simple.update_layout(xaxis_title="", yaxis_title="", height=350, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # -----------------------------------------------------------------------------
-        # COMPARATIVO GRÁFICOS DE TORTA
-        # -----------------------------------------------------------------------------
         st.markdown("---")
         col_cp1, col_cp2 = st.columns(2)
         with col_cp1:
@@ -604,9 +592,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             fig_comp_mr.update_layout(yaxis=dict(autorange="reversed"), height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.2))
             st.plotly_chart(aplicar_touch_safe(fig_comp_mr), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # -----------------------------------------------------------------------------
-        # COMPARATIVOS DISTRIBUCIÓN POR UPRES (ESTILO MONOCROMÁTICO CON TOP INTERNO)
-        # -----------------------------------------------------------------------------
         st.markdown("---")
         generar_grafico_upres_comparativo_top5(
             df_a, df_b, 
@@ -704,9 +689,7 @@ elif authentication_status:
         st.error(f"Error conectando a la base de datos: {e}")
         st.stop()
 
-    # -----------------------------------------------------------------------------
-    # GESTIÓN DE ESTADO Y PREFERENCIAS
-    # -----------------------------------------------------------------------------
+    # Gestión de Filtros en Sidebar
     prefs = cargar_preferencias()
 
     def restablecer_filtros_callback():
@@ -731,17 +714,14 @@ elif authentication_status:
     if "sel_medios" not in st.session_state:
         st.session_state["sel_medios"] = prefs.get("sel_medios", [])
 
-    # Sidebar Global
     st.sidebar.write(f"👤 **{name}**")
     authenticator.logout('Cerrar Sesión', 'sidebar')
     st.sidebar.markdown("---")
     st.sidebar.header("🔍 Filtros Globales de Control")
 
-    # 1. RASES PRIMERO
     lista_rases = sorted([x for x in df_raw['RASES'].dropna().unique() if str(x).strip() != ''])
     sel_rases = st.sidebar.multiselect("RASES", options=lista_rases, key="sel_rases")
 
-    # 2. UPRES SEGUNDO
     lista_unidades = sorted([x for x in df_raw['UNIDAD DE ASIGNACIÓN'].dropna().unique() if str(x).strip() != ''])
     sel_unidades = st.sidebar.multiselect("UPRES", options=lista_unidades, key="sel_unidades")
 
@@ -800,9 +780,7 @@ elif authentication_status:
     if sel_medios:
         df_base_global = df_base_global[df_base_global['Medio de Recepción'].isin(sel_medios)]
 
-    # -----------------------------------------------------------------------------
-    # RENDERIZADO PRINCIPAL
-    # -----------------------------------------------------------------------------
+    # Renderizado Principal
     st.title("🛡️ SIPQR2S Sanidad")
     
     tab_ind, tab_comp = st.tabs(["📊 Análisis Individual", "🔄 Comparativo"])
