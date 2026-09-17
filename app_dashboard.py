@@ -26,7 +26,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS con Word-Wrap en Filtros Desplegables de la Barra Lateral
+# Estilos CSS con Word-Wrap y Mayor Legibilidad en Tablas
 st.markdown("""
     <style>
     .main { padding: 0.5rem; }
@@ -52,6 +52,20 @@ st.markdown("""
 
     h1 { font-size: 1.5rem !important; font-weight: 800; color: #0f172a; }
     h3 { font-size: 1.05rem !important; font-weight: 700; color: #1e293b; margin-top: 0.8rem; }
+
+    /* Estilo mejorado para mayor legibilidad en Dataframes/Tablas */
+    div[data-testid="stDataFrame"] {
+        font-size: 0.95rem !important;
+    }
+    div[data-testid="stDataFrame"] div[role="columnheader"] {
+        font-weight: 700 !important;
+        font-size: 0.95rem !important;
+        color: #0f172a !important;
+        background-color: #f1f5f9 !important;
+    }
+    div[data-testid="stDataFrame"] div[role="gridcell"] {
+        font-size: 0.92rem !important;
+    }
 
     /* Ajuste para visualizar textos largos completos en los desplegables (Multiselect) */
     div[data-baseweb="select"] ul {
@@ -172,30 +186,35 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     top_10_upres = df_base['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index
     df_g2 = df_base[df_base['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
 
-    # MODIFICACIÓN: Cálculo del Top 5 por UPRES
+    # Cálculo del Top 5 local por UPRES
     conteo_local = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant_Local')
     conteo_local['Rank_Local'] = conteo_local.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(method='first', ascending=False)
+    
+    # MODIFICACIÓN: Estricto Top 5 local (Sin incluir "OTROS")
     top_5_locales = conteo_local[conteo_local['Rank_Local'] <= 5].copy()
-    top_5_locales['Es_Top5_Local'] = True
-
-    df_g2 = pd.merge(df_g2, top_5_locales[['UNIDAD DE ASIGNACIÓN', col_target, 'Es_Top5_Local']], on=['UNIDAD DE ASIGNACIÓN', col_target], how='left')
-    df_g2['Grupo_Consolidado'] = df_g2.apply(lambda r: str(r[col_target]) if r['Es_Top5_Local'] == True else "OTROS", axis=1)
-
-    df_stack = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', 'Grupo_Consolidado'], observed=True).size().reset_index(name='Cantidad')
+    
+    df_stack = pd.merge(top_5_locales, df_g2[['UNIDAD DE ASIGNACIÓN']].drop_duplicates(), on='UNIDAD DE ASIGNACIÓN', how='inner')
+    df_stack.rename(columns={'Cant_Local': 'Cantidad'}, inplace=True)
     df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
-    df_stack['Grupo_fmt'] = df_stack['Grupo_Consolidado'].apply(lambda x: "OTROS" if x == "OTROS" else acortar_texto_abreviado(x))
-    df_totales = df_stack.groupby('UPRES_fmt', observed=True)['Cantidad'].sum().reset_index(name='Total')
+    df_stack['Grupo_fmt'] = df_stack[col_target].apply(acortar_texto_abreviado)
+    
+    # Ordenar las categorías globalmente de mayor a menor frecuencia
+    orden_categorias = (
+        df_stack.groupby('Grupo_fmt', observed=True)['Cantidad']
+        .sum()
+        .sort_values(ascending=False)
+        .index.tolist()
+    )
 
-    categorias_unicas = [c for c in df_stack['Grupo_fmt'].unique() if c != "OTROS"]
-    orden_apilado = ["OTROS"] + categorias_unicas
+    df_totales = df_stack.groupby('UPRES_fmt', observed=True)['Cantidad'].sum().reset_index(name='Total')
 
     paleta_contraste = [
         '#1b4332', '#2d6a4f', '#40916c', '#1d3557', 
         '#2b2d42', '#d4a373', '#52b788', '#003049'
     ]
     
-    color_map = {'OTROS': '#a5d6a7'}
-    for idx, cat in enumerate(categorias_unicas):
+    color_map = {}
+    for idx, cat in enumerate(orden_categorias):
         color_map[cat] = paleta_contraste[idx % len(paleta_contraste)]
 
     fig_stack = px.bar(
@@ -204,7 +223,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
         x='Cantidad', 
         color='Grupo_fmt', 
         orientation='h', 
-        category_orders={'Grupo_fmt': orden_apilado},
+        category_orders={'Grupo_fmt': orden_categorias},
         color_discrete_map=color_map
     )
     
@@ -232,16 +251,10 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
 # -----------------------------------------------------------------------------
 # 3. MÓDULOS DE RENDERIZADO
 # -----------------------------------------------------------------------------
-def render_tab_individual(df_base_global, col_mot_esp):
+def render_tab_individual(df_base_global, col_mot_esp, df_filtrado_fecha):
     st.caption("Consola Ejecutiva de Atención al Usuario - Periodo Único")
 
-    min_f = df_base_global['fecha_dt'].min().date() if not df_base_global.empty else None
-    max_f = df_base_global['fecha_dt'].max().date() if not df_base_global.empty else None
-    rango_fechas_ind = st.date_input("Rango de Fecha de Creación (Análisis Individual)", value=(min_f, max_f), min_value=min_f, max_value=max_f) if min_f else []
-
-    df_base = df_base_global.copy()
-    if len(rango_fechas_ind) == 2:
-        df_base = df_base[(df_base['fecha_dt'].dt.date >= rango_fechas_ind[0]) & (df_base['fecha_dt'].dt.date <= rango_fechas_ind[1])]
+    df_base = df_filtrado_fecha.copy()
 
     top_upres_s = df_base['UNIDAD DE ASIGNACIÓN'].value_counts()
     top_upres_nom = top_upres_s.index[0] if not top_upres_s.empty else "N/A"
@@ -305,42 +318,10 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     # -----------------------------------------------------------------------------
     # GRÁFICO DE COMPORTAMIENTO DIARIO (DESHABILITADO A PETICIÓN DEL CLIENTE)
-    # NOTA: Descomentar este bloque completo para restablecer la información cuando se requiera.
     # -----------------------------------------------------------------------------
     # st.subheader("Comportamiento Diario de SIPQR2S")
     # df_dia = df_base.groupby(['fecha_dt', 'fecha_corta'], observed=True).size().reset_index(name='Cantidad').sort_values('fecha_dt')
-    # 
-    # if not df_dia.empty:
-    #     fig_dia = go.Figure()
-    #     fig_dia.add_trace(go.Scatter(
-    #         x=df_dia['fecha_corta'],
-    #         y=df_dia['Cantidad'],
-    #         mode='lines+markers',
-    #         name='Tickets Diarios',
-    #         line=dict(color=COLOR_PERIODO_A, width=1, dash='dot'),
-    #         marker=dict(size=5, color='#1b5e20')
-    #     ))
-    #     
-    #     if len(df_dia) > 1:
-    #         x_vals = np.arange(len(df_dia))
-    #         y_vals = df_dia['Cantidad'].values
-    #         m, b = np.polyfit(x_vals, y_vals, 1)
-    #         trend_line = m * x_vals + b
-    #         
-    #         fig_dia.add_trace(go.Scatter(
-    #             x=df_dia['fecha_corta'],
-    #             y=trend_line,
-    #             mode='lines',
-    #             name='Tendencia Periodo',
-    #             line=dict(color=COLOR_PERIODO_B, width=3.5)
-    #         ))
-    #     
-    #     fig_dia.update_layout(
-    #         xaxis_title="", yaxis_title="", height=300,
-    #         margin=dict(l=5, r=5, t=10, b=10),
-    #         legend=dict(orientation="h", y=1.1, x=0.8)
-    #     )
-    #     st.plotly_chart(aplicar_touch_safe(fig_dia), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+    # ...
 
     st.subheader("SIPQR2S por RASES")
     df_g1 = df_base['RASES'].value_counts().reset_index()
@@ -350,8 +331,8 @@ def render_tab_individual(df_base_global, col_mot_esp):
     fig1.update_layout(xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10))
     st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES - Categoría Salud (Top 5)")
-    generar_grafico_upres_apilado(df_base, col_mot_esp, "Distribución por UPRES - Motivo Específico (Top 5)")
+    generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES - Categoría Salud (Top 5 De Mayor a Menor)")
+    generar_grafico_upres_apilado(df_base, col_mot_esp, "Distribución por UPRES - Motivo Específico (Top 5 De Mayor a Menor)")
 
     st.markdown("---")
     col_t1, col_t2 = st.columns(2)
@@ -430,8 +411,8 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         fig_comp_rases.update_layout(xaxis_title="", yaxis_title="", height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_rases), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # MODIFICACIÓN: Top 5 UPRES en el gráfico comparativo
-        st.subheader("Comparativo Top 5 UPRES")
+        # Top 5 UPRES en el gráfico comparativo (Ordenado de mayor a menor)
+        st.subheader("Comparativo Top 5 UPRES (Mayor a Menor)")
         top_upres_comp = pd.concat([df_a, df_b])['UNIDAD DE ASIGNACIÓN'].value_counts().head(5).index
         df_u_a = df_a[df_a['UNIDAD DE ASIGNACIÓN'].isin(top_upres_comp)].groupby('UNIDAD DE ASIGNACIÓN', observed=True).size().reset_index(name='Cantidad')
         df_u_a['Periodo'] = 'Periodo A'
@@ -444,7 +425,8 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         fig_comp_upres = px.bar(
             df_comp_upres, y='UPRES_fmt', x='Cantidad', color='Periodo', barmode='group', orientation='h',
-            text_auto=True, color_discrete_map=mapa_color_comp
+            text_auto=True, color_discrete_map=mapa_color_comp,
+            category_orders={'UPRES_fmt': [acortar_texto_abreviado(u) for u in top_upres_comp]}
         )
         fig_comp_upres.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=350, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_upres), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
@@ -485,7 +467,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         fig_comp_mot.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="", yaxis_title="", height=420, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_mot), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # MODIFICACIÓN: Tipo de Solicitud y Medio de Recepción renderizados uno debajo del otro
         st.subheader("Comparativo por Tipo de Solicitud")
         df_ts_a = df_a['Tipo de Solicitud'].value_counts().reset_index()
         df_ts_a.columns = ['Tipo', 'Periodo A']
@@ -632,18 +613,32 @@ elif authentication_status:
     st.sidebar.markdown("---")
     st.sidebar.header("🔍 Filtros Globales de Control")
 
+    # 1. Segmentador Rango de Fechas
+    min_f = df_raw['fecha_dt'].min().date() if not df_raw.empty else None
+    max_f = df_raw['fecha_dt'].max().date() if not df_raw.empty else None
+    rango_fechas_ind = st.sidebar.date_input("Rango de Fecha de Creación", value=(min_f, max_f), min_value=min_f, max_value=max_f) if min_f else []
+
+    # Filtrado intermedio base para calcular los segmentadores dependientes del tiempo
+    df_filtrado_fecha = df_raw.copy()
+    if len(rango_fechas_ind) == 2:
+        df_filtrado_fecha = df_filtrado_fecha[(df_filtrado_fecha['fecha_dt'].dt.date >= rango_fechas_ind[0]) & (df_filtrado_fecha['fecha_dt'].dt.date <= rango_fechas_ind[1])]
+
+    # 2. Segmentador UPRES
     lista_unidades = sorted([x for x in df_raw['UNIDAD DE ASIGNACIÓN'].dropna().unique() if str(x).strip() != ''])
     sel_unidades = st.sidebar.multiselect("UPRES", options=lista_unidades, key="sel_unidades")
 
+    # 3. Segmentador RASES
     lista_rases = sorted([x for x in df_raw['RASES'].dropna().unique() if str(x).strip() != ''])
     sel_rases = st.sidebar.multiselect("RASES", options=lista_rases, key="sel_rases")
 
-    cat_ordenadas = df_raw['ESPECIALIDAD_CATEGORIA'].value_counts().index.tolist()
+    # 4. MODIFICACIÓN: Segmentador Categoría Salud (Ordenado dinámicamente de mayor a menor según fecha)
+    cat_ordenadas = df_filtrado_fecha['ESPECIALIDAD_CATEGORIA'].value_counts().index.tolist()
     cat_ordenadas = [c for c in cat_ordenadas if str(c).strip() != '']
     sel_cat = st.sidebar.multiselect("Categoría Salud", options=cat_ordenadas, placeholder="Seleccione categoría...", key="sel_cat")
 
+    # 5. MODIFICACIÓN: Segmentador Motivo Específico (Ordenado dinámicamente de mayor a menor según fecha)
     col_mot_esp = 'MOTIVO ESPECÍFICO' if 'MOTIVO ESPECÍFICO' in df_raw.columns else 'MOTIVO GENERAL'
-    motivos_ordenados = df_raw[col_mot_esp].value_counts().index.tolist()
+    motivos_ordenados = df_filtrado_fecha[col_mot_esp].value_counts().index.tolist()
     motivos_ordenados = [m for m in motivos_ordenados if str(m).strip() != '']
     sel_motivos = st.sidebar.multiselect("Motivo Específico", options=motivos_ordenados, placeholder="Seleccione motivo...", key="sel_motivos")
 
@@ -679,7 +674,7 @@ elif authentication_status:
             on_click=restablecer_filtros_callback
         )
 
-    df_base_global = df_raw.copy()
+    df_base_global = df_filtrado_fecha.copy()
     if sel_unidades:
         df_base_global = df_base_global[df_base_global['UNIDAD DE ASIGNACIÓN'].isin(sel_unidades)]
     if sel_rases:
@@ -698,10 +693,10 @@ elif authentication_status:
     tab_ind, tab_comp, tab_det = st.tabs(["📊 Análisis Individual", "🔄 Comparativo", "📋 Detalle"])
 
     with tab_ind:
-        render_tab_individual(df_base_global, col_mot_esp)
+        render_tab_individual(df_raw, col_mot_esp, df_base_global)
 
     with tab_comp:
-        render_tab_comparativo(df_base_global, col_mot_esp)
+        render_tab_comparativo(df_raw, col_mot_esp)
 
     with tab_det:
         st.subheader("📋 Consolidado de Datos")
@@ -720,7 +715,7 @@ elif authentication_status:
         
         cols_validas = [c for c in cols_detalle if c in df_base_global.columns]
         
-        # MODIFICACIÓN: Configuración estricta de legibilidad de columnas numéricas en la tabla
+        # MODIFICACIÓN: Mayor legibilidad y formato entero nativo directo
         st.dataframe(
             df_base_global[cols_validas].head(100), 
             use_container_width=True,
@@ -728,7 +723,7 @@ elif authentication_status:
             column_config={
                 col_ticket: st.column_config.NumberColumn(
                     label=col_ticket,
-                    format="%d"  # Forzar entero sin separadores de miles ni decimales para máxima legibilidad
+                    format="%d"
                 )
             }
         )
