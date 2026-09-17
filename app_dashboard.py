@@ -169,20 +169,16 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     top_10_upres = df_base['UNIDAD DE ASIGNACIÓN'].value_counts(observed=True).head(10).index
     df_g2 = df_base[df_base['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
 
-    # Ranking global de las 5 principales opciones en todo el conjunto de datos filtrado
+    # Ranking global de las 5 principales opciones
     top_5_globales = df_g2[col_target].value_counts(observed=True).head(5).index.tolist()
 
-    # Mapear cada registro a su categoría Top 1-5 o agruparlo en "OTROS"
     df_g2['Grupo_Consolidado'] = df_g2[col_target].apply(lambda x: x if x in top_5_globales else "OTROS")
 
     df_stack = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', 'Grupo_Consolidado'], observed=True).size().reset_index(name='Cantidad')
     df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
     df_stack['Grupo_fmt'] = df_stack['Grupo_Consolidado'].apply(lambda x: "OTROS" if x == "OTROS" else acortar_texto_abreviado(x))
 
-    # Formatear el ranking Top 5
     top_5_fmt = [acortar_texto_abreviado(x) for x in top_5_globales]
-    
-    # Secuencia estricta de apilado (de base a punta): Top 1 -> Top 2 -> Top 3 -> Top 4 -> Top 5 -> OTROS
     orden_apilado_inverso = ["OTROS"] + top_5_fmt[::-1]
 
     df_totales = df_stack.groupby('UPRES_fmt', observed=True)['Cantidad'].sum().reset_index(name='Total')
@@ -232,11 +228,9 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
 def generar_grafico_top10_cat_apilado_upres(df_base, titulo_grafico):
     st.subheader(titulo_grafico)
     
-    # Top 10 Categorías de Salud
     top_10_cat = df_base['ESPECIALIDAD_CATEGORIA'].value_counts(observed=True).head(10).index
     df_g = df_base[df_base['ESPECIALIDAD_CATEGORIA'].isin(top_10_cat)].copy()
     
-    # Top 5 UPRES principales
     top_5_upres = df_g['UNIDAD DE ASIGNACIÓN'].value_counts(observed=True).head(5).index.tolist()
     df_g['UPRES_Grupo'] = df_g['UNIDAD DE ASIGNACIÓN'].apply(lambda x: x if x in top_5_upres else "OTROS")
     
@@ -294,7 +288,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     df_base = df_base_global.copy()
 
-    # 1. Ajustes en las Tarjetas KPI
+    # Cálculo de variables para tarjetas KPI
     top_upres_s = df_base['UNIDAD DE ASIGNACIÓN'].value_counts(observed=True)
     top_upres_nom = top_upres_s.index[0] if not top_upres_s.empty else "N/A"
     top_upres_val = top_upres_s.iloc[0] if not top_upres_s.empty else 0
@@ -307,13 +301,15 @@ def render_tab_individual(df_base_global, col_mot_esp):
     top_dia_nom = top_dia_s.index[0] if not top_dia_s.empty else "N/A"
     top_dia_val = top_dia_s.iloc[0] if not top_dia_s.empty else 0
 
+    # Fila 1 de Tarjetas
     k1, k2 = st.columns(2)
     k1.metric("Total recepcionado", f"{len(df_base):,}")
+    
     k1_cat = df_base['ESPECIALIDAD_CATEGORIA'].value_counts(observed=True)
     cat_top_name = k1_cat.index[0] if not k1_cat.empty else "N/A"
     k2.metric("Especialidad más impactada", acortar_texto_abreviado(cat_top_name), delta=f"{k1_cat.iloc[0] if not k1_cat.empty else 0:,} tickets", delta_color="off")
 
-    # Intercambio de orden: RASES a la izquierda, UPRES a su derecha
+    # Fila 2 de Tarjetas (RASES a la izquierda, UPRES a la derecha)
     k3, k4, k5 = st.columns(3)
     k3.metric("RASES con más SIPQR2S", acortar_texto_abreviado(top_rases_nom), delta=f"{top_rases_val:,} tickets", delta_color="off")
     k4.metric("UPRES con más SIPQR2S", acortar_texto_abreviado(top_upres_nom), delta=f"{top_upres_val:,} tickets", delta_color="off")
@@ -662,7 +658,6 @@ elif authentication_status:
         query = '''
             SELECT 
                 "fecha_dt",
-                "fecha_corta",
                 "RASES",
                 "UNIDAD DE ASIGNACIÓN",
                 "ESPECIALIDAD_CATEGORIA",
@@ -740,13 +735,23 @@ elif authentication_status:
     lista_rases = sorted([x for x in df_raw['RASES'].dropna().unique() if str(x).strip() != ''])
     sel_rases = st.sidebar.multiselect("3. RASES", options=lista_rases, default=pref_guardadas.get("sel_rases", []), key="sel_rases")
 
-    cat_ordenadas = df_filtrado_temp['ESPECIALIDAD_CATEGORIA'].value_counts(observed=True).index.tolist()
-    cat_ordenadas = [c for c in cat_ordenadas if str(c).strip() != '']
+    # Blindaje defensivo para evitar TypeError si el dataframe filtrado está vacío
+    if not df_filtrado_temp.empty and 'ESPECIALIDAD_CATEGORIA' in df_filtrado_temp.columns:
+        s_cat = df_filtrado_temp['ESPECIALIDAD_CATEGORIA'].value_counts(observed=True)
+        cat_ordenadas = [str(c).strip() for c in s_cat.index if str(c).strip() != '']
+    else:
+        cat_ordenadas = []
+
     sel_cat = st.sidebar.multiselect("4. Categoría Salud", options=cat_ordenadas, placeholder="Seleccione categoría...", default=pref_guardadas.get("sel_cat", []), key="sel_cat")
 
     col_mot_esp = 'MOTIVO ESPECÍFICO' if 'MOTIVO ESPECÍFICO' in df_raw.columns else 'MOTIVO GENERAL'
-    motivos_ordenados = df_filtrado_temp[col_mot_esp].value_counts(observed=True).index.tolist()
-    motivos_ordenados = [m for m in motivos_ordenados if str(m).strip() != '']
+    
+    if not df_filtrado_temp.empty and col_mot_esp in df_filtrado_temp.columns:
+        s_mot = df_filtrado_temp[col_mot_esp].value_counts(observed=True)
+        motivos_ordenados = [str(m).strip() for m in s_mot.index if str(m).strip() != '']
+    else:
+        motivos_ordenados = []
+
     sel_motivos = st.sidebar.multiselect("5. Motivo Específico", options=motivos_ordenados, placeholder="Seleccione motivo...", default=pref_guardadas.get("sel_mot", []), key="sel_mot")
 
     lista_tipos = sorted([x for x in df_raw['Tipo de Solicitud'].dropna().unique() if str(x).strip() != ''])
@@ -770,7 +775,7 @@ elif authentication_status:
     if sel_medios:
         df_base_global = df_base_global[df_base_global['Medio de Recepción'].isin(sel_medios)]
 
-    # Renderizado Principal (Solo 2 Pestañas)
+    # Renderizado Principal (2 Pestañas)
     st.title("🛡️ SIPQR2S Sanidad")
     tab_ind, tab_comp = st.tabs(["📊 Análisis Individual", "🔄 Comparativo"])
 
