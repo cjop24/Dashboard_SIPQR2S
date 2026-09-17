@@ -302,42 +302,45 @@ def render_tab_individual(df_base_global, col_mot_esp):
     fig_mapa.update_layout(height=380, margin=dict(l=0, r=0, t=10, b=0))
     st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    st.subheader("Comportamiento Diario de SIPQR2S")
-    df_dia = df_base.groupby(['fecha_dt', 'fecha_corta'], observed=True).size().reset_index(name='Cantidad').sort_values('fecha_dt')
-    
-    if not df_dia.empty:
-        fig_dia = go.Figure()
-        fig_dia.add_trace(go.Scatter(
-            x=df_dia['fecha_corta'],
-            y=df_dia['Cantidad'],
-            mode='lines+markers',
-            name='Tickets Diarios',
-            line=dict(color=COLOR_PERIODO_A, width=1, dash='dot'),
-            marker=dict(size=5, color='#1b5e20')
-        ))
-        
-        if len(df_dia) > 1:
-            x_vals = np.arange(len(df_dia))
-            y_vals = df_dia['Cantidad'].values
-            m, b = np.polyfit(x_vals, y_vals, 1)
-            trend_line = m * x_vals + b
-            
-            fig_dia.add_trace(go.Scatter(
-                x=df_dia['fecha_corta'],
-                y=trend_line,
-                mode='lines',
-                name='Tendencia Periodo',
-                line=dict(color=COLOR_PERIODO_B, width=3.5)
-            ))
-        
-        fig_dia.update_layout(
-            xaxis_title="", yaxis_title="", height=300,
-            margin=dict(l=5, r=5, t=10, b=10),
-            legend=dict(orientation="h", y=1.1, x=0.8)
-        )
-        st.plotly_chart(aplicar_touch_safe(fig_dia), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+# -----------------------------------------------------------------------------
+    # GRÁFICO INHABILITADO: Comportamiento Diario de SIPQR2S
+    # -----------------------------------------------------------------------------
+    # st.subheader("Comportamiento Diario de SIPQR2S")
+    # df_dia = df_base.groupby(['fecha_dt', 'fecha_corta'], observed=True).size().reset_index(name='Cantidad').sort_values('fecha_dt')
+    # 
+    # if not df_dia.empty:
+    #     fig_dia = go.Figure()
+    #     fig_dia.add_trace(go.Scatter(
+    #         x=df_dia['fecha_corta'],
+    #         y=df_dia['Cantidad'],
+    #         mode='lines+markers',
+    #         name='Tickets Diarios',
+    #         line=dict(color=COLOR_PERIODO_A, width=1, dash='dot'),
+    #         marker=dict(size=5, color='#1b5e20')
+    #     ))
+    #     
+    #     if len(df_dia) > 1:
+    #         x_vals = np.arange(len(df_dia))
+    #         y_vals = df_dia['Cantidad'].values
+    #         m, b = np.polyfit(x_vals, y_vals, 1)
+    #         trend_line = m * x_vals + b
+    #         
+    #         fig_dia.add_trace(go.Scatter(
+    #             x=df_dia['fecha_corta'],
+    #             y=trend_line,
+    #             mode='lines',
+    #             name='Tendencia Periodo',
+    #             line=dict(color=COLOR_PERIODO_B, width=3.5)
+    #         ))
+    #     
+    #     fig_dia.update_layout(
+    #         xaxis_title="", yaxis_title="", height=300,
+    #         margin=dict(l=5, r=5, t=10, b=10),
+    #         legend=dict(orientation="h", y=1.1, x=0.8)
+    #     )
+    #     st.plotly_chart(aplicar_touch_safe(fig_dia), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    st.subheader("SIPQR2S por RASES")
+    st.subheader("PQR2S por RASES")
     df_g1 = df_base['RASES'].value_counts().reset_index()
     df_g1.columns = ['RASES', 'Cantidad']
     df_g1['RASES_fmt'] = df_g1['RASES'].apply(acortar_texto_abreviado)
