@@ -296,7 +296,6 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
 
     fig_comp = go.Figure()
 
-    # Mapeo de colores ejecutivos para las etiquetas Top 1 a Top 5
     colores_top = {
         'Top 1': '#1b4332',
         'Top 2': '#2d6a4f',
@@ -305,12 +304,11 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
         'Top 5': '#74c69d'
     }
 
-    # Creación de trazas por cada nivel Top para asegurar el apilamiento de izquierda a derecha
     for t in orden_top:
         sub_a = df_stack_a[df_stack_a['Top_Etiqueta'] == t]
         sub_b = df_stack_b[df_stack_b['Top_Etiqueta'] == t]
         
-        # Barra superior: Periodo A (Verde RASES)
+        # Barra superior: Periodo A
         fig_comp.add_trace(go.Bar(
             y=sub_a['UPRES_fmt'],
             x=sub_a['Cantidad'],
@@ -325,7 +323,7 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
             offsetgroup=0
         ))
         
-        # Barra inferior: Periodo B (Rojo RASES)
+        # Barra inferior: Periodo B
         fig_comp.add_trace(go.Bar(
             y=sub_b['UPRES_fmt'],
             x=sub_b['Cantidad'],
@@ -366,7 +364,9 @@ def render_tab_individual(df_base_global, col_mot_esp):
     if len(rango_fechas_ind) == 2:
         df_base = df_base[(df_base['fecha_dt'].dt.date >= rango_fechas_ind[0]) & (df_base['fecha_dt'].dt.date <= rango_fechas_ind[1])]
 
-    # Tarjetas KPI
+    # -----------------------------------------------------------------------------
+    # TARJETAS KPI (Reordenadas y con Etiquetas Actualizadas)
+    # -----------------------------------------------------------------------------
     top_upres_s = df_base['UNIDAD DE ASIGNACIÓN'].dropna().value_counts()
     top_upres_nom = top_upres_s.index[0] if not top_upres_s.empty else "N/A"
     top_upres_val = top_upres_s.iloc[0] if not top_upres_s.empty else 0
@@ -392,6 +392,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     st.markdown("---")
 
+    # MAPA GEOGRÁFICO
     st.subheader("MAPA: Distribución Geográfica SIPQR2S por UPRES")
     df_geo_base = df_base.dropna(subset=['UNIDAD DE ASIGNACIÓN'])
     df_geo = df_geo_base.groupby('UNIDAD DE ASIGNACIÓN', observed=True).size().reset_index(name='Cantidad')
@@ -429,6 +430,32 @@ def render_tab_individual(df_base_global, col_mot_esp):
     fig_mapa.update_layout(height=380, margin=dict(l=0, r=0, t=10, b=0))
     st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
+    # -----------------------------------------------------------------------------
+    # GRÁFICOS DE TORTA: DEBAJO DEL MAPA Y ENCIMA DE RASES
+    # -----------------------------------------------------------------------------
+    st.markdown("---")
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        st.subheader("Porcentaje (%) por Tipo de Solicitud")
+        df_pie_sol = df_base['Tipo de Solicitud'].dropna().value_counts().reset_index()
+        df_pie_sol.columns = ['Tipo de Solicitud', 'Cantidad']
+        df_pie_sol = df_pie_sol[df_pie_sol['Cantidad'] > 0]
+        fig_pie1 = px.pie(df_pie_sol, values='Cantidad', names='Tipo de Solicitud', hole=0.4, color_discrete_sequence=px.colors.sequential.Greens_r)
+        fig_pie1.update_layout(height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15))
+        st.plotly_chart(aplicar_touch_safe(fig_pie1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
+    with col_t2:
+        st.subheader("Porcentaje (%) por Medio de Recepción")
+        df_pie_med = df_base['Medio de Recepción'].dropna().value_counts().reset_index()
+        df_pie_med.columns = ['Medio de Recepción', 'Cantidad']
+        df_pie_med = df_pie_med[df_pie_med['Cantidad'] > 0]
+        fig_pie2 = px.pie(df_pie_med, values='Cantidad', names='Medio de Recepción', hole=0.4, color_discrete_sequence=px.colors.sequential.YlGn_r)
+        fig_pie2.update_layout(height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15))
+        st.plotly_chart(aplicar_touch_safe(fig_pie2), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
+    st.markdown("---")
+
+    # GRÁFICO: PQR2S POR RASES
     st.subheader("SIPQR2S por RASES")
     df_g1_raw = df_base['RASES'].dropna().value_counts().reset_index()
     df_g1_raw.columns = ['RASES', 'Cantidad']
@@ -439,6 +466,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
     fig1.update_layout(xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10))
     st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
+    # GRÁFICO: PQR2S POR UPRES
     st.subheader("PQR2S por UPRES")
     df_u1_raw = df_base['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
     df_u1_raw.columns = ['UPRES', 'Cantidad']
@@ -455,26 +483,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
     fig_upres_simple.update_layout(xaxis_title="", yaxis_title="", height=350, margin=dict(l=5, r=5, t=10, b=10))
     st.plotly_chart(aplicar_touch_safe(fig_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    st.markdown("---")
-    col_t1, col_t2 = st.columns(2)
-    with col_t1:
-        st.subheader("Porcentaje (%) por Tipo de Solicitud")
-        df_pie_sol = df_base['Tipo de Solicitud'].dropna().value_counts().reset_index()
-        df_pie_sol.columns = ['Tipo', 'Cantidad']
-        df_pie_sol = df_pie_sol[df_pie_sol['Cantidad'] > 0]
-        fig_pie1 = px.pie(df_pie_sol, values='Cantidad', names='Tipo', hole=0.4, color_discrete_sequence=px.colors.sequential.Greens_r)
-        fig_pie1.update_layout(height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15))
-        st.plotly_chart(aplicar_touch_safe(fig_pie1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
-
-    with col_t2:
-        st.subheader("Porcentaje (%) por Medio de Recepción")
-        df_pie_med = df_base['Medio de Recepción'].dropna().value_counts().reset_index()
-        df_pie_med.columns = ['Medio', 'Cantidad']
-        df_pie_med = df_pie_med[df_pie_med['Cantidad'] > 0]
-        fig_pie2 = px.pie(df_pie_med, values='Cantidad', names='Medio', hole=0.4, color_discrete_sequence=px.colors.sequential.YlGn_r)
-        fig_pie2.update_layout(height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15))
-        st.plotly_chart(aplicar_touch_safe(fig_pie2), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
-
+    # DISTRIBUCIONES APILADAS
     generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES - Categoría Salud (Top 5)")
     generar_grafico_upres_apilado(df_base, col_mot_esp, "Distribución por UPRES - Motivo Específico (Top 5)")
 
@@ -518,6 +527,71 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         mapa_color_comp = {'Periodo A': COLOR_PERIODO_A, 'Periodo B': COLOR_PERIODO_B}
 
+        # -----------------------------------------------------------------------------
+        # 1. TIPO DE SOLICITUD Y MEDIO DE RECEPCIÓN (Primeros en Comparativo, de menor a mayor)
+        # -----------------------------------------------------------------------------
+        col_cp1, col_cp2 = st.columns(2)
+        with col_cp1:
+            st.subheader("Comparativo Tipo de Solicitud")
+            df_ts_a = df_a['Tipo de Solicitud'].dropna().value_counts().reset_index()
+            df_ts_a.columns = ['Tipo de Solicitud', 'Periodo A']
+            
+            df_ts_b = df_b['Tipo de Solicitud'].dropna().value_counts().reset_index()
+            df_ts_b.columns = ['Tipo de Solicitud', 'Periodo B']
+            
+            df_ts_comp = pd.merge(df_ts_a, df_ts_b, on='Tipo de Solicitud', how='outer').fillna(0)
+            df_ts_comp['Total_Volume'] = df_ts_comp['Periodo A'] + df_ts_comp['Periodo B']
+            df_ts_comp = df_ts_comp.sort_values('Total_Volume', ascending=True)
+            
+            df_ts_melt = df_ts_comp.melt(id_vars=['Tipo de Solicitud', 'Total_Volume'], value_vars=['Periodo A', 'Periodo B'], var_name='Periodo', value_name='Cantidad')
+            df_ts_melt = df_ts_melt[df_ts_melt['Cantidad'] > 0]
+            
+            fig_comp_ts = px.bar(
+                df_ts_melt, 
+                x='Cantidad', 
+                y='Tipo de Solicitud', 
+                color='Periodo', 
+                barmode='group', 
+                orientation='h', 
+                text_auto=',d', 
+                color_discrete_map=mapa_color_comp,
+                category_orders={'Tipo de Solicitud': df_ts_comp['Tipo de Solicitud'].tolist()}
+            )
+            fig_comp_ts.update_layout(height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.2))
+            st.plotly_chart(aplicar_touch_safe(fig_comp_ts), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
+        with col_cp2:
+            st.subheader("Comparativo Medio de Recepción")
+            df_mr_a = df_a['Medio de Recepción'].dropna().value_counts().reset_index()
+            df_mr_a.columns = ['Medio de Recepción', 'Periodo A']
+            
+            df_mr_b = df_b['Medio de Recepción'].dropna().value_counts().reset_index()
+            df_mr_b.columns = ['Medio de Recepción', 'Periodo B']
+            
+            df_mr_comp = pd.merge(df_mr_a, df_mr_b, on='Medio de Recepción', how='outer').fillna(0)
+            df_mr_comp['Total_Volume'] = df_mr_comp['Periodo A'] + df_mr_comp['Periodo B']
+            df_mr_comp = df_mr_comp.sort_values('Total_Volume', ascending=True)
+            
+            df_mr_melt = df_mr_comp.melt(id_vars=['Medio de Recepción', 'Total_Volume'], value_vars=['Periodo A', 'Periodo B'], var_name='Periodo', value_name='Cantidad')
+            df_mr_melt = df_mr_melt[df_mr_melt['Cantidad'] > 0]
+            
+            fig_comp_mr = px.bar(
+                df_mr_melt, 
+                x='Cantidad', 
+                y='Medio de Recepción', 
+                color='Periodo', 
+                barmode='group', 
+                orientation='h', 
+                text_auto=',d', 
+                color_discrete_map=mapa_color_comp,
+                category_orders={'Medio de Recepción': df_mr_comp['Medio de Recepción'].tolist()}
+            )
+            fig_comp_mr.update_layout(height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.2))
+            st.plotly_chart(aplicar_touch_safe(fig_comp_mr), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
+        st.markdown("---")
+
+        # COMPARATIVO POR RASES
         st.subheader("Comparativo por RASES")
         df_r_a = df_a['RASES'].dropna().value_counts().reset_index()
         df_r_a.columns = ['RASES', 'Cantidad']
@@ -538,6 +612,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         fig_comp_rases.update_layout(xaxis_title="", yaxis_title="", height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_rases), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
+        # COMPARATIVO PQR2S POR UPRES
         st.subheader("Comparativo PQR2S por UPRES")
         df_u_comp_a = df_a['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
         df_u_comp_a.columns = ['UNIDAD DE ASIGNACIÓN', 'Cantidad']
@@ -558,40 +633,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         fig_comp_upres_simple.update_layout(xaxis_title="", yaxis_title="", height=350, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        st.markdown("---")
-        col_cp1, col_cp2 = st.columns(2)
-        with col_cp1:
-            st.subheader("Comparativo Tipo de Solicitud")
-            df_ts_a = df_a['Tipo de Solicitud'].dropna().value_counts().reset_index()
-            df_ts_a.columns = ['Tipo', 'Periodo A']
-            
-            df_ts_b = df_b['Tipo de Solicitud'].dropna().value_counts().reset_index()
-            df_ts_b.columns = ['Tipo', 'Periodo B']
-            
-            df_ts_comp = pd.merge(df_ts_a, df_ts_b, on='Tipo', how='outer').fillna(0)
-            df_ts_melt = df_ts_comp.melt(id_vars=['Tipo'], value_vars=['Periodo A', 'Periodo B'], var_name='Periodo', value_name='Cantidad')
-            df_ts_melt = df_ts_melt[df_ts_melt['Cantidad'] > 0]
-            
-            fig_comp_ts = px.bar(df_ts_melt, x='Cantidad', y='Tipo', color='Periodo', barmode='group', orientation='h', text_auto=',d', color_discrete_map=mapa_color_comp)
-            fig_comp_ts.update_layout(yaxis=dict(autorange="reversed"), height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.2))
-            st.plotly_chart(aplicar_touch_safe(fig_comp_ts), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
-
-        with col_cp2:
-            st.subheader("Comparativo Medio de Recepción")
-            df_mr_a = df_a['Medio de Recepción'].dropna().value_counts().reset_index()
-            df_mr_a.columns = ['Medio', 'Periodo A']
-            
-            df_mr_b = df_b['Medio de Recepción'].dropna().value_counts().reset_index()
-            df_mr_b.columns = ['Medio', 'Periodo B']
-            
-            df_mr_comp = pd.merge(df_mr_a, df_mr_b, on='Medio', how='outer').fillna(0)
-            df_mr_melt = df_mr_comp.melt(id_vars=['Medio'], value_vars=['Periodo A', 'Periodo B'], var_name='Periodo', value_name='Cantidad')
-            df_mr_melt = df_mr_melt[df_mr_melt['Cantidad'] > 0]
-            
-            fig_comp_mr = px.bar(df_mr_melt, x='Cantidad', y='Medio', color='Periodo', barmode='group', orientation='h', text_auto=',d', color_discrete_map=mapa_color_comp)
-            fig_comp_mr.update_layout(yaxis=dict(autorange="reversed"), height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.2))
-            st.plotly_chart(aplicar_touch_safe(fig_comp_mr), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
-
+        # COMPARATIVOS DISTRIBUCIÓN POR UPRES TOP 5
         st.markdown("---")
         generar_grafico_upres_comparativo_top5(
             df_a, df_b, 
