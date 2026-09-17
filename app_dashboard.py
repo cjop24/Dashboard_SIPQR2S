@@ -762,9 +762,13 @@ elif authentication_status:
     if sel_medios:
         df_base_global = df_base_global[df_base_global['Medio de Recepción'].isin(sel_medios)]
 
-    # Renderizado Principal
+    # -----------------------------------------------------------------------------
+    # RENDERIZADO PRINCIPAL (Pestaña Detalle inhabilitada para optimización)
+    # -----------------------------------------------------------------------------
     st.title("🛡️ SIPQR2S Sanidad")
-    tab_ind, tab_comp, tab_det = st.tabs(["📊 Análisis Individual", "🔄 Comparativo", "📋 Detalle"])
+    
+    # Se inactiva la pestaña Detalle creando únicamente 2 pestañas
+    tab_ind, tab_comp = st.tabs(["📊 Análisis Individual", "🔄 Comparativo"])
 
     with tab_ind:
         render_tab_individual(df_base_global, col_mot_esp)
@@ -772,25 +776,29 @@ elif authentication_status:
     with tab_comp:
         render_tab_comparativo(df_base_global, col_mot_esp)
 
-    with tab_det:
-        st.subheader("📋 Consolidado de Datos")
-        
-        col_ticket = 'Ticket' if 'Ticket' in df_base_global.columns else 'Consecutivo Ticket'
-        cols_detalle = [
-            col_ticket,
-            'fecha_corta',
-            'RASES', 
-            'UNIDAD DE ASIGNACIÓN', 
-            'ESPECIALIDAD_CATEGORIA', 
-            col_mot_esp,
-            'Tipo de Solicitud', 
-            'Medio de Recepción'
-        ]
-        
-        cols_validas = [c for c in cols_detalle if c in df_base_global.columns]
-        
-        st.dataframe(
-            df_base_global[cols_validas].head(100), 
-            use_container_width=True,
-            hide_index=True
-        )
+    # -----------------------------------------------------------------------------
+    # Pestaña Detalle (Inhabilitada temporalmente - Preservada para el futuro)
+    # -----------------------------------------------------------------------------
+    # with tab_det:
+    #     st.subheader("📋 Consolidado de Datos")
+    #     
+    #     col_ticket = 'Ticket' if 'Ticket' in df_base_global.columns else 'Consecutivo Ticket'
+    #     cols_detalle = [
+    #         col_ticket,
+    #         'fecha_corta',
+    #         'RASES', 
+    #         'UNIDAD DE ASIGNACIÓN', 
+    #         'CATEGORIA_SALUD', 
+    #         col_mot_esp,
+    #         'Tipo de Solicitud', 
+    #         'Medio de Recepción'
+    #     ]
+    #     
+    #     cols_validas = [c for c in cols_detalle if c in df_base_global.columns]
+    #     
+    #     st.dataframe(
+    #         df_base_global[cols_validas].head(100), 
+    #         use_container_width=True,
+    #         hide_index=True
+    #     )
+R
