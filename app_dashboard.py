@@ -195,7 +195,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
     df_stack['Grupo_fmt'] = df_stack[col_target].apply(acortar_texto_abreviado)
     
-    # Ordenamiento de UPRES: Mayor arriba y menor abajo
+    # Ordenamiento de UPRES: De menor a mayor (de arriba hacia abajo en el eje Y)
     upres_ordenadas_fmt = [acortar_texto_abreviado(u) for u in top_10_upres]
     df_totales = df_stack.groupby('UPRES_fmt', observed=True)['Cantidad'].sum().reset_index(name='Total')
 
@@ -217,7 +217,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
         color='Grupo_fmt', 
         orientation='h', 
         category_orders={
-            'UPRES_fmt': upres_ordenadas_fmt[::-1],  # Invertir para mostrar el valor más alto en la parte superior del eje Y
+            'UPRES_fmt': upres_ordenadas_fmt,  # Muestra de menor (arriba) a mayor (abajo)
             'Grupo_fmt': categorias_unicas
         },
         color_discrete_map=color_map
@@ -378,7 +378,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
         st.plotly_chart(aplicar_touch_safe(fig_pie2), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     # -----------------------------------------------------------------------------
-    # DISTRIBUCIÓN POR UPRES (TOP 5 SIN OTROS)
+    # DISTRIBUCIÓN POR UPRES (TOP 5 SIN OTROS) - ORDENADO DE MENOR A MAYOR
     # -----------------------------------------------------------------------------
     generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES - Categoría Salud (Top 5)")
     generar_grafico_upres_apilado(df_base, col_mot_esp, "Distribución por UPRES - Motivo Específico (Top 5)")
