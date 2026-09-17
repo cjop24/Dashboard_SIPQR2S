@@ -287,53 +287,46 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
         top_local = conteo[conteo['Rank'] <= 5].copy()
         top_local['Top_Etiqueta'] = top_local['Rank'].astype(int).apply(lambda r: f"Top {r}")
         top_local['Periodo'] = etiqueta_periodo
-        top_local['UPRES_fmt'] = top_local['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+        top_local['UPRES_fmt'] = top_local['UNIDAD DE ASIGNACIÓN'].apply(lambda x: str(acortar_texto_abreviado(x)))
         return top_local
 
     df_stack_a = procesar_periodo_top(df_a_clean, 'Periodo A')
     df_stack_b = procesar_periodo_top(df_b_clean, 'Periodo B')
     df_stack_total = pd.concat([df_stack_a, df_stack_b])
 
-    # Orden del eje Y: de menor (arriba) a mayor (abajo)
-    upres_ordenadas_fmt = [acortar_texto_abreviado(u) for u in reversed(top_5_upres)]
+    # Orden del eje Y: de menor (arriba) a mayor (abajo) asegurando valores tipo str
+    upres_ordenadas_fmt = [str(acortar_texto_abreviado(u)) for u in reversed(top_5_upres)]
 
-    # 6. Crear gráfico con estilo monocromático (limpio, contornos nítidos sin saturación de color)
-    fig_comp = go.Figure()
-
+    # 6. Crear gráfico usando px.bar para manejo automático seguro de category_orders
     estilos_periodo = {
-        'Periodo A': {'fill': '#f3f4f6', 'line': '#374151'},
-        'Periodo B': {'fill': '#e5e7eb', 'line': '#111827'}
+        'Periodo A': '#f3f4f6',
+        'Periodo B': '#e5e7eb'
     }
 
-    for rank_idx in range(1, 6):
-        tag_rank = f"Top {rank_idx}"
-        df_rank = df_stack_total[df_stack_total['Top_Etiqueta'] == tag_rank]
-        
-        for periodo_nombre in ['Periodo A', 'Periodo B']:
-            df_p = df_rank[df_rank['Periodo'] == periodo_nombre]
-            if not df_p.empty:
-                fig_comp.add_trace(go.Bar(
-                    y=df_p['UPRES_fmt'],
-                    x=df_p['Cantidad'],
-                    name=f"{periodo_nombre} - {tag_rank}",
-                    orientation='h',
-                    text=tag_rank,
-                    textposition='inside',
-                    insidetextanchor='middle',
-                    marker=dict(
-                        color=estilos_periodo[periodo_nombre]['fill'],
-                        line=dict(color=estilos_periodo[periodo_nombre]['line'], width=1.5)
-                    ),
-                    showlegend=False
-                ))
+    fig_comp = px.bar(
+        df_stack_total,
+        y='UPRES_fmt',
+        x='Cantidad',
+        color='Periodo',
+        barmode='stack',
+        orientation='h',
+        text='Top_Etiqueta',
+        category_orders={'UPRES_fmt': upres_ordenadas_fmt},
+        color_discrete_map=estilos_periodo
+    )
+
+    fig_comp.update_traces(
+        textposition='inside',
+        insidetextanchor='middle',
+        marker=dict(line=dict(color='#374151', width=1.5))
+    )
 
     fig_comp.update_layout(
-        barmode='stack',
-        category_orders={'y': upres_ordenadas_fmt},
         xaxis_title="",
         yaxis_title="",
         height=420,
-        margin=dict(l=5, r=5, t=10, b=10)
+        margin=dict(l=5, r=5, t=10, b=10),
+        legend=dict(orientation="h", y=-0.15, x=0.3, title=None)
     )
     
     st.plotly_chart(aplicar_touch_safe(fig_comp), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
