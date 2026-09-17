@@ -621,13 +621,12 @@ elif authentication_status:
 
     @st.cache_data(ttl=3600, show_spinner="Cargando datos optimizados...")
     def cargar_datos_consolidados():
-        # Selección puntual de columnas necesarias para evitar latencias de red
+        # Selección puntual de columnas presentes en V_SIPQR2S_CONSOLIDADO
         query = '''
             SELECT 
                 "Consecutivo Ticket",
                 "Ticket",
                 "fecha_dt",
-                "fecha_corta",
                 "RASES",
                 "UNIDAD DE ASIGNACIÓN",
                 "ESPECIALIDAD_CATEGORIA",
@@ -638,10 +637,11 @@ elif authentication_status:
         '''
         df = pd.read_sql(query, con=engine)
         
-        # Casteo optimizado directamente al cargar
+        # Casteo de fecha y creación de fecha corta
         df['fecha_dt'] = pd.to_datetime(df['fecha_dt'])
+        df['fecha_corta'] = df['fecha_dt'].dt.strftime('%Y-%m-%d')
         
-        # Conversión a categóricas para máxima velocidad en RAM
+        # Conversión a categóricas para optimizar memoria en RAM
         cols_cat = ['RASES', 'UNIDAD DE ASIGNACIÓN', 'ESPECIALIDAD_CATEGORIA', 'Tipo de Solicitud', 'Medio de Recepción']
         for col in cols_cat:
             if col in df.columns:
