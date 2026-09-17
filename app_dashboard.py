@@ -246,7 +246,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
 def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafico):
     st.subheader(titulo_grafico)
     
-    # Preprocesar Periodo A y Periodo B
+    # 1. Limpieza de datos
     df_a_clean = df_a.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
     df_b_clean = df_b.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
 
@@ -259,17 +259,17 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
         (df_b_clean[col_target].astype(str).str.strip() != '')
     ]
 
-    # Calcular Top 5 local para Periodo A
-    conteo_a = df_a_clean.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant_Local')
-    conteo_a['Rank_Local'] = conteo_a.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(method='first', ascending=False)
-    top5_a = conteo_a[conteo_a['Rank_Local'] <= 5].groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Cant_Local'].sum().reset_index(name='Suma_Top5')
+    # 2. Ranking Top 5 local por UPRES para Periodo A
+    cA = df_a_clean.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant')
+    cA['Rank'] = cA.groupby('UNIDAD DE ASIGNACIÓN')['Cant'].rank(method='first', ascending=False)
+    top5_a = cA[cA['Rank'] <= 5].groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Cant'].sum().reset_index(name='Suma_Top5')
 
-    # Calcular Top 5 local para Periodo B
-    conteo_b = df_b_clean.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant_Local')
-    conteo_b['Rank_Local'] = conteo_b.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(method='first', ascending=False)
-    top5_b = conteo_b[conteo_b['Rank_Local'] <= 5].groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Cant_Local'].sum().reset_index(name='Suma_Top5')
+    # 3. Ranking Top 5 local por UPRES para Periodo B
+    cB = df_b_clean.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant')
+    cB['Rank'] = cB.groupby('UNIDAD DE ASIGNACIÓN')['Cant'].rank(method='first', ascending=False)
+    top5_b = cB[cB['Rank'] <= 5].groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Cant'].sum().reset_index(name='Suma_Top5')
 
-    # Sumar volumen conjunto de las Top 5 locales para seleccionar las 5 UPRES principales
+    # 4. Seleccionar las 5 UPRES principales con mayor volumen conjunto
     totales_upres = pd.merge(top5_a, top5_b, on='UNIDAD DE ASIGNACIÓN', how='outer').fillna(0)
     totales_upres['Total_Top5'] = totales_upres['Suma_Top5_x'] + totales_upres['Suma_Top5_y']
     
@@ -277,49 +277,65 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
         st.info("No hay datos disponibles para la comparación.")
         return
 
-    # 5 UPRES donde la suma de las Top 5 categorías sea mayor
     top_5_upres = totales_upres.sort_values('Total_Top5', ascending=False).head(5)['UNIDAD DE ASIGNACIÓN'].tolist()
 
-    # Filtrar datos de Periodo A y B con las 5 UPRES seleccionadas
-    df_a_top = df_a_clean[df_a_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)].copy()
-    df_b_top = df_b_clean[df_b_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)].copy()
+    # 5. Construir dataset apilado detallado (Top 1 al Top 5) para ambos periodos
+    def procesar_periodo_top(df_in, etiqueta_periodo):
+        df_sub = df_in[df_in['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)].copy()
+        conteo = df_sub.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cantidad')
+        conteo['Rank'] = conteo.groupby('UNIDAD DE ASIGNACIÓN')['Cantidad'].rank(method='first', ascending=False)
+        top_local = conteo[conteo['Rank'] <= 5].copy()
+        top_local['Top_Etiqueta'] = top_local['Rank'].astype(int).apply(lambda r: f"Top {r}")
+        top_local['Periodo'] = etiqueta_periodo
+        top_local['UPRES_fmt'] = top_local['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+        return top_local
 
-    # Re-filtrar Top 5 ítems de cada UPRES
-    cA = df_a_top.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant')
-    cA['Rank'] = cA.groupby('UNIDAD DE ASIGNACIÓN')['Cant'].rank(method='first', ascending=False)
-    df_a_top5 = cA[cA['Rank'] <= 5].groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Cant'].sum().reset_index(name='Cantidad')
-    df_a_top5['Periodo'] = 'Periodo A'
+    df_stack_a = procesar_periodo_top(df_a_clean, 'Periodo A')
+    df_stack_b = procesar_periodo_top(df_b_clean, 'Periodo B')
+    df_stack_total = pd.concat([df_stack_a, df_stack_b])
 
-    cB = df_b_top.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant')
-    cB['Rank'] = cB.groupby('UNIDAD DE ASIGNACIÓN')['Cant'].rank(method='first', ascending=False)
-    df_b_top5 = cB[cB['Rank'] <= 5].groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Cant'].sum().reset_index(name='Cantidad')
-    df_b_top5['Periodo'] = 'Periodo B'
-
-    df_comp_upres = pd.concat([df_a_top5, df_b_top5])
-    df_comp_upres['UPRES_fmt'] = df_comp_upres['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
-
-    # Ordenar de menor (arriba) a mayor (abajo)
+    # Orden del eje Y: de menor (arriba) a mayor (abajo)
     upres_ordenadas_fmt = [acortar_texto_abreviado(u) for u in reversed(top_5_upres)]
 
-    fig_comp = px.bar(
-        df_comp_upres,
-        y='UPRES_fmt',
-        x='Cantidad',
-        color='Periodo',
-        barmode='group',
-        orientation='h',
-        text_auto=',d',
-        category_orders={'UPRES_fmt': upres_ordenadas_fmt},
-        color_discrete_map={'Periodo A': COLOR_PERIODO_A, 'Periodo B': COLOR_PERIODO_B}
-    )
+    # 6. Crear gráfico con estilo monocromático (limpio, contornos nítidos sin saturación de color)
+    fig_comp = go.Figure()
+
+    estilos_periodo = {
+        'Periodo A': {'fill': '#f3f4f6', 'line': '#374151'},
+        'Periodo B': {'fill': '#e5e7eb', 'line': '#111827'}
+    }
+
+    for rank_idx in range(1, 6):
+        tag_rank = f"Top {rank_idx}"
+        df_rank = df_stack_total[df_stack_total['Top_Etiqueta'] == tag_rank]
+        
+        for periodo_nombre in ['Periodo A', 'Periodo B']:
+            df_p = df_rank[df_rank['Periodo'] == periodo_nombre]
+            if not df_p.empty:
+                fig_comp.add_trace(go.Bar(
+                    y=df_p['UPRES_fmt'],
+                    x=df_p['Cantidad'],
+                    name=f"{periodo_nombre} - {tag_rank}",
+                    orientation='h',
+                    text=tag_rank,
+                    textposition='inside',
+                    insidetextanchor='middle',
+                    marker=dict(
+                        color=estilos_periodo[periodo_nombre]['fill'],
+                        line=dict(color=estilos_periodo[periodo_nombre]['line'], width=1.5)
+                    ),
+                    showlegend=False
+                ))
 
     fig_comp.update_layout(
+        barmode='stack',
+        category_orders={'y': upres_ordenadas_fmt},
         xaxis_title="",
         yaxis_title="",
-        height=380,
-        margin=dict(l=5, r=5, t=10, b=10),
-        legend=dict(orientation="h", y=-0.2, x=0.3)
+        height=420,
+        margin=dict(l=5, r=5, t=10, b=10)
     )
+    
     st.plotly_chart(aplicar_touch_safe(fig_comp), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 # -----------------------------------------------------------------------------
@@ -596,7 +612,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             st.plotly_chart(aplicar_touch_safe(fig_comp_mr), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # -----------------------------------------------------------------------------
-        # COMPARATIVOS DISTRIBUCIÓN POR UPRES (TOP 5 UPRES CON MÁS PQRS TOP 5)
+        # COMPARATIVOS DISTRIBUCIÓN POR UPRES (ESTILO MONOCROMÁTICO CON TOP INTERNO)
         # -----------------------------------------------------------------------------
         st.markdown("---")
         generar_grafico_upres_comparativo_top5(
