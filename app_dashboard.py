@@ -242,9 +242,6 @@ def render_tab_individual(df_base_global, col_mot_esp):
     if len(rango_fechas_ind) == 2:
         df_base = df_base[(df_base['fecha_dt'].dt.date >= rango_fechas_ind[0]) & (df_base['fecha_dt'].dt.date <= rango_fechas_ind[1])]
 
-    # -----------------------------------------------------------------------------
-    # TARJETAS KPI (Ajuste exclusivo de títulos y orden visual)
-    # -----------------------------------------------------------------------------
     top_upres_s = df_base['UNIDAD DE ASIGNACIÓN'].value_counts()
     top_upres_nom = top_upres_s.index[0] if not top_upres_s.empty else "N/A"
     top_upres_val = top_upres_s.iloc[0] if not top_upres_s.empty else 0
@@ -257,14 +254,12 @@ def render_tab_individual(df_base_global, col_mot_esp):
     top_dia_nom = top_dia_s.index[0] if not top_dia_s.empty else "N/A"
     top_dia_val = top_dia_s.iloc[0] if not top_dia_s.empty else 0
 
-    # Fila superior de tarjetas
     k1, k2 = st.columns(2)
     k1.metric("Total recepcionado", f"{len(df_base):,}")
     k1_cat = df_base['ESPECIALIDAD_CATEGORIA'].value_counts()
     cat_top_name = k1_cat.index[0] if not k1_cat.empty else "N/A"
     k2.metric("Especialidad más impactada", acortar_texto_abreviado(cat_top_name), delta=f"{k1_cat.iloc[0] if not k1_cat.empty else 0:,} tickets", delta_color="off")
 
-    # Fila inferior de tarjetas (Intercambio de orden: RASES a la izquierda, UPRES a la derecha)
     k3, k4, k5 = st.columns(3)
     k3.metric("RASES con más PQRS", acortar_texto_abreviado(top_rases_nom), delta=f"{top_rases_val:,} tickets", delta_color="off")
     k4.metric("UPRES con más PQRS", acortar_texto_abreviado(top_upres_nom), delta=f"{top_upres_val:,} tickets", delta_color="off")
@@ -625,7 +620,6 @@ elif authentication_status:
 
     @st.cache_data(ttl=3600, show_spinner="Cargando datos optimizados...")
     def cargar_datos_consolidados():
-        # Extracción puntual de columnas estrictamente necesarias
         query = '''
             SELECT 
                 "Consecutivo Ticket",
@@ -642,11 +636,9 @@ elif authentication_status:
         '''
         df = pd.read_sql(query, con=engine)
         
-        # Conversión datetime y fecha corta
         df['fecha_dt'] = pd.to_datetime(df['fecha_dt'])
         df['fecha_corta'] = df['fecha_dt'].dt.strftime('%Y-%m-%d')
         
-        # Conversión a categóricas para optimizar RAM
         cols_cat = [
             'RASES', 
             'UNIDAD DE ASIGNACIÓN', 
@@ -763,11 +755,10 @@ elif authentication_status:
         df_base_global = df_base_global[df_base_global['Medio de Recepción'].isin(sel_medios)]
 
     # -----------------------------------------------------------------------------
-    # RENDERIZADO PRINCIPAL (Pestaña Detalle inhabilitada para optimización)
+    # RENDERIZADO PRINCIPAL
     # -----------------------------------------------------------------------------
     st.title("🛡️ SIPQR2S Sanidad")
     
-    # Se inactiva la pestaña Detalle creando únicamente 2 pestañas
     tab_ind, tab_comp = st.tabs(["📊 Análisis Individual", "🔄 Comparativo"])
 
     with tab_ind:
@@ -775,30 +766,3 @@ elif authentication_status:
 
     with tab_comp:
         render_tab_comparativo(df_base_global, col_mot_esp)
-
-    # -----------------------------------------------------------------------------
-    # Pestaña Detalle (Inhabilitada temporalmente - Preservada para el futuro)
-    # -----------------------------------------------------------------------------
-    # with tab_det:
-    #     st.subheader("📋 Consolidado de Datos")
-    #     
-    #     col_ticket = 'Ticket' if 'Ticket' in df_base_global.columns else 'Consecutivo Ticket'
-    #     cols_detalle = [
-    #         col_ticket,
-    #         'fecha_corta',
-    #         'RASES', 
-    #         'UNIDAD DE ASIGNACIÓN', 
-    #         'CATEGORIA_SALUD', 
-    #         col_mot_esp,
-    #         'Tipo de Solicitud', 
-    #         'Medio de Recepción'
-    #     ]
-    #     
-    #     cols_validas = [c for c in cols_detalle if c in df_base_global.columns]
-    #     
-    #     st.dataframe(
-    #         df_base_global[cols_validas].head(100), 
-    #         use_container_width=True,
-    #         hide_index=True
-    #     )
-R
