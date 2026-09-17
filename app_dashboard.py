@@ -243,6 +243,85 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     )
     st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
+def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafico):
+    st.subheader(titulo_grafico)
+    
+    # Preprocesar Periodo A y Periodo B
+    df_a_clean = df_a.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
+    df_b_clean = df_b.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
+
+    df_a_clean = df_a_clean[
+        (df_a_clean['UNIDAD DE ASIGNACIÓN'].astype(str).str.strip() != '') &
+        (df_a_clean[col_target].astype(str).str.strip() != '')
+    ]
+    df_b_clean = df_b_clean[
+        (df_b_clean['UNIDAD DE ASIGNACIÓN'].astype(str).str.strip() != '') &
+        (df_b_clean[col_target].astype(str).str.strip() != '')
+    ]
+
+    # Calcular Top 5 local para Periodo A
+    conteo_a = df_a_clean.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant_Local')
+    conteo_a['Rank_Local'] = conteo_a.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(method='first', ascending=False)
+    top5_a = conteo_a[conteo_a['Rank_Local'] <= 5].groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Cant_Local'].sum().reset_index(name='Suma_Top5')
+
+    # Calcular Top 5 local para Periodo B
+    conteo_b = df_b_clean.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant_Local')
+    conteo_b['Rank_Local'] = conteo_b.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(method='first', ascending=False)
+    top5_b = conteo_b[conteo_b['Rank_Local'] <= 5].groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Cant_Local'].sum().reset_index(name='Suma_Top5')
+
+    # Sumar volumen conjunto de las Top 5 locales para seleccionar las 5 UPRES principales
+    totales_upres = pd.merge(top5_a, top5_b, on='UNIDAD DE ASIGNACIÓN', how='outer').fillna(0)
+    totales_upres['Total_Top5'] = totales_upres['Suma_Top5_x'] + totales_upres['Suma_Top5_y']
+    
+    if totales_upres.empty:
+        st.info("No hay datos disponibles para la comparación.")
+        return
+
+    # 5 UPRES donde la suma de las Top 5 categorías sea mayor
+    top_5_upres = totales_upres.sort_values('Total_Top5', ascending=False).head(5)['UNIDAD DE ASIGNACIÓN'].tolist()
+
+    # Filtrar datos de Periodo A y B con las 5 UPRES seleccionadas
+    df_a_top = df_a_clean[df_a_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)].copy()
+    df_b_top = df_b_clean[df_b_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)].copy()
+
+    # Re-filtrar Top 5 ítems de cada UPRES
+    cA = df_a_top.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant')
+    cA['Rank'] = cA.groupby('UNIDAD DE ASIGNACIÓN')['Cant'].rank(method='first', ascending=False)
+    df_a_top5 = cA[cA['Rank'] <= 5].groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Cant'].sum().reset_index(name='Cantidad')
+    df_a_top5['Periodo'] = 'Periodo A'
+
+    cB = df_b_top.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant')
+    cB['Rank'] = cB.groupby('UNIDAD DE ASIGNACIÓN')['Cant'].rank(method='first', ascending=False)
+    df_b_top5 = cB[cB['Rank'] <= 5].groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Cant'].sum().reset_index(name='Cantidad')
+    df_b_top5['Periodo'] = 'Periodo B'
+
+    df_comp_upres = pd.concat([df_a_top5, df_b_top5])
+    df_comp_upres['UPRES_fmt'] = df_comp_upres['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+
+    # Ordenar de menor (arriba) a mayor (abajo)
+    upres_ordenadas_fmt = [acortar_texto_abreviado(u) for u in reversed(top_5_upres)]
+
+    fig_comp = px.bar(
+        df_comp_upres,
+        y='UPRES_fmt',
+        x='Cantidad',
+        color='Periodo',
+        barmode='group',
+        orientation='h',
+        text_auto=',d',
+        category_orders={'UPRES_fmt': upres_ordenadas_fmt},
+        color_discrete_map={'Periodo A': COLOR_PERIODO_A, 'Periodo B': COLOR_PERIODO_B}
+    )
+
+    fig_comp.update_layout(
+        xaxis_title="",
+        yaxis_title="",
+        height=380,
+        margin=dict(l=5, r=5, t=10, b=10),
+        legend=dict(orientation="h", y=-0.2, x=0.3)
+    )
+    st.plotly_chart(aplicar_touch_safe(fig_comp), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
 # -----------------------------------------------------------------------------
 # 3. MÓDULOS DE RENDERIZADO
 # -----------------------------------------------------------------------------
@@ -326,25 +405,6 @@ def render_tab_individual(df_base_global, col_mot_esp):
     # GRÁFICO INHABILITADO: Comportamiento Diario de SIPQR2S
     # -----------------------------------------------------------------------------
     # st.subheader("Comportamiento Diario de SIPQR2S")
-    # df_dia = df_base.groupby(['fecha_dt', 'fecha_corta'], observed=True).size().reset_index(name='Cantidad').sort_values('fecha_dt')
-    # if not df_dia.empty:
-    #     fig_dia = go.Figure()
-    #     fig_dia.add_trace(go.Scatter(
-    #         x=df_dia['fecha_corta'], y=df_dia['Cantidad'], mode='lines+markers',
-    #         name='Tickets Diarios', line=dict(color=COLOR_PERIODO_A, width=1, dash='dot'),
-    #         marker=dict(size=5, color='#1b5e20')
-    #     ))
-    #     if len(df_dia) > 1:
-    #         x_vals = np.arange(len(df_dia))
-    #         y_vals = df_dia['Cantidad'].values
-    #         m, b = np.polyfit(x_vals, y_vals, 1)
-    #         trend_line = m * x_vals + b
-    #         fig_dia.add_trace(go.Scatter(
-    #             x=df_dia['fecha_corta'], y=trend_line, mode='lines',
-    #             name='Tendencia Periodo', line=dict(color=COLOR_PERIODO_B, width=3.5)
-    #         ))
-    #     fig_dia.update_layout(xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.8))
-    #     st.plotly_chart(aplicar_touch_safe(fig_dia), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     # -----------------------------------------------------------------------------
     # GRÁFICO: PQR2S POR RASES
@@ -449,33 +509,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         # GRÁFICO INHABILITADO: Comparativo de Tendencia Diario
         # -----------------------------------------------------------------------------
         # st.subheader("Comparativo de Tendencia Diario")
-        # df_dia_a = df_a.groupby('fecha_corta', observed=True).size().reset_index(name='Periodo A')
-        # df_dia_b = df_b.groupby('fecha_corta', observed=True).size().reset_index(name='Periodo B')
-        # df_dia_a['Dia_Relativo'] = np.arange(1, len(df_dia_a) + 1)
-        # df_dia_b['Dia_Relativo'] = np.arange(1, len(df_dia_b) + 1)
-        # fig_comp_dia = go.Figure()
-        # fig_comp_dia.add_trace(go.Scatter(
-        #     x=df_dia_a['Dia_Relativo'], y=df_dia_a['Periodo A'], mode='lines+markers', name='Periodo A',
-        #     customdata=df_dia_a['fecha_corta'], hovertemplate="<b>Periodo A</b><br>Fecha: %{customdata}<br>Día %{x}: %{y} tickets<extra></extra>",
-        #     line=dict(color=COLOR_PERIODO_A, width=1, dash='dot'), marker=dict(size=5)
-        # ))
-        # if len(df_dia_a) > 1:
-        #     x_a = df_dia_a['Dia_Relativo'].values
-        #     y_a = df_dia_a['Periodo A'].values
-        #     m_a, b_a = np.polyfit(x_a, y_a, 1)
-        #     fig_comp_dia.add_trace(go.Scatter(x=df_dia_a['Dia_Relativo'], y=m_a * x_a + b_a, mode='lines', name='Tendencia Periodo A', line=dict(color=COLOR_PERIODO_A, width=3.5)))
-        # fig_comp_dia.add_trace(go.Scatter(
-        #     x=df_dia_b['Dia_Relativo'], y=df_dia_b['Periodo B'], mode='lines+markers', name='Periodo B',
-        #     customdata=df_dia_b['fecha_corta'], hovertemplate="<b>Periodo B</b><br>Fecha: %{customdata}<br>Día %{x}: %{y} tickets<extra></extra>",
-        #     line=dict(color=COLOR_PERIODO_B, width=1, dash='dot'), marker=dict(size=5)
-        # ))
-        # if len(df_dia_b) > 1:
-        #     x_b = df_dia_b['Dia_Relativo'].values
-        #     y_b = df_dia_b['Periodo B'].values
-        #     m_b, b_b = np.polyfit(x_b, y_b, 1)
-        #     fig_comp_dia.add_trace(go.Scatter(x=df_dia_b['Dia_Relativo'], y=m_b * x_b + b_b, mode='lines', name='Tendencia Periodo B', line=dict(color=COLOR_PERIODO_B, width=3.5)))
-        # fig_comp_dia.update_layout(xaxis_title="Día del Rango (1, 2, 3...)", yaxis_title="Cantidad de Tickets", height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.1))
-        # st.plotly_chart(aplicar_touch_safe(fig_comp_dia), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         mapa_color_comp = {'Periodo A': COLOR_PERIODO_A, 'Periodo B': COLOR_PERIODO_B}
 
@@ -503,7 +536,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         st.plotly_chart(aplicar_touch_safe(fig_comp_rases), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # -----------------------------------------------------------------------------
-        # COMPARATIVO PQR2S POR UPRES (Mismo orden y formato simple que RASES)
+        # COMPARATIVO PQR2S POR UPRES
         # -----------------------------------------------------------------------------
         st.subheader("Comparativo PQR2S por UPRES")
         df_u_comp_a = df_a['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
@@ -526,7 +559,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         st.plotly_chart(aplicar_touch_safe(fig_comp_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # -----------------------------------------------------------------------------
-        # COMPARATIVO GRÁFICOS DE TORTA (EN DOS COLUMNAS DEBAJO DE PQR2S POR UPRES)
+        # COMPARATIVO GRÁFICOS DE TORTA
         # -----------------------------------------------------------------------------
         st.markdown("---")
         col_cp1, col_cp2 = st.columns(2)
@@ -563,19 +596,19 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             st.plotly_chart(aplicar_touch_safe(fig_comp_mr), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # -----------------------------------------------------------------------------
-        # COMPARATIVOS DISTRIBUCIÓN POR UPRES (TOP 5 DE MENOR A MAYOR EN CADA PERIODO)
+        # COMPARATIVOS DISTRIBUCIÓN POR UPRES (TOP 5 UPRES CON MÁS PQRS TOP 5)
         # -----------------------------------------------------------------------------
         st.markdown("---")
-        st.subheader("Comparativo Distribución por UPRES - Categoría Salud (Top 5 Periodo A)")
-        generar_grafico_upres_apilado(df_a, 'ESPECIALIDAD_CATEGORIA', "Periodo A - Categoría Salud (Top 5)")
-        st.subheader("Comparativo Distribución por UPRES - Categoría Salud (Top 5 Periodo B)")
-        generar_grafico_upres_apilado(df_b, 'ESPECIALIDAD_CATEGORIA', "Periodo B - Categoría Salud (Top 5)")
-
-        st.markdown("---")
-        st.subheader("Comparativo Distribución por UPRES - Motivo Específico (Top 5 Periodo A)")
-        generar_grafico_upres_apilado(df_a, col_mot_esp, "Periodo A - Motivo Específico (Top 5)")
-        st.subheader("Comparativo Distribución por UPRES - Motivo Específico (Top 5 Periodo B)")
-        generar_grafico_upres_apilado(df_b, col_mot_esp, "Periodo B - Motivo Específico (Top 5)")
+        generar_grafico_upres_comparativo_top5(
+            df_a, df_b, 
+            'ESPECIALIDAD_CATEGORIA', 
+            "Comparativo Distribución por UPRES - Categoría Salud (Top 5)"
+        )
+        generar_grafico_upres_comparativo_top5(
+            df_a, df_b, 
+            col_mot_esp, 
+            "Comparativo Distribución por UPRES - Motivo Específico (Top 5)"
+        )
     else:
         st.warning("Seleccione dos fechas válidas para el Periodo A y el Periodo B.")
 
