@@ -53,7 +53,7 @@ st.markdown("""
     h1 { font-size: 1.5rem !important; font-weight: 800; color: #0f172a; }
     h3 { font-size: 1.05rem !important; font-weight: 700; color: #1e293b; margin-top: 0.8rem; }
 
-    /* Ajuste para visualizar textos largos completos en los desplegables (Multiselect) */
+    /* Ajuste para visualizar textos largos completos en los desplegables */
     div[data-baseweb="select"] ul {
         max-width: 90vw !important;
     }
@@ -173,7 +173,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     top_10_upres = df_base['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index
     df_g2 = df_base[df_base['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
 
-    conteo_local = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_target]).size().reset_index(name='Cant_Local')
+    conteo_local = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=False).size().reset_index(name='Cant_Local')
     conteo_local['Rank_Local'] = conteo_local.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(method='first', ascending=False)
     top_3_locales = conteo_local[conteo_local['Rank_Local'] <= 3].copy()
     top_3_locales['Es_Top3_Local'] = True
@@ -181,7 +181,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     df_g2 = pd.merge(df_g2, top_3_locales[['UNIDAD DE ASIGNACIÓN', col_target, 'Es_Top3_Local']], on=['UNIDAD DE ASIGNACIÓN', col_target], how='left')
     df_g2['Grupo_Consolidado'] = df_g2.apply(lambda r: r[col_target] if r['Es_Top3_Local'] == True else "OTROS", axis=1)
 
-    df_stack = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', 'Grupo_Consolidado']).size().reset_index(name='Cantidad')
+    df_stack = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', 'Grupo_Consolidado'], observed=False).size().reset_index(name='Cantidad')
     df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
     df_stack['Grupo_fmt'] = df_stack['Grupo_Consolidado'].apply(lambda x: "OTROS" if x == "OTROS" else acortar_texto_abreviado(x))
     df_totales = df_stack.groupby('UPRES_fmt')['Cantidad'].sum().reset_index(name='Total')
@@ -269,7 +269,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
     st.markdown("---")
 
     st.subheader("MAPA: Distribución Geográfica SIPQR2S por UPRES")
-    df_geo = df_base.groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Cantidad')
+    df_geo = df_base.groupby('UNIDAD DE ASIGNACIÓN', observed=False).size().reset_index(name='Cantidad')
     
     lats, lons = [], []
     for u in df_geo['UNIDAD DE ASIGNACIÓN']:
@@ -304,7 +304,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
     st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     st.subheader("Comportamiento Diario de SIPQR2S")
-    df_dia = df_base.groupby(['fecha_dt', 'fecha_corta']).size().reset_index(name='Cantidad').sort_values('fecha_dt')
+    df_dia = df_base.groupby(['fecha_dt', 'fecha_corta'], observed=False).size().reset_index(name='Cantidad').sort_values('fecha_dt')
     
     if not df_dia.empty:
         fig_dia = go.Figure()
@@ -407,15 +407,14 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         st.subheader("Comparativo de Tendencia Diario")
 
-        df_dia_a = df_a.groupby('fecha_corta').size().reset_index(name='Periodo A')
-        df_dia_b = df_b.groupby('fecha_corta').size().reset_index(name='Periodo B')
+        df_dia_a = df_a.groupby('fecha_corta', observed=False).size().reset_index(name='Periodo A')
+        df_dia_b = df_b.groupby('fecha_corta', observed=False).size().reset_index(name='Periodo B')
 
         df_dia_a['Dia_Relativo'] = np.arange(1, len(df_dia_a) + 1)
         df_dia_b['Dia_Relativo'] = np.arange(1, len(df_dia_b) + 1)
 
         fig_comp_dia = go.Figure()
 
-        # Traza diaria Periodo A
         fig_comp_dia.add_trace(go.Scatter(
             x=df_dia_a['Dia_Relativo'],
             y=df_dia_a['Periodo A'],
@@ -427,7 +426,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             marker=dict(size=5)
         ))
 
-        # Tendencia Periodo A
         if len(df_dia_a) > 1:
             x_a = df_dia_a['Dia_Relativo'].values
             y_a = df_dia_a['Periodo A'].values
@@ -440,7 +438,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
                 line=dict(color=COLOR_PERIODO_A, width=3.5)
             ))
 
-        # Traza diaria Periodo B
         fig_comp_dia.add_trace(go.Scatter(
             x=df_dia_b['Dia_Relativo'],
             y=df_dia_b['Periodo B'],
@@ -452,7 +449,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             marker=dict(size=5)
         ))
 
-        # Tendencia Periodo B
         if len(df_dia_b) > 1:
             x_b = df_dia_b['Dia_Relativo'].values
             y_b = df_dia_b['Periodo B'].values
@@ -474,7 +470,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         )
         st.plotly_chart(aplicar_touch_safe(fig_comp_dia), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # Mapa de colores unificado para comparativas de barras
         mapa_color_comp = {'Periodo A': COLOR_PERIODO_A, 'Periodo B': COLOR_PERIODO_B}
 
         st.subheader("Comparativo por RASES")
@@ -498,10 +493,10 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         st.subheader("Comparativo Top 10 UPRES")
         top_upres_comp = pd.concat([df_a, df_b])['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index
-        df_u_a = df_a[df_a['UNIDAD DE ASIGNACIÓN'].isin(top_upres_comp)].groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Cantidad')
+        df_u_a = df_a[df_a['UNIDAD DE ASIGNACIÓN'].isin(top_upres_comp)].groupby('UNIDAD DE ASIGNACIÓN', observed=False).size().reset_index(name='Cantidad')
         df_u_a['Periodo'] = 'Periodo A'
 
-        df_u_b = df_b[df_b['UNIDAD DE ASIGNACIÓN'].isin(top_upres_comp)].groupby('UNIDAD DE ASIGNACIÓN').size().reset_index(name='Cantidad')
+        df_u_b = df_b[df_b['UNIDAD DE ASIGNACIÓN'].isin(top_upres_comp)].groupby('UNIDAD DE ASIGNACIÓN', observed=False).size().reset_index(name='Cantidad')
         df_u_b['Periodo'] = 'Periodo B'
 
         df_comp_upres = pd.concat([df_u_a, df_u_b])
@@ -516,10 +511,10 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         st.subheader("Comparativo por Categoría Salud")
         top_cat_comp = pd.concat([df_a, df_b])['ESPECIALIDAD_CATEGORIA'].value_counts().head(10).index
-        df_c_a = df_a[df_a['ESPECIALIDAD_CATEGORIA'].isin(top_cat_comp)].groupby('ESPECIALIDAD_CATEGORIA').size().reset_index(name='Cantidad')
+        df_c_a = df_a[df_a['ESPECIALIDAD_CATEGORIA'].isin(top_cat_comp)].groupby('ESPECIALIDAD_CATEGORIA', observed=False).size().reset_index(name='Cantidad')
         df_c_a['Periodo'] = 'Periodo A'
 
-        df_c_b = df_b[df_b['ESPECIALIDAD_CATEGORIA'].isin(top_cat_comp)].groupby('ESPECIALIDAD_CATEGORIA').size().reset_index(name='Cantidad')
+        df_c_b = df_b[df_b['ESPECIALIDAD_CATEGORIA'].isin(top_cat_comp)].groupby('ESPECIALIDAD_CATEGORIA', observed=False).size().reset_index(name='Cantidad')
         df_c_b['Periodo'] = 'Periodo B'
 
         df_comp_cat = pd.concat([df_c_a, df_c_b])
@@ -534,10 +529,10 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         st.subheader("Comparativo por Motivo Específico")
         top_mot_comp = pd.concat([df_a, df_b])[col_mot_esp].value_counts().head(10).index
-        df_m_a = df_a[df_a[col_mot_esp].isin(top_mot_comp)].groupby(col_mot_esp).size().reset_index(name='Cantidad')
+        df_m_a = df_a[df_a[col_mot_esp].isin(top_mot_comp)].groupby(col_mot_esp, observed=False).size().reset_index(name='Cantidad')
         df_m_a['Periodo'] = 'Periodo A'
 
-        df_m_b = df_b[df_b[col_mot_esp].isin(top_mot_comp)].groupby(col_mot_esp).size().reset_index(name='Cantidad')
+        df_m_b = df_b[df_b[col_mot_esp].isin(top_mot_comp)].groupby(col_mot_esp, observed=False).size().reset_index(name='Cantidad')
         df_m_b['Periodo'] = 'Periodo B'
 
         df_comp_mot = pd.concat([df_m_a, df_m_b])
@@ -624,13 +619,34 @@ elif authentication_status:
     pass_encoded = urllib.parse.quote_plus(DB_PASS)
     engine = create_engine(f"postgresql://{DB_USER}:{pass_encoded}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
 
-    @st.cache_data(ttl=600)
+    @st.cache_data(ttl=3600, show_spinner="Cargando datos optimizados...")
     def cargar_datos_consolidados():
-        query = 'SELECT * FROM "V_SIPQR2S_CONSOLIDADO";'
+        # Selección puntual de columnas necesarias para evitar latencias de red
+        query = '''
+            SELECT 
+                "Consecutivo Ticket",
+                "Ticket",
+                "fecha_dt",
+                "fecha_corta",
+                "RASES",
+                "UNIDAD DE ASIGNACIÓN",
+                "ESPECIALIDAD_CATEGORIA",
+                "MOTIVO ESPECÍFICO",
+                "Tipo de Solicitud",
+                "Medio de Recepción"
+            FROM "V_SIPQR2S_CONSOLIDADO";
+        '''
         df = pd.read_sql(query, con=engine)
+        
+        # Casteo optimizado directamente al cargar
         df['fecha_dt'] = pd.to_datetime(df['fecha_dt'])
-        df['dia_semana'] = df['fecha_dt'].dt.day_name()
-        df['fecha_corta'] = df['fecha_dt'].dt.strftime('%Y-%m-%d')
+        
+        # Conversión a categóricas para máxima velocidad en RAM
+        cols_cat = ['RASES', 'UNIDAD DE ASIGNACIÓN', 'ESPECIALIDAD_CATEGORIA', 'Tipo de Solicitud', 'Medio de Recepción']
+        for col in cols_cat:
+            if col in df.columns:
+                df[col] = df[col].astype('category')
+                
         return df
 
     try:
@@ -746,10 +762,7 @@ elif authentication_status:
     with tab_det:
         st.subheader("📋 Consolidado de Datos")
         
-        # Identificar la columna de Ticket
-        col_ticket = 'Ticket' if 'Ticket' in df_base_global.columns else ('ticket' if 'ticket' in df_base_global.columns else 'Consecutivo Ticket')
-        
-        # Lista de columnas a desplegar incluyendo Ticket y Motivo Específico
+        col_ticket = 'Ticket' if 'Ticket' in df_base_global.columns else 'Consecutivo Ticket'
         cols_detalle = [
             col_ticket,
             'fecha_corta',
@@ -763,8 +776,9 @@ elif authentication_status:
         
         cols_validas = [c for c in cols_detalle if c in df_base_global.columns]
         
+        # Muestra ligera de las primeras 50 filas filtradas
         st.dataframe(
-            df_base_global[cols_validas].head(100), 
+            df_base_global[cols_validas].head(50), 
             use_container_width=True,
             hide_index=True
         )
