@@ -464,7 +464,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
         hover_data={'Cantidad': True, 'lat': False, 'lon': False},
         color='Cantidad',
         color_continuous_scale=px.colors.sequential.Greens,
-        zoom=4.8,
+        zoom=4.5,
         center={"lat": 4.5709, "lon": -74.2973},
         map_style="carto-positron"
     )
