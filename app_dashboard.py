@@ -163,8 +163,8 @@ GEO_DEPARTAMENTOS_COL = {
     
     # Antioquia (incluye asociativa para Urabá)
     'ANTIOQUIA': [6.5569, -75.8302],
-    'URABA': [6.5569, -75.8302], 'URABÁ': [6.5569, -75.8302], 
-    'REGION URABA': [6.5569, -75.8302], 'REGIÓN URABÁ': [6.5569, -75.8302],
+    'URABA': [8.75924, -76.52969], 'URABÁ': [8.75924, -76.52969], 
+    'REGION URABA': [8.75924, -76.52969], 'REGIÓN URABÁ': [8.75924, -76.52969],
     
     # Departamentos restantes
     'ATLANTICO': [10.6317, -74.9613], 'ATLÁNTICO': [10.6317, -74.9613],
