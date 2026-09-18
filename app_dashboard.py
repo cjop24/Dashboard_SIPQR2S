@@ -228,7 +228,6 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
         '#bc4749', '#a5a58d', '#6b705c', '#386641', '#6a040f'
     ]
     
-    # Asignar un color único por cada categoría/motivo
     categorias_unicas = top_5_locales['Grupo_fmt'].unique().tolist()
     color_map = {cat: paleta_contraste[i % len(paleta_contraste)] for i, cat in enumerate(categorias_unicas)}
 
@@ -260,7 +259,6 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
                 )
             ))
 
-    # Etiqueta con el total general al final de cada barra
     fig_stack.add_trace(go.Scatter(
         y=df_totales['UPRES_fmt'], 
         x=df_totales['Total'], 
@@ -320,7 +318,7 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
         conteo = df_sub.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cantidad')
         conteo['Rank'] = conteo.groupby('UNIDAD DE ASIGNACIÓN')['Cantidad'].rank(method='first', ascending=False)
         top_local = conteo[conteo['Rank'] <= 5].copy()
-        top_local['Top_Etiqueta'] = top_local['Rank'].astype(int).apply(lambda r: f"Top {r}")
+        top_local['Rank_Local'] = top_local['Rank'].astype(int)
         top_local['Periodo'] = etiqueta_periodo
         top_local['UPRES_fmt'] = top_local['UNIDAD DE ASIGNACIÓN'].apply(lambda x: str(acortar_texto_abreviado(x)))
         top_local['Categoria_fmt'] = top_local[col_target].apply(lambda x: str(acortar_texto_abreviado(x)))
@@ -330,50 +328,66 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
     df_stack_b = procesar_periodo_top(df_b_clean, lbl_b)
 
     upres_ordenadas_fmt = [str(acortar_texto_abreviado(u)) for u in reversed(top_5_upres)]
-    
-    orden_top = ['Top 1', 'Top 2', 'Top 3', 'Top 4', 'Top 5']
+
+    # Obtener todas las categorías únicas de ambos periodos para darles colores individuales
+    todas_cats = list(set(df_stack_a['Categoria_fmt'].tolist() + df_stack_b['Categoria_fmt'].tolist()))
+    paleta_contraste = [
+        '#1b4332', '#1d3557', '#d4a373', '#e07a5f', '#2b2d42', 
+        '#2d6a4f', '#003049', '#52b788', '#3d405b', '#40916c',
+        '#bc4749', '#a5a58d', '#6b705c', '#386641', '#6a040f'
+    ]
+    color_map = {cat: paleta_contraste[i % len(paleta_contraste)] for i, cat in enumerate(todas_cats)}
 
     fig_comp = go.Figure()
 
-    colores_top = {
-        'Top 1': '#1b4332',
-        'Top 2': '#2d6a4f',
-        'Top 3': '#40916c',
-        'Top 4': '#52b788',
-        'Top 5': '#74c69d'
-    }
+    # Iterar del Rango 1 al Rango 5 para ambos periodos en orden estricto de izquierda a derecha
+    for rank in range(1, 6):
+        sub_a_rank = df_stack_a[df_stack_a['Rank_Local'] == rank]
+        sub_b_rank = df_stack_b[df_stack_b['Rank_Local'] == rank]
 
-    for t in orden_top:
-        sub_a = df_stack_a[df_stack_a['Top_Etiqueta'] == t]
-        sub_b = df_stack_b[df_stack_b['Top_Etiqueta'] == t]
-        
-        fig_comp.add_trace(go.Bar(
-            y=sub_a['UPRES_fmt'],
-            x=sub_a['Cantidad'],
-            name=f"{t} ({lbl_a})",
-            orientation='h',
-            text=sub_a['Top_Etiqueta'],
-            textposition='inside',
-            insidetextanchor='middle',
-            customdata=sub_a[['Periodo', 'Categoria_fmt']],
-            hovertemplate=f"<b>%{{y}} - {lbl_a}</b><br>%{{customdata[1]}} (%{{text}}): %{{x}} tickets<extra></extra>",
-            marker=dict(color=colores_top[t], line=dict(color='#2e7d32', width=1.5)),
-            offsetgroup=0
-        ))
-        
-        fig_comp.add_trace(go.Bar(
-            y=sub_b['UPRES_fmt'],
-            x=sub_b['Cantidad'],
-            name=f"{t} ({lbl_b})",
-            orientation='h',
-            text=sub_b['Top_Etiqueta'],
-            textposition='inside',
-            insidetextanchor='middle',
-            customdata=sub_b[['Periodo', 'Categoria_fmt']],
-            hovertemplate=f"<b>%{{y}} - {lbl_b}</b><br>%{{customdata[1]}} (%{{text}}): %{{x}} tickets<extra></extra>",
-            marker=dict(color=colores_top[t], line=dict(color='#c62828', width=1.5)),
-            offsetgroup=1
-        ))
+        # Agregar trazas Periodo A
+        for _, row in sub_a_rank.iterrows():
+            item_nombre = row['Categoria_fmt']
+            fig_comp.add_trace(go.Bar(
+                y=[row['UPRES_fmt']],
+                x=[row['Cantidad']],
+                name=f"{item_nombre} ({lbl_a})",
+                legendgroup=item_nombre,
+                showlegend=True if item_nombre not in [t.legendgroup for t in fig_comp.data] else False,
+                orientation='h',
+                text=[f"T{rank}"],
+                textposition='inside',
+                insidetextanchor='middle',
+                customdata=[(lbl_a, item_nombre, rank)],
+                hovertemplate=f"<b>%{{y}} - {lbl_a}</b><br>Top %{{customdata[2]}}: %{{customdata[1]}}<br>Cantidad: %{{x}} PQRS<extra></extra>",
+                marker=dict(
+                    color=color_map.get(item_nombre, '#2e7d32'),
+                    line=dict(color='#2e7d32', width=1.5)
+                ),
+                offsetgroup=0
+            ))
+
+        # Agregar trazas Periodo B
+        for _, row in sub_b_rank.iterrows():
+            item_nombre = row['Categoria_fmt']
+            fig_comp.add_trace(go.Bar(
+                y=[row['UPRES_fmt']],
+                x=[row['Cantidad']],
+                name=f"{item_nombre} ({lbl_b})",
+                legendgroup=item_nombre,
+                showlegend=False,
+                orientation='h',
+                text=[f"T{rank}"],
+                textposition='inside',
+                insidetextanchor='middle',
+                customdata=[(lbl_b, item_nombre, rank)],
+                hovertemplate=f"<b>%{{y}} - {lbl_b}</b><br>Top %{{customdata[2]}}: %{{customdata[1]}}<br>Cantidad: %{{x}} PQRS<extra></extra>",
+                marker=dict(
+                    color=color_map.get(item_nombre, '#c62828'),
+                    line=dict(color='#c62828', width=1.5)
+                ),
+                offsetgroup=1
+            ))
 
     fig_comp.update_layout(
         barmode='stack',
@@ -382,7 +396,7 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
         yaxis_title="",
         height=520,
         margin=dict(l=5, r=5, t=10, b=10),
-        showlegend=False
+        legend=dict(orientation="h", y=-0.2, x=0, title=None, font=dict(size=10))
     )
     
     st.plotly_chart(aplicar_touch_safe(fig_comp), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
