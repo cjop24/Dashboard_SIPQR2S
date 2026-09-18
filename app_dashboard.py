@@ -26,7 +26,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Inyección de Font Awesome y Google Fonts (Poppins) con exclusión para los iconos nativos de Streamlit
+# Inyección de Font Awesome y Google Fonts (Poppins)
+# Se incluye la regla específica para restaurar los iconos nativos de Streamlit
 st.markdown("""
     <!-- Font Awesome CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -34,17 +35,24 @@ st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
 
-    /* Aplicar Poppins solo a elementos de texto y NO a los iconos de interfaz de Streamlit */
-    html, body, p, h1, h2, h3, h4, h5, h6, label, input, button, select, div:not([data-testid="stSidebarNav"]):not([class*="material-symbols"]) {
-        font-family: 'Poppins', sans-serif;
+    /* 1. Aplicar Poppins a elementos de texto comunes */
+    html, body, p, h1, h2, h3, h4, h5, h6, label, input, button, select {
+        font-family: 'Poppins', sans-serif !important;
     }
 
-    /* Proteger los iconos nativos de Streamlit (Material Icons / Symbols) para que rendericen la flecha correcta */
-    [class*="material-symbols"], 
-    [class*="MaterialIcons"], 
+    /* 2. Forzar que los contenedores principales usen Poppins */
+    .stApp, .main, div[data-testid="stSidebarContent"] {
+        font-family: 'Poppins', sans-serif !important;
+    }
+
+    /* 3. RESTAURAR FUENTE NATIVA PARA LOS ICONOS DE STREAMLIT (Línea clave) */
+    [data-testid="stHeader"] *,
     [data-testid="stSidebarCollapseButton"] *,
-    [data-testid="stHeader"] * {
-        font-family: 'Material Symbols Sharp', 'Material Icons', sans-serif !important;
+    [data-testid="stSidebarNav"] *,
+    .material-symbols-sharp,
+    .material-symbols-outlined,
+    .material-icons {
+        font-family: 'Material Symbols Rounded', 'Material Symbols Sharp', 'Material Icons' !important;
     }
 
     .main { padding: 0.5rem; }
