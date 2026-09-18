@@ -209,42 +209,52 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     top_10_upres = df_filtrado['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index.tolist()
     df_g2 = df_filtrado[df_filtrado['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
 
-    # Ranking local para identificar Top 1 al Top 5 en cada UPRES
+    # Obtener el ranking local (Top 1 a Top 5) dentro de cada UPRES
     conteo_local = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant_Local')
     conteo_local['Rank_Local'] = conteo_local.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(method='first', ascending=False)
     
     top_5_locales = conteo_local[conteo_local['Rank_Local'] <= 5].copy()
+    top_5_locales['Rank_Local'] = top_5_locales['Rank_Local'].astype(int)
+    top_5_locales['UPRES_fmt'] = top_5_locales['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+    top_5_locales['Grupo_fmt'] = top_5_locales[col_target].apply(acortar_texto_abreviado)
 
-    df_stack = top_5_locales.groupby(['UNIDAD DE ASIGNACIÓN', col_target, 'Rank_Local'], observed=True)['Cant_Local'].sum().reset_index(name='Cantidad')
-    df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
-    df_stack['Grupo_fmt'] = df_stack[col_target].apply(acortar_texto_abreviado)
-    
-    # Ordenar las categorías para que el Top 1 aparezca primero (a la izquierda)
-    orden_categorias = df_stack.sort_values('Rank_Local')['Grupo_fmt'].unique().tolist()
+    upres_ordenadas_fmt = [acortar_texto_abreviado(u) for u in reversed(top_10_upres)]
+    df_totales = top_5_locales.groupby('UPRES_fmt', observed=True)['Cant_Local'].sum().reset_index(name='Total')
 
-    upres_ordenadas_fmt = [acortar_texto_abreviado(u) for u in top_10_upres]
-    df_totales = df_stack.groupby('UPRES_fmt', observed=True)['Cantidad'].sum().reset_index(name='Total')
+    # Degradado de color verde RASES: Top 1 más oscuro -> Top 5 más claro
+    colores_deg_top = {
+        1: '#0f381e',  # Top 1 (Verde ultra oscuro)
+        2: '#1b5e20',  # Top 2 (Verde oscuro)
+        3: '#2e7d32',  # Top 3 (Verde medio)
+        4: '#4caf50',  # Top 4 (Verde claro)
+        5: '#81c784'   # Top 5 (Verde muy claro)
+    }
 
-    paleta_contraste = [
-        '#1b4332', '#2d6a4f', '#40916c', '#1d3557', 
-        '#2b2d42', '#d4a373', '#52b788', '#003049', '#e07a5f', '#3d405b'
-    ]
-    
-    color_map = {cat: paleta_contraste[i % len(paleta_contraste)] for i, cat in enumerate(orden_categorias)}
+    fig_stack = go.Figure()
 
-    fig_stack = px.bar(
-        df_stack, 
-        y='UPRES_fmt', 
-        x='Cantidad', 
-        color='Grupo_fmt', 
-        orientation='h', 
-        category_orders={
-            'UPRES_fmt': upres_ordenadas_fmt,
-            'Grupo_fmt': orden_categorias
-        },
-        color_discrete_map=color_map
-    )
-    
+    # Iterar explícitamente desde el Rango 1 hasta el Rango 5 para garantizar orden de izquierda a derecha
+    for rank in range(1, 6):
+        sub_rank = top_5_locales[top_5_locales['Rank_Local'] == rank]
+        if sub_rank.empty:
+            continue
+            
+        fig_stack.add_trace(go.Bar(
+            y=sub_rank['UPRES_fmt'],
+            x=sub_rank['Cant_Local'],
+            name=f"Top {rank}",
+            orientation='h',
+            text=sub_rank['Cant_Local'],
+            textposition='inside',
+            insidetextanchor='middle',
+            customdata=sub_rank['Grupo_fmt'],
+            hovertemplate="<b>%{y}</b><br>Top " + str(rank) + ": %{customdata}<br>Cantidad: %{x} PQRS<extra></extra>",
+            marker=dict(
+                color=colores_deg_top[rank],
+                line=dict(color='#ffffff', width=1)
+            )
+        ))
+
+    # Etiqueta con el total al final de la barra
     fig_stack.add_trace(go.Scatter(
         y=df_totales['UPRES_fmt'], 
         x=df_totales['Total'], 
@@ -254,15 +264,17 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
         showlegend=False, 
         hoverinfo='skip'
     ))
-    
+
     fig_stack.update_layout(
         barmode='stack', 
+        yaxis=dict(categoryorder='array', categoryarray=upres_ordenadas_fmt),
         xaxis_title="", 
         yaxis_title="", 
         height=480, 
         margin=dict(l=5, r=40, t=10, b=10), 
-        legend=dict(orientation="h", y=-0.25, x=0, title=None, font=dict(size=10))
+        legend=dict(orientation="h", y=-0.15, x=0, title=None, font=dict(size=11))
     )
+    
     st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
