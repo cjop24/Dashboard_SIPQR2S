@@ -291,7 +291,6 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
 
     upres_ordenadas_fmt = [str(acortar_texto_abreviado(u)) for u in reversed(top_5_upres)]
     
-    # Orden de apilado obligatorio de izquierda a derecha
     orden_top = ['Top 1', 'Top 2', 'Top 3', 'Top 4', 'Top 5']
 
     fig_comp = go.Figure()
@@ -358,15 +357,34 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     min_f = df_base_global['fecha_dt'].min().date() if not df_base_global.empty else None
     max_f = df_base_global['fecha_dt'].max().date() if not df_base_global.empty else None
-    rango_fechas_ind = st.date_input("Rango de Fecha de Creación (Análisis Individual)", value=(min_f, max_f), min_value=min_f, max_value=max_f) if min_f else []
+    
+    # SELECCIÓN DE FECHA POR UN SOLO CLIC (Dos calendarios independientes)
+    col_fi1, col_fi2 = st.columns(2)
+    with col_fi1:
+        fecha_ind_inicio = st.date_input(
+            "Fecha Inicio", 
+            value=min_f, 
+            min_value=min_f, 
+            max_value=max_f,
+            key="fecha_ind_inicio"
+        )
+    with col_fi2:
+        fecha_ind_fin = st.date_input(
+            "Fecha Fin", 
+            value=max_f, 
+            min_value=min_f, 
+            max_value=max_f,
+            key="fecha_ind_fin"
+        )
 
     df_base = df_base_global.copy()
-    if len(rango_fechas_ind) == 2:
-        df_base = df_base[(df_base['fecha_dt'].dt.date >= rango_fechas_ind[0]) & (df_base['fecha_dt'].dt.date <= rango_fechas_ind[1])]
+    if fecha_ind_inicio and fecha_ind_fin:
+        if fecha_ind_inicio <= fecha_ind_fin:
+            df_base = df_base[(df_base['fecha_dt'].dt.date >= fecha_ind_inicio) & (df_base['fecha_dt'].dt.date <= fecha_ind_fin)]
+        else:
+            st.warning("⚠️ La Fecha Inicio no puede ser posterior a la Fecha Fin.")
 
-    # -----------------------------------------------------------------------------
-    # TARJETAS KPI (Reordenadas y con Etiquetas Actualizadas)
-    # -----------------------------------------------------------------------------
+    # TARJETAS KPI
     top_upres_s = df_base['UNIDAD DE ASIGNACIÓN'].dropna().value_counts()
     top_upres_nom = top_upres_s.index[0] if not top_upres_s.empty else "N/A"
     top_upres_val = top_upres_s.iloc[0] if not top_upres_s.empty else 0
@@ -430,9 +448,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
     fig_mapa.update_layout(height=380, margin=dict(l=0, r=0, t=10, b=0))
     st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    # -----------------------------------------------------------------------------
     # GRÁFICOS DE TORTA: DEBAJO DEL MAPA Y ENCIMA DE RASES
-    # -----------------------------------------------------------------------------
     st.markdown("---")
     col_t1, col_t2 = st.columns(2)
     with col_t1:
@@ -494,17 +510,31 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
     min_hist = df_base_global['fecha_dt'].min().date() if not df_base_global.empty else None
     max_hist = df_base_global['fecha_dt'].max().date() if not df_base_global.empty else None
 
+    # CONTROLES DE FECHAS DE UN SOLO CLIC PARA PERIODO A Y PERIODO B
     col_p1, col_p2 = st.columns(2)
     with col_p1:
         st.markdown("### Periodo A (Base)")
-        rango_a = st.date_input("Seleccione Rango A", value=(min_hist, min_hist + pd.Timedelta(days=30)) if min_hist else [], min_value=min_hist, max_value=max_hist, key="rango_a")
+        col_a1, col_a2 = st.columns(2)
+        with col_a1:
+            fecha_a_inicio = st.date_input("Fecha Inicio A", value=min_hist, min_value=min_hist, max_value=max_hist, key="fecha_a_inicio")
+        with col_a2:
+            fecha_a_fin = st.date_input("Fecha Fin A", value=min_hist + pd.Timedelta(days=30) if min_hist else max_hist, min_value=min_hist, max_value=max_hist, key="fecha_a_fin")
+
     with col_p2:
         st.markdown("### Periodo B (Comparado)")
-        rango_b = st.date_input("Seleccione Rango B", value=(max_hist - pd.Timedelta(days=30), max_hist) if max_hist else [], min_value=min_hist, max_value=max_hist, key="rango_b")
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+            fecha_b_inicio = st.date_input("Fecha Inicio B", value=max_hist - pd.Timedelta(days=30) if max_hist else min_hist, min_value=min_hist, max_value=max_hist, key="fecha_b_inicio")
+        with col_b2:
+            fecha_b_fin = st.date_input("Fecha Fin B", value=max_hist, min_value=min_hist, max_value=max_hist, key="fecha_b_fin")
 
-    if len(rango_a) == 2 and len(rango_b) == 2:
-        df_a = df_base_global[(df_base_global['fecha_dt'].dt.date >= rango_a[0]) & (df_base_global['fecha_dt'].dt.date <= rango_a[1])].copy()
-        df_b = df_base_global[(df_base_global['fecha_dt'].dt.date >= rango_b[0]) & (df_base_global['fecha_dt'].dt.date <= rango_b[1])].copy()
+    if fecha_a_inicio and fecha_a_fin and fecha_b_inicio and fecha_b_fin:
+        if fecha_a_inicio > fecha_a_fin or fecha_b_inicio > fecha_b_fin:
+            st.warning("⚠️ En uno de los periodos, la Fecha Inicio es mayor a la Fecha Fin.")
+            return
+
+        df_a = df_base_global[(df_base_global['fecha_dt'].dt.date >= fecha_a_inicio) & (df_base_global['fecha_dt'].dt.date <= fecha_a_fin)].copy()
+        df_b = df_base_global[(df_base_global['fecha_dt'].dt.date >= fecha_b_inicio) & (df_base_global['fecha_dt'].dt.date <= fecha_b_fin)].copy()
 
         tot_a, tot_b = len(df_a), len(df_b)
         diff_abs = tot_b - tot_a
@@ -527,9 +557,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         mapa_color_comp = {'Periodo A': COLOR_PERIODO_A, 'Periodo B': COLOR_PERIODO_B}
 
-        # -----------------------------------------------------------------------------
         # 1. TIPO DE SOLICITUD Y MEDIO DE RECEPCIÓN (Primeros en Comparativo, de menor a mayor)
-        # -----------------------------------------------------------------------------
         col_cp1, col_cp2 = st.columns(2)
         with col_cp1:
             st.subheader("Comparativo Tipo de Solicitud")
@@ -645,8 +673,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             col_mot_esp, 
             "Comparativo Distribución por UPRES - Motivo Específico (Top 5)"
         )
-    else:
-        st.warning("Seleccione dos fechas válidas para el Periodo A y el Periodo B.")
 
 # -----------------------------------------------------------------------------
 # 4. AUTENTICACIÓN Y CARGA PRINCIPAL
