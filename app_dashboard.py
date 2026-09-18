@@ -248,7 +248,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
                 legendgroup=item_nombre,
                 showlegend=True if item_nombre not in [t.name for t in fig_stack.data] else False,
                 orientation='h',
-                text=[row['Cant_Local']],
+                text=[row['Cant_Local']],  # Muestra el número dentro de la barra
                 textposition='inside',
                 insidetextanchor='middle',
                 customdata=[(rank, item_nombre)],
@@ -329,7 +329,6 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
 
     upres_ordenadas_fmt = [str(acortar_texto_abreviado(u)) for u in reversed(top_5_upres)]
 
-    # Obtener todas las categorías únicas de ambos periodos para darles colores individuales
     todas_cats = list(set(df_stack_a['Categoria_fmt'].tolist() + df_stack_b['Categoria_fmt'].tolist()))
     paleta_contraste = [
         '#1b4332', '#1d3557', '#d4a373', '#e07a5f', '#2b2d42', 
@@ -345,7 +344,7 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
         sub_a_rank = df_stack_a[df_stack_a['Rank_Local'] == rank]
         sub_b_rank = df_stack_b[df_stack_b['Rank_Local'] == rank]
 
-        # Agregar trazas Periodo A
+        # Agregar trazas Periodo A con la cantidad numérica dentro de la barra
         for _, row in sub_a_rank.iterrows():
             item_nombre = row['Categoria_fmt']
             fig_comp.add_trace(go.Bar(
@@ -355,7 +354,7 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
                 legendgroup=item_nombre,
                 showlegend=True if item_nombre not in [t.legendgroup for t in fig_comp.data] else False,
                 orientation='h',
-                text=[f"T{rank}"],
+                text=[row['Cantidad']],  # Muestra el número dentro de la barra
                 textposition='inside',
                 insidetextanchor='middle',
                 customdata=[(lbl_a, item_nombre, rank)],
@@ -367,7 +366,7 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
                 offsetgroup=0
             ))
 
-        # Agregar trazas Periodo B
+        # Agregar trazas Periodo B con la cantidad numérica dentro de la barra
         for _, row in sub_b_rank.iterrows():
             item_nombre = row['Categoria_fmt']
             fig_comp.add_trace(go.Bar(
@@ -377,7 +376,7 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
                 legendgroup=item_nombre,
                 showlegend=False,
                 orientation='h',
-                text=[f"T{rank}"],
+                text=[row['Cantidad']],  # Muestra el número dentro de la barra
                 textposition='inside',
                 insidetextanchor='middle',
                 customdata=[(lbl_b, item_nombre, rank)],
