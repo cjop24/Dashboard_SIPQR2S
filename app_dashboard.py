@@ -163,8 +163,9 @@ GEO_DEPARTAMENTOS_COL = {
     
     # Antioquia (incluye asociativa para Urabá)
     'ANTIOQUIA': [6.5569, -75.8302],
-    'URABA': [8.75924, -76.52969], 'URABÁ': URABA': [8.75924, -76.52969], 
-        
+    'URABA': [6.5569, -75.8302], 'URABÁ': [6.5569, -75.8302], 
+    'REGION URABA': [6.5569, -75.8302], 'REGIÓN URABÁ': [6.5569, -75.8302],
+    
     # Departamentos restantes
     'ATLANTICO': [10.6317, -74.9613], 'ATLÁNTICO': [10.6317, -74.9613],
     'BOLIVAR': [8.6707, -74.0300], 'BOLÍVAR': [8.6707, -74.0300],
@@ -454,9 +455,6 @@ def render_tab_individual(df_base_global, col_mot_esp):
     df_geo['lat'] = lats
     df_geo['lon'] = lons
     
-# -----------------------------------------------------------------------------
-    # Gráfico: Mapa Geográfico de Colombia por UPRES (Con Zoom Aumentado)
-    # -----------------------------------------------------------------------------
     fig_mapa = px.scatter_map(
         df_geo, 
         lat='lat', 
@@ -466,7 +464,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
         hover_data={'Cantidad': True, 'lat': False, 'lon': False},
         color='Cantidad',
         color_continuous_scale=px.colors.sequential.Greens,
-        zoom=4.5,  # Aumentado de 4.1 a 4.5 para ver el mapa de Colombia más grande
+        zoom=4.8,
         center={"lat": 4.5709, "lon": -74.2973},
         map_style="carto-positron"
     )
