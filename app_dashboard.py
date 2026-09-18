@@ -17,24 +17,34 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # -----------------------------------------------------------------------------
-# 1. CONFIGURACIÓN RESPONSIVA (Mobile-First / iOS Friendly)
+# 1. CONFIGURACIÓN RESPONSIVA Y ESTILOS DE FUENTE E ICONOS
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Oficina Atención al Usuario - Dashboard Comportamiento PQRS",
+    page_title="Dashboard SIPQR2S",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS con Word-Wrap en Filtros Desplegables de la Barra Lateral
+# Inyección de CDN Font Awesome 6 y Google Fonts (Poppins) + Estilos CSS
 st.markdown("""
+    <!-- Font Awesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts: Poppins -->
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+
+    html, body, [class*="css"], .stMarkdown, div, span, p, label, input {
+        font-family: 'Poppins', sans-serif !important;
+    }
+
     .main { padding: 0.5rem; }
     
     div[data-testid="stMetric"] {
         background-color: #ffffff;
         border-radius: 12px;
-        padding: 10px 12px;
+        padding: 12px 14px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
         border: 1px solid #e5e7eb;
         margin-bottom: 6px;
@@ -50,10 +60,10 @@ st.markdown("""
         font-weight: 600;
     }
 
-    h1 { font-size: 1.5rem !important; font-weight: 800; color: #0f172a; }
+    h1 { font-size: 1.6rem !important; font-weight: 800; color: #0f172a; }
     h3 { font-size: 1.05rem !important; font-weight: 700; color: #1e293b; margin-top: 0.8rem; }
 
-    /* Ajuste para visualizar textos largos completos en los desplegables (Multiselect) */
+    /* Ajuste para desplegables (Multiselect) */
     div[data-baseweb="select"] ul {
         max-width: 90vw !important;
     }
@@ -194,7 +204,7 @@ GEO_DEPARTAMENTOS_COL = {
 }
 
 def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
-    st.subheader(titulo_grafico)
+    st.markdown(f"### {titulo_grafico}")
     
     df_filtrado = df_base.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
     df_filtrado = df_filtrado[
@@ -267,6 +277,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     ))
 
     fig_stack.update_layout(
+        font=dict(family="Poppins, sans-serif"),
         barmode='stack', 
         yaxis=dict(categoryorder='array', categoryarray=upres_ordenadas_fmt),
         xaxis_title="", 
@@ -279,7 +290,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
-    st.subheader(titulo_grafico)
+    st.markdown(f"### {titulo_grafico}")
     
     df_a_clean = df_a.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
     df_b_clean = df_b.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
@@ -340,7 +351,6 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
         sub_a_rank = df_stack_a[df_stack_a['Rank_Local'] == rank]
         sub_b_rank = df_stack_b[df_stack_b['Rank_Local'] == rank]
 
-        # Periodo A: name unicamente con la categoria limpia sin la cadena del periodo
         for _, row in sub_a_rank.iterrows():
             item_nombre = row['Categoria_fmt']
             fig_comp.add_trace(go.Bar(
@@ -362,7 +372,6 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
                 offsetgroup=0
             ))
 
-        # Periodo B: reutiliza la misma etiqueta e identico color
         for _, row in sub_b_rank.iterrows():
             item_nombre = row['Categoria_fmt']
             fig_comp.add_trace(go.Bar(
@@ -385,6 +394,7 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
             ))
 
     fig_comp.update_layout(
+        font=dict(family="Poppins, sans-serif"),
         barmode='stack',
         yaxis=dict(categoryorder='array', categoryarray=upres_ordenadas_fmt),
         xaxis_title="",
@@ -455,7 +465,14 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     st.markdown("---")
 
-    st.subheader("MAPA: Distribución Geográfica PQRS por UPRES")
+    # Titulo estilizado con icono vectorial Font Awesome
+    st.markdown("""
+        <h3 style='display: flex; align-items: center; gap: 8px;'>
+            <i class="fa-solid fa-map-location-dot" style="color: #2e7d32;"></i>
+            MAPA: Distribución Geográfica PQRS por UPRES
+        </h3>
+    """, unsafe_allow_html=True)
+    
     df_geo_base = df_base.dropna(subset=['UNIDAD DE ASIGNACIÓN'])
     df_geo = df_geo_base.groupby('UNIDAD DE ASIGNACIÓN', observed=True).size().reset_index(name='Cantidad')
     df_geo = df_geo[df_geo['Cantidad'] > 0]
@@ -489,42 +506,62 @@ def render_tab_individual(df_base_global, col_mot_esp):
         center={"lat": 4.5709, "lon": -74.2973},
         map_style="carto-positron"
     )
-    fig_mapa.update_layout(height=580, margin=dict(l=0, r=0, t=10, b=0))
+    fig_mapa.update_layout(font=dict(family="Poppins, sans-serif"), height=580, margin=dict(l=0, r=0, t=10, b=0))
     st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     st.markdown("---")
     col_t1, col_t2 = st.columns(2)
     with col_t1:
-        st.subheader("Porcentaje (%) por Tipo de Solicitud")
+        st.markdown("""
+            <h3 style='display: flex; align-items: center; gap: 8px;'>
+                <i class="fa-solid fa-chart-pie" style="color: #2e7d32;"></i>
+                Porcentaje (%) por Tipo de Solicitud
+            </h3>
+        """, unsafe_allow_html=True)
         df_pie_sol = df_base['Tipo de Solicitud'].dropna().value_counts().reset_index()
         df_pie_sol.columns = ['Tipo de Solicitud', 'Cantidad']
         df_pie_sol = df_pie_sol[df_pie_sol['Cantidad'] > 0]
         fig_pie1 = px.pie(df_pie_sol, values='Cantidad', names='Tipo de Solicitud', hole=0.4, color_discrete_sequence=px.colors.sequential.Greens_r)
-        fig_pie1.update_layout(height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15))
+        fig_pie1.update_layout(font=dict(family="Poppins, sans-serif"), height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15))
         st.plotly_chart(aplicar_touch_safe(fig_pie1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     with col_t2:
-        st.subheader("Porcentaje (%) por Medio de Recepción")
+        st.markdown("""
+            <h3 style='display: flex; align-items: center; gap: 8px;'>
+                <i class="fa-solid fa-inbox" style="color: #2e7d32;"></i>
+                Porcentaje (%) por Medio de Recepción
+            </h3>
+        """, unsafe_allow_html=True)
         df_pie_med = df_base['Medio de Recepción'].dropna().value_counts().reset_index()
         df_pie_med.columns = ['Medio de Recepción', 'Cantidad']
         df_pie_med = df_pie_med[df_pie_med['Cantidad'] > 0]
         fig_pie2 = px.pie(df_pie_med, values='Cantidad', names='Medio de Recepción', hole=0.4, color_discrete_sequence=px.colors.sequential.YlGn_r)
-        fig_pie2.update_layout(height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15))
+        fig_pie2.update_layout(font=dict(family="Poppins, sans-serif"), height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15))
         st.plotly_chart(aplicar_touch_safe(fig_pie2), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     st.markdown("---")
 
-    st.subheader("PQRS por RASES")
+    st.markdown("""
+        <h3 style='display: flex; align-items: center; gap: 8px;'>
+            <i class="fa-solid fa-sitemap" style="color: #2e7d32;"></i>
+            PQRS por RASES
+        </h3>
+    """, unsafe_allow_html=True)
     df_g1_raw = df_base['RASES'].dropna().value_counts().reset_index()
     df_g1_raw.columns = ['RASES', 'Cantidad']
     df_g1 = df_g1_raw[(df_g1_raw['Cantidad'] > 0) & (df_g1_raw['RASES'].astype(str).str.strip() != '')].copy()
     df_g1['RASES_fmt'] = df_g1['RASES'].apply(acortar_texto_abreviado)
     
     fig1 = px.bar(df_g1, x='RASES_fmt', y='Cantidad', text_auto=',d', color_discrete_sequence=[COLOR_PERIODO_A])
-    fig1.update_layout(xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10))
+    fig1.update_layout(font=dict(family="Poppins, sans-serif"), xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10))
     st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    st.subheader("PQRS por UPRES")
+    st.markdown("""
+        <h3 style='display: flex; align-items: center; gap: 8px;'>
+            <i class="fa-solid fa-hospital" style="color: #2e7d32;"></i>
+            PQRS por UPRES
+        </h3>
+    """, unsafe_allow_html=True)
     df_u1_raw = df_base['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
     df_u1_raw.columns = ['UPRES', 'Cantidad']
     df_u1 = df_u1_raw[(df_u1_raw['Cantidad'] > 0) & (df_u1_raw['UPRES'].astype(str).str.strip() != '')].copy()
@@ -537,7 +574,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
         text_auto=',d',
         color_discrete_sequence=[COLOR_PERIODO_A]
     )
-    fig_upres_simple.update_layout(xaxis_title="", yaxis_title="", height=350, margin=dict(l=5, r=5, t=10, b=10))
+    fig_upres_simple.update_layout(font=dict(family="Poppins, sans-serif"), xaxis_title="", yaxis_title="", height=350, margin=dict(l=5, r=5, t=10, b=10))
     st.plotly_chart(aplicar_touch_safe(fig_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES - Categoría Salud (Top 5)")
@@ -584,7 +621,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         diff_pct = ((diff_abs / tot_a) * 100) if tot_a > 0 else 0.0
 
         st.markdown("---")
-        st.subheader(f"Indicadores Comparativos Generales ({vs_header})")
+        st.markdown(f"### <i class='fa-solid fa-scale-balanced' style='color:#1b5e20;'></i> Indicadores Comparativos Generales ({vs_header})", unsafe_allow_html=True)
         kc1, kc2, kc3 = st.columns(3)
         kc1.metric(f"Total {lbl_a}", f"{tot_a:,}")
         kc2.metric(f"Total {lbl_b}", f"{tot_b:,}")
@@ -602,7 +639,12 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         col_cp1, col_cp2 = st.columns(2)
         with col_cp1:
-            st.subheader("Comparativo Tipo de Solicitud")
+            st.markdown("""
+                <h3 style='display: flex; align-items: center; gap: 8px;'>
+                    <i class="fa-solid fa-list-check" style="color: #2e7d32;"></i>
+                    Comparativo Tipo de Solicitud
+                </h3>
+            """, unsafe_allow_html=True)
             df_ts_a = df_a['Tipo de Solicitud'].dropna().value_counts().reset_index()
             df_ts_a.columns = ['Tipo de Solicitud', lbl_a]
             
@@ -612,7 +654,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             df_ts_comp = pd.merge(df_ts_a, df_ts_b, on='Tipo de Solicitud', how='outer').fillna(0)
             df_ts_comp['Total_Volume'] = df_ts_comp[lbl_a] + df_ts_comp[lbl_b]
             
-            # Ordenar de menor a mayor para que Plotly coloque el valor mas alto ARRIBA
             df_ts_comp = df_ts_comp.sort_values('Total_Volume', ascending=True)
             orden_categorias_ts = df_ts_comp['Tipo de Solicitud'].tolist()
             
@@ -630,6 +671,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
                 color_discrete_map=mapa_color_comp
             )
             fig_comp_ts.update_layout(
+                font=dict(family="Poppins, sans-serif"),
                 height=320, 
                 margin=dict(l=5, r=5, t=10, b=10), 
                 legend=dict(orientation="h", y=-0.2),
@@ -638,7 +680,12 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             st.plotly_chart(aplicar_touch_safe(fig_comp_ts), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         with col_cp2:
-            st.subheader("Comparativo Medio de Recepción")
+            st.markdown("""
+                <h3 style='display: flex; align-items: center; gap: 8px;'>
+                    <i class="fa-solid fa-headset" style="color: #2e7d32;"></i>
+                    Comparativo Medio de Recepción
+                </h3>
+            """, unsafe_allow_html=True)
             df_mr_a = df_a['Medio de Recepción'].dropna().value_counts().reset_index()
             df_mr_a.columns = ['Medio de Recepción', lbl_a]
             
@@ -648,7 +695,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             df_mr_comp = pd.merge(df_mr_a, df_mr_b, on='Medio de Recepción', how='outer').fillna(0)
             df_mr_comp['Total_Volume'] = df_mr_comp[lbl_a] + df_mr_comp[lbl_b]
             
-            # Ordenar de menor a mayor para que Plotly coloque el valor mas alto ARRIBA
             df_mr_comp = df_mr_comp.sort_values('Total_Volume', ascending=True)
             orden_categorias_mr = df_mr_comp['Medio de Recepción'].tolist()
             
@@ -666,6 +712,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
                 color_discrete_map=mapa_color_comp
             )
             fig_comp_mr.update_layout(
+                font=dict(family="Poppins, sans-serif"),
                 height=320, 
                 margin=dict(l=5, r=5, t=10, b=10), 
                 legend=dict(orientation="h", y=-0.2),
@@ -675,8 +722,12 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         st.markdown("---")
 
-        # COMPARATIVO POR RASES
-        st.subheader("Comparativo por RASES")
+        st.markdown("""
+            <h3 style='display: flex; align-items: center; gap: 8px;'>
+                <i class="fa-solid fa-diagram-project" style="color: #2e7d32;"></i>
+                Comparativo por RASES
+            </h3>
+        """, unsafe_allow_html=True)
         df_r_a = df_a['RASES'].dropna().value_counts().reset_index()
         df_r_a.columns = ['RASES', 'Cantidad']
         df_r_a['Periodo'] = lbl_a
@@ -693,11 +744,15 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             df_comp_rases, x='RASES_fmt', y='Cantidad', color='Periodo', barmode='group',
             text_auto=',d', color_discrete_map=mapa_color_comp
         )
-        fig_comp_rases.update_layout(xaxis_title="", yaxis_title="", height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
+        fig_comp_rases.update_layout(font=dict(family="Poppins, sans-serif"), xaxis_title="", yaxis_title="", height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_rases), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # COMPARATIVO PQRS POR UPRES
-        st.subheader("Comparativo PQRS por UPRES")
+        st.markdown("""
+            <h3 style='display: flex; align-items: center; gap: 8px;'>
+                <i class="fa-solid fa-hospital-user" style="color: #2e7d32;"></i>
+                Comparativo PQRS por UPRES
+            </h3>
+        """, unsafe_allow_html=True)
         df_u_comp_a = df_a['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
         df_u_comp_a.columns = ['UNIDAD DE ASIGNACIÓN', 'Cantidad']
         df_u_comp_a['Periodo'] = lbl_a
@@ -714,7 +769,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             df_comp_upres_simple, x='UPRES_fmt', y='Cantidad', color='Periodo', barmode='group',
             text_auto=',d', color_discrete_map=mapa_color_comp
         )
-        fig_comp_upres_simple.update_layout(xaxis_title="", yaxis_title="", height=350, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
+        fig_comp_upres_simple.update_layout(font=dict(family="Poppins, sans-serif"), xaxis_title="", yaxis_title="", height=350, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         st.markdown("---")
@@ -841,10 +896,10 @@ elif authentication_status:
     if "sel_medios" not in st.session_state:
         st.session_state["sel_medios"] = prefs.get("sel_medios", [])
 
-    st.sidebar.write(f"👤 **{name}**")
+    st.sidebar.markdown(f"👤 **{name}**")
     authenticator.logout('Cerrar Sesión', 'sidebar')
     st.sidebar.markdown("---")
-    st.sidebar.header("🔍 Filtros Globales de Control")
+    st.sidebar.markdown("<h3 style='font-size: 1.1rem;'><i class='fa-solid fa-filter' style='color:#1b5e20;'></i> Filtros Globales de Control</h3>", unsafe_allow_html=True)
 
     lista_rases = sorted([x for x in df_raw['RASES'].dropna().unique() if str(x).strip() != ''])
     sel_rases = st.sidebar.multiselect("RASES", options=lista_rases, key="sel_rases")
@@ -907,8 +962,13 @@ elif authentication_status:
     if sel_medios:
         df_base_global = df_base_global[df_base_global['Medio de Recepción'].isin(sel_medios)]
 
-    # Renderizado Principal con Persistencia de Pestaña Activa
-    st.title("🛡️ SIPQR2S Sanidad")
+    # Header Principal con Icono Estilizado Font Awesome
+    st.markdown("""
+        <h1 style='display: flex; align-items: center; gap: 12px; margin-bottom: 0px;'>
+            <i class="fa-solid fa-shield-halved" style="color: #1b5e20;"></i>
+            SIPQR2S Sanidad
+        </h1>
+    """, unsafe_allow_html=True)
     
     if "active_tab" not in st.session_state:
         st.session_state["active_tab"] = "📊 Análisis Individual"
