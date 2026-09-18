@@ -20,7 +20,7 @@ load_dotenv()
 # 1. CONFIGURACIÓN RESPONSIVA (Mobile-First / iOS Friendly)
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Dashboard SIPQR2S",
+    page_title="Oficina Atención al Usuario - Dashboard Comportamiento PQRS",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="collapsed"
