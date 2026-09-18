@@ -158,15 +158,9 @@ CONFIG_PLOTLY_TOUCH = {
 }
 
 GEO_DEPARTAMENTOS_COL = {
-    # Bogotá D.C.
     'BOGOTA': [4.6097, -74.0817], 'BOGOTÁ': [4.6097, -74.0817], 'BOGOTÁ D.C.': [4.6097, -74.0817], 'BOGOTA D.C.': [4.6097, -74.0817],
-    
-    # Antioquia (incluye asociativa para Urabá)
-    'ANTIOQUIA': [6.5569, -75.8302],
-    'URABA': [8.75924, -76.52969], 'URABÁ': [8.75924, -76.52969], 
-    'REGION URABA': [8.75924, -76.52969], 'REGIÓN URABÁ': [8.75924, -76.52969],
-    
-    # Departamentos restantes
+    'ANTIOQUIA': [6.5569, -75.8302], 'URABA': [6.5569, -75.8302], 'URABÁ': [6.5569, -75.8302], 
+    'REGION URABA': [6.5569, -75.8302], 'REGIÓN URABÁ': [6.5569, -75.8302],
     'ATLANTICO': [10.6317, -74.9613], 'ATLÁNTICO': [10.6317, -74.9613],
     'BOLIVAR': [8.6707, -74.0300], 'BOLÍVAR': [8.6707, -74.0300],
     'BOYACA': [5.7125, -72.9323], 'BOYACÁ': [5.7125, -72.9323],
@@ -215,28 +209,28 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     top_10_upres = df_filtrado['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index.tolist()
     df_g2 = df_filtrado[df_filtrado['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
 
+    # Ranking local para identificar Top 1 al Top 5 en cada UPRES
     conteo_local = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant_Local')
     conteo_local['Rank_Local'] = conteo_local.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(method='first', ascending=False)
     
     top_5_locales = conteo_local[conteo_local['Rank_Local'] <= 5].copy()
 
-    df_stack = top_5_locales.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True)['Cant_Local'].sum().reset_index(name='Cantidad')
+    df_stack = top_5_locales.groupby(['UNIDAD DE ASIGNACIÓN', col_target, 'Rank_Local'], observed=True)['Cant_Local'].sum().reset_index(name='Cantidad')
     df_stack['UPRES_fmt'] = df_stack['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
     df_stack['Grupo_fmt'] = df_stack[col_target].apply(acortar_texto_abreviado)
     
+    # Ordenar las categorías para que el Top 1 aparezca primero (a la izquierda)
+    orden_categorias = df_stack.sort_values('Rank_Local')['Grupo_fmt'].unique().tolist()
+
     upres_ordenadas_fmt = [acortar_texto_abreviado(u) for u in top_10_upres]
     df_totales = df_stack.groupby('UPRES_fmt', observed=True)['Cantidad'].sum().reset_index(name='Total')
-
-    categorias_unicas = df_stack['Grupo_fmt'].unique().tolist()
 
     paleta_contraste = [
         '#1b4332', '#2d6a4f', '#40916c', '#1d3557', 
         '#2b2d42', '#d4a373', '#52b788', '#003049', '#e07a5f', '#3d405b'
     ]
     
-    color_map = {}
-    for idx, cat in enumerate(categorias_unicas):
-        color_map[cat] = paleta_contraste[idx % len(paleta_contraste)]
+    color_map = {cat: paleta_contraste[i % len(paleta_contraste)] for i, cat in enumerate(orden_categorias)}
 
     fig_stack = px.bar(
         df_stack, 
@@ -246,7 +240,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
         orientation='h', 
         category_orders={
             'UPRES_fmt': upres_ordenadas_fmt,
-            'Grupo_fmt': categorias_unicas
+            'Grupo_fmt': orden_categorias
         },
         color_discrete_map=color_map
     )
@@ -464,7 +458,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
         hover_data={'Cantidad': True, 'lat': False, 'lon': False},
         color='Cantidad',
         color_continuous_scale=px.colors.sequential.Greens,
-        zoom=4.5,
+        zoom=4.8,
         center={"lat": 4.5709, "lon": -74.2973},
         map_style="carto-positron"
     )
@@ -529,7 +523,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
     min_hist = df_base_global['fecha_dt'].min().date() if not df_base_global.empty else None
     max_hist = df_base_global['fecha_dt'].max().date() if not df_base_global.empty else None
 
-    # CONTROLES DE FECHAS
     col_p1, col_p2 = st.columns(2)
     with col_p1:
         st.markdown("### Periodo A (Base)")
@@ -552,7 +545,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             st.warning("⚠️ En uno de los periodos, la Fecha Inicio es mayor a la Fecha Fin.")
             return
 
-        # RÓTULOS DINÁMICOS DE FECHAS PARA GRÁFICOS Y LEYENDAS
         lbl_a = f"Periodo A ({fecha_a_inicio.strftime('%d/%m/%Y')} – {fecha_a_fin.strftime('%d/%m/%Y')})"
         lbl_b = f"Periodo B ({fecha_b_inicio.strftime('%d/%m/%Y')} – {fecha_b_fin.strftime('%d/%m/%Y')})"
         vs_header = f"{fecha_a_inicio.strftime('%d/%m/%Y')} – {fecha_a_fin.strftime('%d/%m/%Y')} 🆚 {fecha_b_inicio.strftime('%d/%m/%Y')} – {fecha_b_fin.strftime('%d/%m/%Y')}"
@@ -581,7 +573,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         mapa_color_comp = {lbl_a: COLOR_PERIODO_A, lbl_b: COLOR_PERIODO_B}
 
-        # TIPO DE SOLICITUD Y MEDIO DE RECEPCIÓN (ORDENADOS DE MAYOR A MENOR)
         col_cp1, col_cp2 = st.columns(2)
         with col_cp1:
             st.subheader(f"Comparativo Tipo de Solicitud ({vs_header})")
@@ -593,8 +584,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             
             df_ts_comp = pd.merge(df_ts_a, df_ts_b, on='Tipo de Solicitud', how='outer').fillna(0)
             df_ts_comp['Total_Volume'] = df_ts_comp[lbl_a] + df_ts_comp[lbl_b]
-            
-            # ORDENAR DE MAYOR A MENOR (ascending=False)
             df_ts_comp = df_ts_comp.sort_values('Total_Volume', ascending=False)
             
             df_ts_melt = df_ts_comp.melt(id_vars=['Tipo de Solicitud', 'Total_Volume'], value_vars=[lbl_a, lbl_b], var_name='Periodo', value_name='Cantidad')
@@ -624,8 +613,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             
             df_mr_comp = pd.merge(df_mr_a, df_mr_b, on='Medio de Recepción', how='outer').fillna(0)
             df_mr_comp['Total_Volume'] = df_mr_comp[lbl_a] + df_mr_comp[lbl_b]
-            
-            # ORDENAR DE MAYOR A MENOR (ascending=False)
             df_mr_comp = df_mr_comp.sort_values('Total_Volume', ascending=False)
             
             df_mr_melt = df_mr_comp.melt(id_vars=['Medio de Recepción', 'Total_Volume'], value_vars=[lbl_a, lbl_b], var_name='Periodo', value_name='Cantidad')
@@ -689,7 +676,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         fig_comp_upres_simple.update_layout(xaxis_title="", yaxis_title="", height=350, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # COMPARATIVOS DISTRIBUCIÓN POR UPRES TOP 5
         st.markdown("---")
         generar_grafico_upres_comparativo_top5(
             df_a, df_b, 
