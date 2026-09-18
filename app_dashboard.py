@@ -209,7 +209,6 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     top_10_upres = df_filtrado['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index.tolist()
     df_g2 = df_filtrado[df_filtrado['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
 
-    # Ranking local para identificar Top 1 al Top 5 dentro de cada UPRES
     conteo_local = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant_Local')
     conteo_local['Rank_Local'] = conteo_local.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(method='first', ascending=False)
     
@@ -221,7 +220,6 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     upres_ordenadas_fmt = [acortar_texto_abreviado(u) for u in reversed(top_10_upres)]
     df_totales = top_5_locales.groupby('UPRES_fmt', observed=True)['Cant_Local'].sum().reset_index(name='Total')
 
-    # Paleta de colores distintivos con alto contraste para cada ítem único
     paleta_contraste = [
         '#1b4332', '#1d3557', '#d4a373', '#e07a5f', '#2b2d42', 
         '#2d6a4f', '#003049', '#52b788', '#3d405b', '#40916c',
@@ -233,7 +231,6 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
 
     fig_stack = go.Figure()
 
-    # Iterar explícitamente del Rango 1 al Rango 5 para garantizar orden estricto de izquierda a derecha
     for rank in range(1, 6):
         sub_rank = top_5_locales[top_5_locales['Rank_Local'] == rank]
         if sub_rank.empty:
@@ -248,7 +245,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
                 legendgroup=item_nombre,
                 showlegend=True if item_nombre not in [t.name for t in fig_stack.data] else False,
                 orientation='h',
-                text=[row['Cant_Local']],  # Muestra el número dentro de la barra
+                text=[row['Cant_Local']],
                 textposition='inside',
                 insidetextanchor='middle',
                 customdata=[(rank, item_nombre)],
@@ -339,12 +336,10 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
 
     fig_comp = go.Figure()
 
-    # Iterar del Rango 1 al Rango 5 para ambos periodos en orden estricto de izquierda a derecha
     for rank in range(1, 6):
         sub_a_rank = df_stack_a[df_stack_a['Rank_Local'] == rank]
         sub_b_rank = df_stack_b[df_stack_b['Rank_Local'] == rank]
 
-        # Agregar trazas Periodo A con la cantidad numérica dentro de la barra
         for _, row in sub_a_rank.iterrows():
             item_nombre = row['Categoria_fmt']
             fig_comp.add_trace(go.Bar(
@@ -354,7 +349,7 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
                 legendgroup=item_nombre,
                 showlegend=True if item_nombre not in [t.legendgroup for t in fig_comp.data] else False,
                 orientation='h',
-                text=[row['Cantidad']],  # Muestra el número dentro de la barra
+                text=[row['Cantidad']],
                 textposition='inside',
                 insidetextanchor='middle',
                 customdata=[(lbl_a, item_nombre, rank)],
@@ -366,7 +361,6 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
                 offsetgroup=0
             ))
 
-        # Agregar trazas Periodo B con la cantidad numérica dentro de la barra
         for _, row in sub_b_rank.iterrows():
             item_nombre = row['Categoria_fmt']
             fig_comp.add_trace(go.Bar(
@@ -376,7 +370,7 @@ def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafic
                 legendgroup=item_nombre,
                 showlegend=False,
                 orientation='h',
-                text=[row['Cantidad']],  # Muestra el número dentro de la barra
+                text=[row['Cantidad']],
                 textposition='inside',
                 insidetextanchor='middle',
                 customdata=[(lbl_b, item_nombre, rank)],
@@ -459,7 +453,8 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     st.markdown("---")
 
-    st.subheader("MAPA: Distribución Geográfica SIPQR2S por UPRES")
+    # Cambio de título solicitado
+    st.subheader("MAPA: Distribución Geográfica PQRS por UPRES")
     df_geo_base = df_base.dropna(subset=['UNIDAD DE ASIGNACIÓN'])
     df_geo = df_geo_base.groupby('UNIDAD DE ASIGNACIÓN', observed=True).size().reset_index(name='Cantidad')
     df_geo = df_geo[df_geo['Cantidad'] > 0]
@@ -518,7 +513,8 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     st.markdown("---")
 
-    st.subheader("SIPQR2S por RASES")
+    # Cambio de título solicitado
+    st.subheader("PQRS por RASES")
     df_g1_raw = df_base['RASES'].dropna().value_counts().reset_index()
     df_g1_raw.columns = ['RASES', 'Cantidad']
     df_g1 = df_g1_raw[(df_g1_raw['Cantidad'] > 0) & (df_g1_raw['RASES'].astype(str).str.strip() != '')].copy()
@@ -528,7 +524,8 @@ def render_tab_individual(df_base_global, col_mot_esp):
     fig1.update_layout(xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10))
     st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    st.subheader("PQR2S por UPRES")
+    # Cambio de título solicitado
+    st.subheader("PQRS por UPRES")
     df_u1_raw = df_base['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
     df_u1_raw.columns = ['UPRES', 'Cantidad']
     df_u1 = df_u1_raw[(df_u1_raw['Cantidad'] > 0) & (df_u1_raw['UPRES'].astype(str).str.strip() != '')].copy()
@@ -606,7 +603,8 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         col_cp1, col_cp2 = st.columns(2)
         with col_cp1:
-            st.subheader(f"Comparativo Tipo de Solicitud ({vs_header})")
+            # Título simplificado sin fechas
+            st.subheader("Comparativo Tipo de Solicitud")
             df_ts_a = df_a['Tipo de Solicitud'].dropna().value_counts().reset_index()
             df_ts_a.columns = ['Tipo de Solicitud', lbl_a]
             
@@ -615,7 +613,10 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             
             df_ts_comp = pd.merge(df_ts_a, df_ts_b, on='Tipo de Solicitud', how='outer').fillna(0)
             df_ts_comp['Total_Volume'] = df_ts_comp[lbl_a] + df_ts_comp[lbl_b]
-            df_ts_comp = df_ts_comp.sort_values('Total_Volume', ascending=False)
+            
+            # Ordenamiento estricto de mayor a menor (Reclamo arriba, Solicitud de documentos abajo)
+            df_ts_comp = df_ts_comp.sort_values('Total_Volume', ascending=True)
+            orden_categorias_ts = df_ts_comp['Tipo de Solicitud'].tolist()
             
             df_ts_melt = df_ts_comp.melt(id_vars=['Tipo de Solicitud', 'Total_Volume'], value_vars=[lbl_a, lbl_b], var_name='Periodo', value_name='Cantidad')
             df_ts_melt = df_ts_melt[df_ts_melt['Cantidad'] > 0]
@@ -629,13 +630,14 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
                 orientation='h', 
                 text_auto=',d', 
                 color_discrete_map=mapa_color_comp,
-                category_orders={'Tipo de Solicitud': df_ts_comp['Tipo de Solicitud'].tolist()[::-1]}
+                category_orders={'Tipo de Solicitud': orden_categorias_ts}
             )
-            fig_comp_ts.update_layout(height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.2))
+            fig_comp_ts.update_layout(height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.2))
             st.plotly_chart(aplicar_touch_safe(fig_comp_ts), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         with col_cp2:
-            st.subheader(f"Comparativo Medio de Recepción ({vs_header})")
+            # Título simplificado sin fechas
+            st.subheader("Comparativo Medio de Recepción")
             df_mr_a = df_a['Medio de Recepción'].dropna().value_counts().reset_index()
             df_mr_a.columns = ['Medio de Recepción', lbl_a]
             
@@ -644,7 +646,10 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             
             df_mr_comp = pd.merge(df_mr_a, df_mr_b, on='Medio de Recepción', how='outer').fillna(0)
             df_mr_comp['Total_Volume'] = df_mr_comp[lbl_a] + df_mr_comp[lbl_b]
-            df_mr_comp = df_mr_comp.sort_values('Total_Volume', ascending=False)
+            
+            # Ordenamiento estricto de mayor a menor (Supersalud/Web arriba)
+            df_mr_comp = df_mr_comp.sort_values('Total_Volume', ascending=True)
+            orden_categorias_mr = df_mr_comp['Medio de Recepción'].tolist()
             
             df_mr_melt = df_mr_comp.melt(id_vars=['Medio de Recepción', 'Total_Volume'], value_vars=[lbl_a, lbl_b], var_name='Periodo', value_name='Cantidad')
             df_mr_melt = df_mr_melt[df_mr_melt['Cantidad'] > 0]
@@ -658,15 +663,15 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
                 orientation='h', 
                 text_auto=',d', 
                 color_discrete_map=mapa_color_comp,
-                category_orders={'Medio de Recepción': df_mr_comp['Medio de Recepción'].tolist()[::-1]}
+                category_orders={'Medio de Recepción': orden_categorias_mr}
             )
-            fig_comp_mr.update_layout(height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.2))
+            fig_comp_mr.update_layout(height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.2))
             st.plotly_chart(aplicar_touch_safe(fig_comp_mr), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         st.markdown("---")
 
-        # COMPARATIVO POR RASES
-        st.subheader(f"Comparativo por RASES ({vs_header})")
+        # COMPARATIVO POR RASES (Título simplificado)
+        st.subheader("Comparativo por RASES")
         df_r_a = df_a['RASES'].dropna().value_counts().reset_index()
         df_r_a.columns = ['RASES', 'Cantidad']
         df_r_a['Periodo'] = lbl_a
@@ -686,8 +691,8 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         fig_comp_rases.update_layout(xaxis_title="", yaxis_title="", height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
         st.plotly_chart(aplicar_touch_safe(fig_comp_rases), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # COMPARATIVO PQR2S POR UPRES
-        st.subheader(f"Comparativo PQR2S por UPRES ({vs_header})")
+        # COMPARATIVO PQRS POR UPRES (Título simplificado)
+        st.subheader("Comparativo PQRS por UPRES")
         df_u_comp_a = df_a['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
         df_u_comp_a.columns = ['UNIDAD DE ASIGNACIÓN', 'Cantidad']
         df_u_comp_a['Periodo'] = lbl_a
@@ -711,14 +716,14 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         generar_grafico_upres_comparativo_top5(
             df_a, df_b, 
             'ESPECIALIDAD_CATEGORIA', 
-            f"Comparativo Distribución por UPRES - Categoría Salud (Top 5) ({vs_header})",
+            "Comparativo Distribución por UPRES - Categoría Salud (Top 5)",
             lbl_a=lbl_a,
             lbl_b=lbl_b
         )
         generar_grafico_upres_comparativo_top5(
             df_a, df_b, 
             col_mot_esp, 
-            f"Comparativo Distribución por UPRES - Motivo Específico (Top 5) ({vs_header})",
+            "Comparativo Distribución por UPRES - Motivo Específico (Top 5)",
             lbl_a=lbl_a,
             lbl_b=lbl_b
         )
