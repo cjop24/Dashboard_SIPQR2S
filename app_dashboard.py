@@ -152,21 +152,19 @@ CONFIG_PLOTLY_TOUCH = {
     'showAxisDragHandles': False
 }
 
-# Coordenadas verificadas de los 32 departamentos + Bogotá D.C. e inclusión de Urabá
+# Coordenadas actualizadas con base en las modificaciones del JSON
 GEO_DEPARTAMENTOS_COL = {
     # Bogotá D.C.
     'BOGOTA': [4.6097, -74.0817], 'BOGOTÁ': [4.6097, -74.0817], 'BOGOTÁ D.C.': [4.6097, -74.0817], 'BOGOTA D.C.': [4.6097, -74.0817],
     
-    # Antioquia e inclusión geográfica de la región Urabá
+    # Departamentos principales corregidos a centroides
     'ANTIOQUIA': [6.5569, -75.8302],
-    'URABA': [6.5569, -75.8302], 'URABÁ': [6.5569, -75.8302], 
-    'REGION URABA': [6.5569, -75.8302], 'REGIÓN URABÁ': [6.5569, -75.8302],
-    
-    # Resto de Departamentos
     'ATLANTICO': [10.6317, -74.9613], 'ATLÁNTICO': [10.6317, -74.9613],
     'BOLIVAR': [8.6707, -74.0300], 'BOLÍVAR': [8.6707, -74.0300],
     'BOYACA': [5.7125, -72.9323], 'BOYACÁ': [5.7125, -72.9323],
     'CUNDINAMARCA': [5.0260, -74.0000],
+    
+    # Resto de Departamentos
     'VALLE': [3.8000, -76.5000], 'VALLE DEL CAUCA': [3.8000, -76.5000],
     'SANTANDER': [6.6437, -73.6486],
     'CALDAS': [5.0689, -75.5174], 
@@ -324,12 +322,11 @@ def render_tab_individual(df_base_global, col_mot_esp):
         hover_data={'Cantidad': True, 'lat': False, 'lon': False},
         color='Cantidad',
         color_continuous_scale=px.colors.sequential.Greens,
-        zoom=4.2,  # Zoom ajustado para visión general
+        zoom=4.5,
         center={"lat": 4.5709, "lon": -74.2973},
         map_style="carto-positron"
     )
-    # Ventana ampliada a 550px de alto para visualización completa del país
-    fig_mapa.update_layout(height=550, margin=dict(l=0, r=0, t=10, b=0))
+    fig_mapa.update_layout(height=380, margin=dict(l=0, r=0, t=10, b=0))
     st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     st.subheader("SIPQR2S por RASES")
