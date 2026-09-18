@@ -455,6 +455,9 @@ def render_tab_individual(df_base_global, col_mot_esp):
     df_geo['lat'] = lats
     df_geo['lon'] = lons
     
+# -----------------------------------------------------------------------------
+    # Gráfico: Mapa Geográfico de Colombia por UPRES (Con Zoom Aumentado)
+    # -----------------------------------------------------------------------------
     fig_mapa = px.scatter_map(
         df_geo, 
         lat='lat', 
@@ -464,7 +467,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
         hover_data={'Cantidad': True, 'lat': False, 'lon': False},
         color='Cantidad',
         color_continuous_scale=px.colors.sequential.Greens,
-        zoom=4.1,
+        zoom=4.8,  # Aumentado de 4.1 a 4.8 para ver el mapa de Colombia más grande
         center={"lat": 4.5709, "lon": -74.2973},
         map_style="carto-positron"
     )
