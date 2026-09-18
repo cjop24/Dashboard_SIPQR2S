@@ -26,17 +26,25 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Inyección de CDN Font Awesome 6 y Google Fonts (Poppins) + Estilos CSS
+# Inyección de Font Awesome y Google Fonts (Poppins) con exclusión para los iconos nativos de Streamlit
 st.markdown("""
     <!-- Font Awesome CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Google Fonts: Poppins -->
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
 
-    html, body, [class*="css"], .stMarkdown, div, span, p, label, input {
-        font-family: 'Poppins', sans-serif !important;
+    /* Aplicar Poppins solo a elementos de texto y NO a los iconos de interfaz de Streamlit */
+    html, body, p, h1, h2, h3, h4, h5, h6, label, input, button, select, div:not([data-testid="stSidebarNav"]):not([class*="material-symbols"]) {
+        font-family: 'Poppins', sans-serif;
+    }
+
+    /* Proteger los iconos nativos de Streamlit (Material Icons / Symbols) para que rendericen la flecha correcta */
+    [class*="material-symbols"], 
+    [class*="MaterialIcons"], 
+    [data-testid="stSidebarCollapseButton"] *,
+    [data-testid="stHeader"] * {
+        font-family: 'Material Symbols Sharp', 'Material Icons', sans-serif !important;
     }
 
     .main { padding: 0.5rem; }
@@ -465,7 +473,6 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     st.markdown("---")
 
-    # Titulo estilizado con icono vectorial Font Awesome
     st.markdown("""
         <h3 style='display: flex; align-items: center; gap: 8px;'>
             <i class="fa-solid fa-map-location-dot" style="color: #2e7d32;"></i>
