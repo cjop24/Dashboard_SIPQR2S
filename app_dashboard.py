@@ -543,7 +543,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
             hole=0.4, 
             color_discrete_sequence=px.colors.sequential.Greens_r
         )
-        # Ajuste de tamaño ampliado (height=550) y márgenes de 60px para evitar cortes
+        # Altura ampliada a 680px y márgenes generosos de 80px
         fig_pie1.update_traces(
             rotation=200,
             textposition='outside',
@@ -552,9 +552,9 @@ def render_tab_individual(df_base_global, col_mot_esp):
         )
         fig_pie1.update_layout(
             font=dict(family="Poppins, sans-serif"), 
-            height=550, 
+            height=680, 
             showlegend=False,
-            margin=dict(l=60, r=60, t=60, b=60)
+            margin=dict(l=80, r=80, t=80, b=80)
         )
         st.plotly_chart(aplicar_touch_safe(fig_pie1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
@@ -576,7 +576,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
             hole=0.4, 
             color_discrete_sequence=px.colors.sequential.YlGn_r
         )
-        # Ajuste de tamaño ampliado (height=550) y márgenes de 60px para evitar cortes
+        # Altura ampliada a 680px y márgenes generosos de 80px
         fig_pie2.update_traces(
             rotation=200,
             textposition='outside',
@@ -585,9 +585,9 @@ def render_tab_individual(df_base_global, col_mot_esp):
         )
         fig_pie2.update_layout(
             font=dict(family="Poppins, sans-serif"), 
-            height=550, 
+            height=680, 
             showlegend=False,
-            margin=dict(l=60, r=60, t=60, b=60)
+            margin=dict(l=80, r=80, t=80, b=80)
         )
         st.plotly_chart(aplicar_touch_safe(fig_pie2), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
