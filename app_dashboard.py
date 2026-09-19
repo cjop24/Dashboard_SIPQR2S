@@ -525,13 +525,9 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     st.markdown("---")
     
-    # -------------------------------------------------------------------------
-    # DISPOSICIÓN VERTICAL: Una dona debajo de la otra aprovechando todo el ancho
-    # -------------------------------------------------------------------------
-    
-    # DONA 1: Tipo de Solicitud
+    # DONA 1: Tipo de Solicitud (Ajustado con rotación y margen t=10 para acercar al título)
     st.markdown("""
-        <h3 style='display: flex; align-items: center; gap: 8px;'>
+        <h3 style='display: flex; align-items: center; gap: 8px; margin-bottom: 0px;'>
             <i class="fa-solid fa-chart-pie" style="color: #2e7d32;"></i>
             Porcentaje (%) por Tipo de Solicitud
         </h3>
@@ -548,16 +544,16 @@ def render_tab_individual(df_base_global, col_mot_esp):
         color_discrete_sequence=px.colors.sequential.Greens_r
     )
     fig_pie1.update_traces(
-        rotation=200,
+        rotation=30,  # Rotación ajustada para equilibrar la distribución de las líneas de texto
         textposition='outside',
         textinfo='label+percent',
         pull=[0.05 if v < (df_pie_sol['Cantidad'].sum() * 0.05) else 0 for v in df_pie_sol['Cantidad']]
     )
     fig_pie1.update_layout(
         font=dict(family="Poppins, sans-serif"), 
-        height=520, 
+        height=450, 
         showlegend=False,
-        margin=dict(l=100, r=100, t=50, b=50)
+        margin=dict(l=20, r=20, t=10, b=40)  # Margen superior pequeño (t=10) para eliminar espacio sobrante
     )
     st.plotly_chart(aplicar_touch_safe(fig_pie1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
@@ -565,7 +561,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     # DONA 2: Medio de Recepción
     st.markdown("""
-        <h3 style='display: flex; align-items: center; gap: 8px;'>
+        <h3 style='display: flex; align-items: center; gap: 8px; margin-bottom: 0px;'>
             <i class="fa-solid fa-inbox" style="color: #2e7d32;"></i>
             Porcentaje (%) por Medio de Recepción
         </h3>
@@ -582,16 +578,16 @@ def render_tab_individual(df_base_global, col_mot_esp):
         color_discrete_sequence=px.colors.sequential.YlGn_r
     )
     fig_pie2.update_traces(
-        rotation=200,
+        rotation=30,
         textposition='outside',
         textinfo='label+percent',
         pull=[0.05 if v < (df_pie_med['Cantidad'].sum() * 0.05) else 0 for v in df_pie_med['Cantidad']]
     )
     fig_pie2.update_layout(
         font=dict(family="Poppins, sans-serif"), 
-        height=520, 
+        height=450, 
         showlegend=False,
-        margin=dict(l=100, r=100, t=50, b=50)
+        margin=dict(l=20, r=20, t=10, b=40)
     )
     st.plotly_chart(aplicar_touch_safe(fig_pie2), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
