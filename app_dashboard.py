@@ -27,7 +27,6 @@ st.set_page_config(
 )
 
 # Inyección de Font Awesome y Google Fonts (Poppins)
-# Se incluye la regla específica para restaurar los iconos nativos de Streamlit
 st.markdown("""
     <!-- Font Awesome CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -536,8 +535,27 @@ def render_tab_individual(df_base_global, col_mot_esp):
         df_pie_sol = df_base['Tipo de Solicitud'].dropna().value_counts().reset_index()
         df_pie_sol.columns = ['Tipo de Solicitud', 'Cantidad']
         df_pie_sol = df_pie_sol[df_pie_sol['Cantidad'] > 0]
-        fig_pie1 = px.pie(df_pie_sol, values='Cantidad', names='Tipo de Solicitud', hole=0.4, color_discrete_sequence=px.colors.sequential.Greens_r)
-        fig_pie1.update_layout(font=dict(family="Poppins, sans-serif"), height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15))
+        
+        fig_pie1 = px.pie(
+            df_pie_sol, 
+            values='Cantidad', 
+            names='Tipo de Solicitud', 
+            hole=0.4, 
+            color_discrete_sequence=px.colors.sequential.Greens_r
+        )
+        # Se elimina la leyenda externa y se colocan el nombre y el porcentaje en las líneas indicadoras
+        fig_pie1.update_traces(
+            rotation=200,
+            textposition='outside',
+            textinfo='label+percent',
+            pull=[0.05 if v < (df_pie_sol['Cantidad'].sum() * 0.05) else 0 for v in df_pie_sol['Cantidad']]
+        )
+        fig_pie1.update_layout(
+            font=dict(family="Poppins, sans-serif"), 
+            height=420, 
+            showlegend=False,
+            margin=dict(l=40, r=40, t=40, b=40)
+        )
         st.plotly_chart(aplicar_touch_safe(fig_pie1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     with col_t2:
@@ -550,8 +568,27 @@ def render_tab_individual(df_base_global, col_mot_esp):
         df_pie_med = df_base['Medio de Recepción'].dropna().value_counts().reset_index()
         df_pie_med.columns = ['Medio de Recepción', 'Cantidad']
         df_pie_med = df_pie_med[df_pie_med['Cantidad'] > 0]
-        fig_pie2 = px.pie(df_pie_med, values='Cantidad', names='Medio de Recepción', hole=0.4, color_discrete_sequence=px.colors.sequential.YlGn_r)
-        fig_pie2.update_layout(font=dict(family="Poppins, sans-serif"), height=300, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-0.15))
+        
+        fig_pie2 = px.pie(
+            df_pie_med, 
+            values='Cantidad', 
+            names='Medio de Recepción', 
+            hole=0.4, 
+            color_discrete_sequence=px.colors.sequential.YlGn_r
+        )
+        # Se elimina la leyenda externa y se colocan el nombre y el porcentaje en las líneas indicadoras
+        fig_pie2.update_traces(
+            rotation=200,
+            textposition='outside',
+            textinfo='label+percent',
+            pull=[0.05 if v < (df_pie_med['Cantidad'].sum() * 0.05) else 0 for v in df_pie_med['Cantidad']]
+        )
+        fig_pie2.update_layout(
+            font=dict(family="Poppins, sans-serif"), 
+            height=420, 
+            showlegend=False,
+            margin=dict(l=40, r=40, t=40, b=40)
+        )
         st.plotly_chart(aplicar_touch_safe(fig_pie2), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     st.markdown("---")
