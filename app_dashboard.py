@@ -619,6 +619,9 @@ def render_tab_individual(df_base_global, col_mot_esp):
     df_u1 = df_u1_raw[(df_u1_raw['Cantidad'] > 0) & (df_u1_raw['UPRES'].astype(str).str.strip() != '')].copy()
     df_u1['UPRES_fmt'] = df_u1['UPRES'].apply(acortar_texto_abreviado)
     
+    # Limitado únicamente a las 10 UPRES con más PQRS
+    df_u1 = df_u1.head(10)
+    
     fig_upres_simple = px.bar(
         df_u1, 
         x='UPRES_fmt', 
@@ -815,6 +818,12 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         df_comp_upres_simple = pd.concat([df_u_comp_a, df_u_comp_b])
         df_comp_upres_simple = df_comp_upres_simple[(df_comp_upres_simple['Cantidad'] > 0) & (df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].astype(str).str.strip() != '')].copy()
+        
+        # Filtrar exclusivamente las 10 UPRES con mayor volumen combinado en ambos periodos
+        totales_comp_upres = df_comp_upres_simple.groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Cantidad'].sum().reset_index(name='Total')
+        top_10_comp_upres = totales_comp_upres.sort_values('Total', ascending=False).head(10)['UNIDAD DE ASIGNACIÓN'].tolist()
+        df_comp_upres_simple = df_comp_upres_simple[df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].isin(top_10_comp_upres)].copy()
+        
         df_comp_upres_simple['UPRES_fmt'] = df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
 
         fig_comp_upres_simple = px.bar(
