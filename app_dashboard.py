@@ -395,7 +395,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 # -----------------------------------------------------------------------------
-# BARRAS AL 100% (OPTIMIZADAS)
+# BARRAS AL 100% (UPRES ORDENADAS DE MAYOR A MENOR SEGÚN PERIODO B)
 # -----------------------------------------------------------------------------
 def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
     st.markdown(f"### {titulo_grafico}")
@@ -407,12 +407,15 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         st.info("No hay datos disponibles para la comparación.")
         return
 
-    tot_a = df_a_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
+    # 1. Obtener Top 5 UPRES ordenadas estrictamente de MAYOR A MENOR según el PERIODO B
     tot_b = df_b_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
-    top_5_upres = (tot_a.add(tot_b, fill_value=0)).sort_values(ascending=False).head(5).index.tolist()
+    tot_a = df_a_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
+    
+    # Se consolida priorizando el volumen de Periodo B
+    upres_ordenadas_b = tot_b.add(tot_a * 0.00001, fill_value=0).sort_values(ascending=False).head(5).index.tolist()
 
-    df_a_sub = df_a_clean[df_a_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)].copy()
-    df_b_sub = df_b_clean[df_b_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)].copy()
+    df_a_sub = df_a_clean[df_a_clean['UNIDAD DE ASIGNACIÓN'].isin(upres_ordenadas_b)].copy()
+    df_b_sub = df_b_clean[df_b_clean['UNIDAD DE ASIGNACIÓN'].isin(upres_ordenadas_b)].copy()
 
     def procesar_periodo_dinamico(df_in, lbl):
         if df_in.empty:
@@ -421,7 +424,7 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         registros_agrupados = []
         totales_absolutos = []
 
-        for upres in top_5_upres:
+        for upres in upres_ordenadas_b:
             df_u = df_in[df_in['UNIDAD DE ASIGNACIÓN'] == upres]
             if df_u.empty:
                 continue
@@ -482,12 +485,17 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
     color_map = {cat: paleta_amplia[i % len(paleta_amplia)] for i, cat in enumerate(categorias_unicas_todas)}
     color_map['Otros'] = '#8d99ae'
 
-    top_5_upres_fmt = [acortar_texto_abreviado(u) for u in top_5_upres]
-    df_total['UPRES_fmt'] = pd.Categorical(df_total['UPRES_fmt'], categories=reversed(top_5_upres_fmt), ordered=True)
+    # ORDENAR EJE Y PARA QUE LA MAYOR SEGÚN PERIODO B QUEDE ARRIBA
+    top_5_upres_fmt = [acortar_texto_abreviado(u) for u in upres_ordenadas_b]
+    
+    # En Plotly, el eje Y dibuja de abajo a arriba, por lo que invertimos la lista para que el #1 quede arriba
+    upres_orden_eje_y = list(reversed(top_5_upres_fmt))
+
+    df_total['UPRES_fmt'] = pd.Categorical(df_total['UPRES_fmt'], categories=upres_orden_eje_y, ordered=True)
     df_total = df_total.sort_values(['UPRES_fmt', 'Periodo', 'Rank_Local'])
 
     if not df_totales_absolutos.empty:
-        df_totales_absolutos['UPRES_fmt'] = pd.Categorical(df_totales_absolutos['UPRES_fmt'], categories=reversed(top_5_upres_fmt), ordered=True)
+        df_totales_absolutos['UPRES_fmt'] = pd.Categorical(df_totales_absolutos['UPRES_fmt'], categories=upres_orden_eje_y, ordered=True)
         df_totales_absolutos = df_totales_absolutos.sort_values(['UPRES_fmt', 'Periodo'])
 
     fig = go.Figure()
@@ -528,13 +536,17 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
             hoverinfo='skip'
         ))
 
-    # BARRAS MÁS GRUESAS Y MÁS JUNTAS POR UPRES
     fig.update_layout(
         font=dict(family="Poppins, sans-serif"),
         barmode='stack',
-        bargap=0.45,          # Mayor separación entre distintas UPRES
-        bargroupgap=0.02,     # Barras Periodo A y Periodo B casi pegadas (más gruesas)
-        yaxis=dict(title="", tickfont=dict(size=11)),
+        bargap=0.45,
+        bargroupgap=0.02,
+        yaxis=dict(
+            title="", 
+            tickfont=dict(size=11),
+            categoryorder='array',
+            categoryarray=upres_orden_eje_y
+        ),
         xaxis=dict(title="Proporción Relativa (%)", range=[0, 110]),
         height=580,
         margin=dict(l=10, r=40, t=10, b=10),
@@ -549,7 +561,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
 def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
     st.caption("Consola Ejecutiva de Atención al Usuario - Periodo Único")
 
-    # Inicialización limpia en session_state sin reruns encadenados
     if "fecha_ind_inicio" not in st.session_state:
         st.session_state["fecha_ind_inicio"] = min_f
     if "fecha_ind_fin" not in st.session_state:
@@ -750,7 +761,6 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
 def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
     st.caption("Comparación Analítica Cruzada entre dos Ventanas de Tiempo")
 
-    # Inicialización limpia en session_state sin callbacks
     if "fecha_a_inicio" not in st.session_state:
         st.session_state["fecha_a_inicio"] = min_hist
     if "fecha_a_fin" not in st.session_state:
@@ -985,7 +995,6 @@ elif authentication_status:
     try:
         df_raw = cargar_datos_consolidados()
         
-        # Obtenemos las fechas globales una sola vez
         min_global_date = df_raw['fecha_dt'].min().date() if not df_raw.empty else None
         max_global_date = df_raw['fecha_dt'].max().date() if not df_raw.empty else None
     except Exception as e:
