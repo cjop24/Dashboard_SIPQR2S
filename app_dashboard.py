@@ -145,7 +145,9 @@ def acortar_texto_abreviado(texto):
         'SISTEMA SGDEA MINDEFENSA': 'MINDEFENSA',
         'SGDEA MINDEFENSA': 'MINDEFENSA',
         'LÍNEA DIRECTOR GENERAL': 'LÍNEA DIRECTOR',
-        'LINEA DIRECTOR GENERAL': 'LÍNEA DIRECTOR'
+        'LINEA DIRECTOR GENERAL': 'LÍNEA DIRECTOR',
+        'INFORMACIÓN SEGURIDAD CIUDADANA': 'SEG. CIUDADANA',
+        'INFORMACION SEGURIDAD CIUDADANA': 'SEG. CIUDADANA'
     }
     if s in frases_especificas:
         return frases_especificas[s]
@@ -182,6 +184,9 @@ def acortar_texto_abreviado(texto):
         'USUARIOS': 'USUAR.',
         'RECONOCIMIENTOS': 'FELICITACIÓN',
         'RECONOCIMIENTO': 'FELICITACIÓN',
+        'INFORMACION': 'INFORM.',
+        'INFORMACIÓN': 'INFORM.',
+        'SEGURIDAD': 'SEG.',
         'SGDEA': '',
         'SISTEMA': ''
     }
@@ -394,122 +399,80 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     
     st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-def generar_grafico_upres_comparativo_top5(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
+# NUEVA FUNCIÓN: MAPA DE CALOR COMPARATIVO
+def generar_heatmap_upres_comparativo(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
     st.markdown(f"### {titulo_grafico}")
     
     df_a_clean = df_a.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
     df_b_clean = df_b.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
 
-    df_a_clean = df_a_clean[
-        (df_a_clean['UNIDAD DE ASIGNACIÓN'].astype(str).str.strip() != '') &
-        (df_a_clean[col_target].astype(str).str.strip() != '')
-    ]
-    df_b_clean = df_b_clean[
-        (df_b_clean['UNIDAD DE ASIGNACIÓN'].astype(str).str.strip() != '') &
-        (df_b_clean[col_target].astype(str).str.strip() != '')
-    ]
-
-    cA = df_a_clean.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant')
-    cA['Rank'] = cA.groupby('UNIDAD DE ASIGNACIÓN')['Cant'].rank(method='first', ascending=False)
-    top5_a = cA[cA['Rank'] <= 5].groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Cant'].sum().reset_index(name='Suma_Top5')
-
-    cB = df_b_clean.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant')
-    cB['Rank'] = cB.groupby('UNIDAD DE ASIGNACIÓN')['Cant'].rank(method='first', ascending=False)
-    top5_b = cB[cB['Rank'] <= 5].groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Cant'].sum().reset_index(name='Suma_Top5')
-
-    totales_upres = pd.merge(top5_a, top5_b, on='UNIDAD DE ASIGNACIÓN', how='outer').fillna(0)
-    totales_upres['Total_Top5'] = totales_upres['Suma_Top5_x'] + totales_upres['Suma_Top5_y']
-    
-    if totales_upres.empty:
-        st.info("No hay datos disponibles para la comparación.")
+    if df_a_clean.empty and df_b_clean.empty:
+        st.info("No hay datos suficientes para generar el Mapa de Calor.")
         return
 
-    top_5_upres = totales_upres.sort_values('Total_Top5', ascending=False).head(5)['UNIDAD DE ASIGNACIÓN'].tolist()
+    # Obtener Top 5 UPRES por volumen general
+    tot_a = df_a_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
+    tot_b = df_b_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
+    top_5_upres = (tot_a.add(tot_b, fill_value=0)).sort_values(ascending=False).head(5).index.tolist()
 
-    def procesar_periodo_top(df_in, etiqueta_periodo):
-        df_sub = df_in[df_in['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)].copy()
-        conteo = df_sub.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cantidad')
-        conteo['Rank'] = conteo.groupby('UNIDAD DE ASIGNACIÓN')['Cantidad'].rank(method='first', ascending=False)
-        top_local = conteo[conteo['Rank'] <= 5].copy()
-        top_local['Rank_Local'] = top_local['Rank'].astype(int)
-        top_local['Periodo'] = etiqueta_periodo
-        top_local['UPRES_fmt'] = top_local['UNIDAD DE ASIGNACIÓN'].apply(lambda x: str(acortar_texto_abreviado(x)))
-        top_local['Categoria_fmt'] = top_local[col_target].apply(lambda x: str(acortar_texto_abreviado(x)))
-        return top_local
+    df_a_sub = df_a_clean[df_a_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)]
+    df_b_sub = df_b_clean[df_b_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)]
 
-    df_stack_a = procesar_periodo_top(df_a_clean, lbl_a)
-    df_stack_b = procesar_periodo_top(df_b_clean, lbl_b)
+    # Obtener Top 5 Categorías más frecuentes
+    cat_a = df_a_sub[col_target].value_counts()
+    cat_b = df_b_sub[col_target].value_counts()
+    top_5_cats = (cat_a.add(cat_b, fill_value=0)).sort_values(ascending=False).head(5).index.tolist()
 
-    upres_ordenadas_fmt = [str(acortar_texto_abreviado(u)) for u in reversed(top_5_upres)]
+    # Agrupación de datos
+    g_a = df_a_sub[df_a_sub[col_target].isin(top_5_cats)].groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cantidad')
+    g_a['Columna'] = g_a[col_target].apply(lambda c: f"{acortar_texto_abreviado(c)} ({lbl_a})")
 
-    todas_cats = list(set(df_stack_a['Categoria_fmt'].tolist() + df_stack_b['Categoria_fmt'].tolist()))
-    paleta_contraste = [
-        '#1b4332', '#1d3557', '#d4a373', '#e07a5f', '#2b2d42', 
-        '#2d6a4f', '#003049', '#52b788', '#3d405b', '#40916c',
-        '#bc4749', '#a5a58d', '#6b705c', '#386641', '#6a040f'
-    ]
-    color_map = {cat: paleta_contraste[i % len(paleta_contraste)] for i, cat in enumerate(todas_cats)}
+    g_b = df_b_sub[df_b_sub[col_target].isin(top_5_cats)].groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cantidad')
+    g_b['Columna'] = g_b[col_target].apply(lambda c: f"{acortar_texto_abreviado(c)} ({lbl_b})")
 
-    fig_comp = go.Figure()
+    df_heat = pd.concat([g_a, g_b])
+    df_heat['UPRES_fmt'] = df_heat['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
 
-    for rank in range(1, 6):
-        sub_a_rank = df_stack_a[df_stack_a['Rank_Local'] == rank]
-        sub_b_rank = df_stack_b[df_stack_b['Rank_Local'] == rank]
+    # Crear matriz pivote
+    pivot_df = df_heat.pivot(index='UPRES_fmt', columns='Columna', values='Cantidad').fillna(0)
+    
+    # Ordenar filas por UPRES principales y columnas alternando A y B
+    upres_order = [acortar_texto_abreviado(u) for u in top_5_upres if acortar_texto_abreviado(u) in pivot_df.index]
+    pivot_df = pivot_df.reindex(upres_order)
 
-        for _, row in sub_a_rank.iterrows():
-            item_nombre = row['Categoria_fmt']
-            fig_comp.add_trace(go.Bar(
-                y=[row['UPRES_fmt']],
-                x=[row['Cantidad']],
-                name=item_nombre,
-                legendgroup=item_nombre,
-                showlegend=True if item_nombre not in [t.name for t in fig_comp.data] else False,
-                orientation='h',
-                text=[row['Cantidad']],
-                textposition='inside',
-                insidetextanchor='middle',
-                customdata=[(lbl_a, item_nombre, rank)],
-                hovertemplate=f"<b>%{{y}} - {lbl_a}</b><br>Top %{{customdata[2]}}: %{{customdata[1]}}<br>Cantidad: %{{x}} PQRS<extra></extra>",
-                marker=dict(
-                    color=color_map.get(item_nombre, '#2e7d32'),
-                    line=dict(color='#ffffff', width=1)
-                ),
-                offsetgroup=0
-            ))
+    cols_ordenadas = []
+    for c in top_5_cats:
+        c_fmt = acortar_texto_abreviado(c)
+        col_a_name = f"{c_fmt} ({lbl_a})"
+        col_b_name = f"{c_fmt} ({lbl_b})"
+        if col_a_name in pivot_df.columns: cols_ordenadas.append(col_a_name)
+        if col_b_name in pivot_df.columns: cols_ordenadas.append(col_b_name)
+    
+    pivot_df = pivot_df.reindex(columns=cols_ordenadas)
 
-        for _, row in sub_b_rank.iterrows():
-            item_nombre = row['Categoria_fmt']
-            fig_comp.add_trace(go.Bar(
-                y=[row['UPRES_fmt']],
-                x=[row['Cantidad']],
-                name=item_nombre,
-                legendgroup=item_nombre,
-                showlegend=False,
-                orientation='h',
-                text=[row['Cantidad']],
-                textposition='inside',
-                insidetextanchor='middle',
-                customdata=[(lbl_b, item_nombre, rank)],
-                hovertemplate=f"<b>%{{y}} - {lbl_b}</b><br>Top %{{customdata[2]}}: %{{customdata[1]}}<br>Cantidad: %{{x}} PQRS<extra></extra>",
-                marker=dict(
-                    color=color_map.get(item_nombre, '#2e7d32'),
-                    line=dict(color='#ffffff', width=1)
-                ),
-                offsetgroup=1
-            ))
-
-    fig_comp.update_layout(
-        font=dict(family="Poppins, sans-serif"),
-        barmode='stack',
-        yaxis=dict(categoryorder='array', categoryarray=upres_ordenadas_fmt),
-        xaxis_title="",
-        yaxis_title="",
-        height=520,
-        margin=dict(l=5, r=5, t=10, b=10),
-        legend=dict(orientation="h", y=-0.2, x=0, title=None, font=dict(size=10))
+    # Renderizar el Mapa de Calor con Plotly
+    fig = px.imshow(
+        pivot_df.values,
+        labels=dict(x="Motivo / Periodo", y="UPRES", color="PQRS"),
+        x=pivot_df.columns,
+        y=pivot_df.index,
+        color_continuous_scale="Greens",
+        text_auto=True
     )
     
-    st.plotly_chart(aplicar_touch_safe(fig_comp), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+    fig.update_traces(
+        texttemplate="%{z:,d}",
+        hovertemplate="<b>UPRES:</b> %{y}<br><b>Motivo:</b> %{x}<br><b>Cantidad:</b> %{z:,} PQRS<extra></extra>"
+    )
+    
+    fig.update_layout(
+        font=dict(family="Poppins, sans-serif"),
+        height=380,
+        margin=dict(l=10, r=10, t=20, b=10),
+        xaxis=dict(tickangle=-30)
+    )
+
+    st.plotly_chart(aplicar_touch_safe(fig), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 # -----------------------------------------------------------------------------
 # 3. MÓDULOS DE RENDERIZADO
@@ -520,14 +483,12 @@ def render_tab_individual(df_base_global, col_mot_esp):
     min_f = df_base_global['fecha_dt'].min().date() if not df_base_global.empty else None
     max_f = df_base_global['fecha_dt'].max().date() if not df_base_global.empty else None
 
-    # Inicialización de estado para las fechas del Análisis Individual
     if "fecha_ind_inicio" not in st.session_state:
         st.session_state["fecha_ind_inicio"] = min_f
     if "fecha_ind_fin" not in st.session_state:
         st.session_state["fecha_ind_fin"] = max_f
 
     def auto_ajustar_fecha_ind_fin():
-        # Si la fecha de inicio supera la fecha de fin actual, la fecha fin se ajusta automáticamente
         if st.session_state["fecha_ind_inicio"] > st.session_state["fecha_ind_fin"]:
             st.session_state["fecha_ind_fin"] = st.session_state["fecha_ind_inicio"]
 
@@ -624,7 +585,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
     st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     st.markdown("---")
-    
+
     # DONA 1: Tipo de Solicitud
     st.markdown("""
         <h3 style='display: flex; align-items: center; gap: 8px; margin-bottom: 0px;'>
@@ -742,7 +703,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
     min_hist = df_base_global['fecha_dt'].min().date() if not df_base_global.empty else None
     max_hist = df_base_global['fecha_dt'].max().date() if not df_base_global.empty else None
 
-    # Inicialización de estado para los periodos A y B del Comparativo
     if "fecha_a_inicio" not in st.session_state:
         st.session_state["fecha_a_inicio"] = min_hist
     if "fecha_a_fin" not in st.session_state:
@@ -912,17 +872,20 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         st.plotly_chart(aplicar_touch_safe(fig_comp_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         st.markdown("---")
-        generar_grafico_upres_comparativo_top5(
+        
+        # SUSTITUCIÓN POR MAPAS DE CALOR COMPARATIVOS
+        generar_heatmap_upres_comparativo(
             df_a, df_b, 
             'ESPECIALIDAD_CATEGORIA', 
-            "Comparativo Distribución por UPRES - Categoría Salud (Top 5)",
+            "Mapa de Calor: Comparativo UPRES vs Categoría Salud (Top 5)",
             lbl_a=lbl_a_short,
             lbl_b=lbl_b_short
         )
-        generar_grafico_upres_comparativo_top5(
+        
+        generar_heatmap_upres_comparativo(
             df_a, df_b, 
             col_mot_esp, 
-            "Comparativo Distribución por UPRES - Motivo Específico (Top 5)",
+            "Mapa de Calor: Comparativo UPRES vs Motivo Específico (Top 5)",
             lbl_a=lbl_a_short,
             lbl_b=lbl_b_short
         )
