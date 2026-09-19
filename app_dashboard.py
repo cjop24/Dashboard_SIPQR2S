@@ -410,6 +410,7 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
     tot_b_absoluto = df_b_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     tot_a_absoluto = df_a_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     
+    # Se consolida priorizando el volumen total de registros de Periodo B
     tot_combinado = tot_b_absoluto.add(tot_a_absoluto * 0, fill_value=0)
     upres_ordenadas_b = tot_combinado.sort_values(ascending=False).head(5).index.tolist()
 
@@ -896,7 +897,8 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
         st.plotly_chart(aplicar_touch_safe(fig_comp_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         st.markdown("---")
-        
+
+        # 1. Gráfico comparativo de Categoría Salud (Ordenado por total del Periodo B)
         generar_barras_100pct_comparativo(
             df_a, df_b, 
             'ESPECIALIDAD_CATEGORIA', 
@@ -905,6 +907,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
             lbl_b=lbl_b_short
         )
         
+        # 2. Gráfico comparativo de Motivo Específico (Ordenado por total del Periodo B)
         generar_barras_100pct_comparativo(
             df_a, df_b, 
             col_mot_esp, 
@@ -937,7 +940,6 @@ if authentication_status is False:
 elif authentication_status is None:
     st.warning("Por favor ingrese sus credenciales para acceder")
 elif authentication_status:
-    # Carga de credenciales Postgres de Streamlit Secrets o .env
     try:
         DB_USER = st.secrets["postgres"]["user"]
         DB_PASS = st.secrets["postgres"]["password"]
