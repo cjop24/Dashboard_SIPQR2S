@@ -666,6 +666,8 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         lbl_a = f"Periodo A ({fecha_a_inicio.strftime('%d/%m/%Y')} – {fecha_a_fin.strftime('%d/%m/%Y')})"
         lbl_b = f"Periodo B ({fecha_b_inicio.strftime('%d/%m/%Y')} – {fecha_b_fin.strftime('%d/%m/%Y')})"
+        lbl_a_short = "Periodo A"
+        lbl_b_short = "Periodo B"
         vs_header = f"{fecha_a_inicio.strftime('%d/%m/%Y')} – {fecha_a_fin.strftime('%d/%m/%Y')} 🆚 {fecha_b_inicio.strftime('%d/%m/%Y')} – {fecha_b_fin.strftime('%d/%m/%Y')}"
 
         df_a = df_base_global[(df_base_global['fecha_dt'].dt.date >= fecha_a_inicio) & (df_base_global['fecha_dt'].dt.date <= fecha_a_fin)].copy()
@@ -678,8 +680,8 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         st.markdown("---")
         st.markdown(f"### <i class='fa-solid fa-scale-balanced' style='color:#1b5e20;'></i> Indicadores Comparativos Generales ({vs_header})", unsafe_allow_html=True)
         kc1, kc2, kc3 = st.columns(3)
-        kc1.metric(f"Total {lbl_a}", f"{tot_a:,}")
-        kc2.metric(f"Total {lbl_b}", f"{tot_b:,}")
+        kc1.metric(f"Total {lbl_a_short}", f"{tot_a:,}")
+        kc2.metric(f"Total {lbl_b_short}", f"{tot_b:,}")
         
         kc3.metric(
             "Variación Periodo B vs A",
@@ -690,7 +692,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         st.markdown("---")
 
-        mapa_color_comp = {lbl_a: COLOR_PERIODO_A, lbl_b: COLOR_PERIODO_B}
+        mapa_color_comp = {lbl_a_short: COLOR_PERIODO_A, lbl_b_short: COLOR_PERIODO_B}
 
         col_cp1, col_cp2 = st.columns(2)
         with col_cp1:
@@ -701,18 +703,18 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
                 </h3>
             """, unsafe_allow_html=True)
             df_ts_a = df_a['Tipo de Solicitud'].dropna().value_counts().reset_index()
-            df_ts_a.columns = ['Tipo de Solicitud', lbl_a]
+            df_ts_a.columns = ['Tipo de Solicitud', lbl_a_short]
             
             df_ts_b = df_b['Tipo de Solicitud'].dropna().value_counts().reset_index()
-            df_ts_b.columns = ['Tipo de Solicitud', lbl_b]
+            df_ts_b.columns = ['Tipo de Solicitud', lbl_b_short]
             
             df_ts_comp = pd.merge(df_ts_a, df_ts_b, on='Tipo de Solicitud', how='outer').fillna(0)
-            df_ts_comp['Total_Volume'] = df_ts_comp[lbl_a] + df_ts_comp[lbl_b]
+            df_ts_comp['Total_Volume'] = df_ts_comp[lbl_a_short] + df_ts_comp[lbl_b_short]
             
             df_ts_comp = df_ts_comp.sort_values('Total_Volume', ascending=True)
             orden_categorias_ts = df_ts_comp['Tipo de Solicitud'].tolist()
             
-            df_ts_melt = df_ts_comp.melt(id_vars=['Tipo de Solicitud', 'Total_Volume'], value_vars=[lbl_a, lbl_b], var_name='Periodo', value_name='Cantidad')
+            df_ts_melt = df_ts_comp.melt(id_vars=['Tipo de Solicitud', 'Total_Volume'], value_vars=[lbl_a_short, lbl_b_short], var_name='Periodo', value_name='Cantidad')
             df_ts_melt = df_ts_melt[df_ts_melt['Cantidad'] > 0]
             
             fig_comp_ts = px.bar(
@@ -728,8 +730,8 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             fig_comp_ts.update_layout(
                 font=dict(family="Poppins, sans-serif"),
                 height=320, 
-                margin=dict(l=5, r=5, t=10, b=10), 
-                legend=dict(orientation="h", y=-0.2),
+                margin=dict(l=10, r=10, t=30, b=10), 
+                legend=dict(orientation="h", y=1.15, x=0, title=None, font=dict(size=10)),
                 yaxis=dict(categoryorder='array', categoryarray=orden_categorias_ts)
             )
             st.plotly_chart(aplicar_touch_safe(fig_comp_ts), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
@@ -742,18 +744,18 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
                 </h3>
             """, unsafe_allow_html=True)
             df_mr_a = df_a['Medio de Recepción'].dropna().value_counts().reset_index()
-            df_mr_a.columns = ['Medio de Recepción', lbl_a]
+            df_mr_a.columns = ['Medio de Recepción', lbl_a_short]
             
             df_mr_b = df_b['Medio de Recepción'].dropna().value_counts().reset_index()
-            df_mr_b.columns = ['Medio de Recepción', lbl_b]
+            df_mr_b.columns = ['Medio de Recepción', lbl_b_short]
             
             df_mr_comp = pd.merge(df_mr_a, df_mr_b, on='Medio de Recepción', how='outer').fillna(0)
-            df_mr_comp['Total_Volume'] = df_mr_comp[lbl_a] + df_mr_comp[lbl_b]
+            df_mr_comp['Total_Volume'] = df_mr_comp[lbl_a_short] + df_mr_comp[lbl_b_short]
             
             df_mr_comp = df_mr_comp.sort_values('Total_Volume', ascending=True)
             orden_categorias_mr = df_mr_comp['Medio de Recepción'].tolist()
             
-            df_mr_melt = df_mr_comp.melt(id_vars=['Medio de Recepción', 'Total_Volume'], value_vars=[lbl_a, lbl_b], var_name='Periodo', value_name='Cantidad')
+            df_mr_melt = df_mr_comp.melt(id_vars=['Medio de Recepción', 'Total_Volume'], value_vars=[lbl_a_short, lbl_b_short], var_name='Periodo', value_name='Cantidad')
             df_mr_melt = df_mr_melt[df_mr_melt['Cantidad'] > 0]
             
             fig_comp_mr = px.bar(
@@ -769,8 +771,8 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             fig_comp_mr.update_layout(
                 font=dict(family="Poppins, sans-serif"),
                 height=320, 
-                margin=dict(l=5, r=5, t=10, b=10), 
-                legend=dict(orientation="h", y=-0.2),
+                margin=dict(l=10, r=10, t=30, b=10), 
+                legend=dict(orientation="h", y=1.15, x=0, title=None, font=dict(size=10)),
                 yaxis=dict(categoryorder='array', categoryarray=orden_categorias_mr)
             )
             st.plotly_chart(aplicar_touch_safe(fig_comp_mr), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
@@ -785,11 +787,11 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         """, unsafe_allow_html=True)
         df_r_a = df_a['RASES'].dropna().value_counts().reset_index()
         df_r_a.columns = ['RASES', 'Cantidad']
-        df_r_a['Periodo'] = lbl_a
+        df_r_a['Periodo'] = lbl_a_short
 
         df_r_b = df_b['RASES'].dropna().value_counts().reset_index()
         df_r_b.columns = ['RASES', 'Cantidad']
-        df_r_b['Periodo'] = lbl_b
+        df_r_b['Periodo'] = lbl_b_short
 
         df_comp_rases = pd.concat([df_r_a, df_r_b])
         df_comp_rases = df_comp_rases[(df_comp_rases['Cantidad'] > 0) & (df_comp_rases['RASES'].astype(str).str.strip() != '')].copy()
@@ -799,7 +801,14 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             df_comp_rases, x='RASES_fmt', y='Cantidad', color='Periodo', barmode='group',
             text_auto=',d', color_discrete_map=mapa_color_comp
         )
-        fig_comp_rases.update_layout(font=dict(family="Poppins, sans-serif"), xaxis_title="", yaxis_title="", height=320, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
+        fig_comp_rases.update_layout(
+            font=dict(family="Poppins, sans-serif"), 
+            xaxis_title="", 
+            yaxis_title="", 
+            height=320, 
+            margin=dict(l=10, r=10, t=30, b=10), 
+            legend=dict(orientation="h", y=1.15, x=0, title=None, font=dict(size=10))
+        )
         st.plotly_chart(aplicar_touch_safe(fig_comp_rases), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         st.markdown("""
@@ -810,11 +819,11 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         """, unsafe_allow_html=True)
         df_u_comp_a = df_a['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
         df_u_comp_a.columns = ['UNIDAD DE ASIGNACIÓN', 'Cantidad']
-        df_u_comp_a['Periodo'] = lbl_a
+        df_u_comp_a['Periodo'] = lbl_a_short
 
         df_u_comp_b = df_b['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
         df_u_comp_b.columns = ['UNIDAD DE ASIGNACIÓN', 'Cantidad']
-        df_u_comp_b['Periodo'] = lbl_b
+        df_u_comp_b['Periodo'] = lbl_b_short
 
         df_comp_upres_simple = pd.concat([df_u_comp_a, df_u_comp_b])
         df_comp_upres_simple = df_comp_upres_simple[(df_comp_upres_simple['Cantidad'] > 0) & (df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].astype(str).str.strip() != '')].copy()
@@ -830,7 +839,14 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             df_comp_upres_simple, x='UPRES_fmt', y='Cantidad', color='Periodo', barmode='group',
             text_auto=',d', color_discrete_map=mapa_color_comp
         )
-        fig_comp_upres_simple.update_layout(font=dict(family="Poppins, sans-serif"), xaxis_title="", yaxis_title="", height=350, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=1.1, x=0.3))
+        fig_comp_upres_simple.update_layout(
+            font=dict(family="Poppins, sans-serif"), 
+            xaxis_title="", 
+            yaxis_title="", 
+            height=350, 
+            margin=dict(l=10, r=10, t=30, b=10), 
+            legend=dict(orientation="h", y=1.15, x=0, title=None, font=dict(size=10))
+        )
         st.plotly_chart(aplicar_touch_safe(fig_comp_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         st.markdown("---")
@@ -838,15 +854,15 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             df_a, df_b, 
             'ESPECIALIDAD_CATEGORIA', 
             "Comparativo Distribución por UPRES - Categoría Salud (Top 5)",
-            lbl_a=lbl_a,
-            lbl_b=lbl_b
+            lbl_a=lbl_a_short,
+            lbl_b=lbl_b_short
         )
         generar_grafico_upres_comparativo_top5(
             df_a, df_b, 
             col_mot_esp, 
             "Comparativo Distribución por UPRES - Motivo Específico (Top 5)",
-            lbl_a=lbl_a,
-            lbl_b=lbl_b
+            lbl_a=lbl_a_short,
+            lbl_b=lbl_b_short
         )
 
 # -----------------------------------------------------------------------------
