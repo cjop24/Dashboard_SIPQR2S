@@ -525,7 +525,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     st.markdown("---")
     
-    # DONA 1: Tipo de Solicitud (Rotación a 270 para calcar la orientación vertical del ejemplo)
+    # DONA 1: Tipo de Solicitud (Porcentajes adentro, tooltip al interactuar)
     st.markdown("""
         <h3 style='display: flex; align-items: center; gap: 8px; margin-bottom: 0px;'>
             <i class="fa-solid fa-chart-pie" style="color: #2e7d32;"></i>
@@ -544,22 +544,22 @@ def render_tab_individual(df_base_global, col_mot_esp):
         color_discrete_sequence=px.colors.sequential.Greens_r
     )
     fig_pie1.update_traces(
-        rotation=270,  # Rotado a 270° para orientar los sectores idénticos al modelo deseado
-        textposition='outside',
-        textinfo='label+percent',
-        pull=[0.05 if v < (df_pie_sol['Cantidad'].sum() * 0.05) else 0 for v in df_pie_sol['Cantidad']]
+        textposition='inside',
+        textinfo='percent',
+        hoverinfo='label+percent+value',
+        insidetextorientation='radial'
     )
     fig_pie1.update_layout(
         font=dict(family="Poppins, sans-serif"), 
-        height=450, 
+        height=400, 
         showlegend=False,
-        margin=dict(l=20, r=20, t=0, b=40)  # Margen t=0 elimina espacio en blanco sobrante
+        margin=dict(l=20, r=20, t=10, b=20)
     )
     st.plotly_chart(aplicar_touch_safe(fig_pie1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     st.markdown("---")
 
-    # DONA 2: Medio de Recepción
+    # DONA 2: Medio de Recepción (Porcentajes adentro, tooltip al interactuar)
     st.markdown("""
         <h3 style='display: flex; align-items: center; gap: 8px; margin-bottom: 0px;'>
             <i class="fa-solid fa-inbox" style="color: #2e7d32;"></i>
@@ -578,16 +578,16 @@ def render_tab_individual(df_base_global, col_mot_esp):
         color_discrete_sequence=px.colors.sequential.YlGn_r
     )
     fig_pie2.update_traces(
-        rotation=270,
-        textposition='outside',
-        textinfo='label+percent',
-        pull=[0.05 if v < (df_pie_med['Cantidad'].sum() * 0.05) else 0 for v in df_pie_med['Cantidad']]
+        textposition='inside',
+        textinfo='percent',
+        hoverinfo='label+percent+value',
+        insidetextorientation='radial'
     )
     fig_pie2.update_layout(
         font=dict(family="Poppins, sans-serif"), 
-        height=450, 
+        height=400, 
         showlegend=False,
-        margin=dict(l=20, r=20, t=0, b=40)
+        margin=dict(l=20, r=20, t=10, b=20)
     )
     st.plotly_chart(aplicar_touch_safe(fig_pie2), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
