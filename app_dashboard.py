@@ -524,72 +524,76 @@ def render_tab_individual(df_base_global, col_mot_esp):
     st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     st.markdown("---")
-    col_t1, col_t2 = st.columns(2)
-    with col_t1:
-        st.markdown("""
-            <h3 style='display: flex; align-items: center; gap: 8px;'>
-                <i class="fa-solid fa-chart-pie" style="color: #2e7d32;"></i>
-                Porcentaje (%) por Tipo de Solicitud
-            </h3>
-        """, unsafe_allow_html=True)
-        df_pie_sol = df_base['Tipo de Solicitud'].dropna().value_counts().reset_index()
-        df_pie_sol.columns = ['Tipo de Solicitud', 'Cantidad']
-        df_pie_sol = df_pie_sol[df_pie_sol['Cantidad'] > 0]
-        
-        fig_pie1 = px.pie(
-            df_pie_sol, 
-            values='Cantidad', 
-            names='Tipo de Solicitud', 
-            hole=0.4, 
-            color_discrete_sequence=px.colors.sequential.Greens_r
-        )
-        # Altura ampliada a 680px y márgenes generosos de 80px
-        fig_pie1.update_traces(
-            rotation=200,
-            textposition='outside',
-            textinfo='label+percent',
-            pull=[0.05 if v < (df_pie_sol['Cantidad'].sum() * 0.05) else 0 for v in df_pie_sol['Cantidad']]
-        )
-        fig_pie1.update_layout(
-            font=dict(family="Poppins, sans-serif"), 
-            height=680, 
-            showlegend=False,
-            margin=dict(l=80, r=80, t=80, b=80)
-        )
-        st.plotly_chart(aplicar_touch_safe(fig_pie1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+    
+    # -------------------------------------------------------------------------
+    # DISPOSICIÓN VERTICAL: Una dona debajo de la otra aprovechando todo el ancho
+    # -------------------------------------------------------------------------
+    
+    # DONA 1: Tipo de Solicitud
+    st.markdown("""
+        <h3 style='display: flex; align-items: center; gap: 8px;'>
+            <i class="fa-solid fa-chart-pie" style="color: #2e7d32;"></i>
+            Porcentaje (%) por Tipo de Solicitud
+        </h3>
+    """, unsafe_allow_html=True)
+    df_pie_sol = df_base['Tipo de Solicitud'].dropna().value_counts().reset_index()
+    df_pie_sol.columns = ['Tipo de Solicitud', 'Cantidad']
+    df_pie_sol = df_pie_sol[df_pie_sol['Cantidad'] > 0]
+    
+    fig_pie1 = px.pie(
+        df_pie_sol, 
+        values='Cantidad', 
+        names='Tipo de Solicitud', 
+        hole=0.4, 
+        color_discrete_sequence=px.colors.sequential.Greens_r
+    )
+    fig_pie1.update_traces(
+        rotation=200,
+        textposition='outside',
+        textinfo='label+percent',
+        pull=[0.05 if v < (df_pie_sol['Cantidad'].sum() * 0.05) else 0 for v in df_pie_sol['Cantidad']]
+    )
+    fig_pie1.update_layout(
+        font=dict(family="Poppins, sans-serif"), 
+        height=520, 
+        showlegend=False,
+        margin=dict(l=100, r=100, t=50, b=50)
+    )
+    st.plotly_chart(aplicar_touch_safe(fig_pie1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    with col_t2:
-        st.markdown("""
-            <h3 style='display: flex; align-items: center; gap: 8px;'>
-                <i class="fa-solid fa-inbox" style="color: #2e7d32;"></i>
-                Porcentaje (%) por Medio de Recepción
-            </h3>
-        """, unsafe_allow_html=True)
-        df_pie_med = df_base['Medio de Recepción'].dropna().value_counts().reset_index()
-        df_pie_med.columns = ['Medio de Recepción', 'Cantidad']
-        df_pie_med = df_pie_med[df_pie_med['Cantidad'] > 0]
-        
-        fig_pie2 = px.pie(
-            df_pie_med, 
-            values='Cantidad', 
-            names='Medio de Recepción', 
-            hole=0.4, 
-            color_discrete_sequence=px.colors.sequential.YlGn_r
-        )
-        # Altura ampliada a 680px y márgenes generosos de 80px
-        fig_pie2.update_traces(
-            rotation=200,
-            textposition='outside',
-            textinfo='label+percent',
-            pull=[0.05 if v < (df_pie_med['Cantidad'].sum() * 0.05) else 0 for v in df_pie_med['Cantidad']]
-        )
-        fig_pie2.update_layout(
-            font=dict(family="Poppins, sans-serif"), 
-            height=680, 
-            showlegend=False,
-            margin=dict(l=80, r=80, t=80, b=80)
-        )
-        st.plotly_chart(aplicar_touch_safe(fig_pie2), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+    st.markdown("---")
+
+    # DONA 2: Medio de Recepción
+    st.markdown("""
+        <h3 style='display: flex; align-items: center; gap: 8px;'>
+            <i class="fa-solid fa-inbox" style="color: #2e7d32;"></i>
+            Porcentaje (%) por Medio de Recepción
+        </h3>
+    """, unsafe_allow_html=True)
+    df_pie_med = df_base['Medio de Recepción'].dropna().value_counts().reset_index()
+    df_pie_med.columns = ['Medio de Recepción', 'Cantidad']
+    df_pie_med = df_pie_med[df_pie_med['Cantidad'] > 0]
+    
+    fig_pie2 = px.pie(
+        df_pie_med, 
+        values='Cantidad', 
+        names='Medio de Recepción', 
+        hole=0.4, 
+        color_discrete_sequence=px.colors.sequential.YlGn_r
+    )
+    fig_pie2.update_traces(
+        rotation=200,
+        textposition='outside',
+        textinfo='label+percent',
+        pull=[0.05 if v < (df_pie_med['Cantidad'].sum() * 0.05) else 0 for v in df_pie_med['Cantidad']]
+    )
+    fig_pie2.update_layout(
+        font=dict(family="Poppins, sans-serif"), 
+        height=520, 
+        showlegend=False,
+        margin=dict(l=100, r=100, t=50, b=50)
+    )
+    st.plotly_chart(aplicar_touch_safe(fig_pie2), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     st.markdown("---")
 
