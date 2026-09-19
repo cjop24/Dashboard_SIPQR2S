@@ -400,7 +400,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 # -----------------------------------------------------------------------------
-# OPCIÓN 2: BARRAS AL 100% AGRUPADAS POR UPRES Y PERIODO
+# BARRAS AL 100% AGRUPADAS POR UPRES Y PERIODO
 # -----------------------------------------------------------------------------
 def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
     st.markdown(f"### {titulo_grafico}")
@@ -438,34 +438,39 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         st.info("No hay datos suficientes en los rangos seleccionados.")
         return
 
-    # 3. Construir gráfico con eje Y jerárquico [UPRES, Periodo]
-    top_5_upres_fmt = [acortar_texto_abreviado(u) for u in top_5_upres]
-    
-    # Ordenar UPRES de arriba a abajo en el gráfico
-    df_total['UPRES_fmt'] = pd.Categorical(df_total['UPRES_fmt'], categories=reversed(top_5_upres_fmt), ordered=True)
-    df_total = df_total.sort_values(['UPRES_fmt', 'Periodo'])
-
+    # 3. Mapeo de colores por categoría
+    categorias_unicas = df_total['Cat_fmt'].unique().tolist()
     paleta_contraste = [
         '#1b4332', '#1d3557', '#d4a373', '#e07a5f', '#2b2d42', 
         '#2d6a4f', '#003049', '#52b788', '#3d405b', '#40916c'
     ]
+    color_map = {cat: paleta_contraste[i % len(paleta_contraste)] for i, cat in enumerate(categorias_unicas)}
 
-    fig = px.bar(
-        df_total,
-        y=['UPRES_fmt', 'Periodo'],
-        x='Pct',
-        color='Cat_fmt',
-        orientation='h',
-        text=df_total['Pct'].apply(lambda v: f"{v:.0f}%" if v >= 6 else ""),
-        color_discrete_sequence=paleta_contraste,
-        custom_data=['Cat_fmt', 'Cant']
-    )
+    # 4. Ordenar UPRES e interactividad de ejes
+    top_5_upres_fmt = [acortar_texto_abreviado(u) for u in top_5_upres]
+    df_total['UPRES_fmt'] = pd.Categorical(df_total['UPRES_fmt'], categories=reversed(top_5_upres_fmt), ordered=True)
+    df_total = df_total.sort_values(['UPRES_fmt', 'Periodo'])
 
-    fig.update_traces(
-        textposition='inside',
-        insidetextanchor='middle',
-        hovertemplate="<b>%{y[0]} - %{y[1]}</b><br>Categoría: %{customdata[0]}<br>Proporción: %{x:.1f}%<br>Cantidad: %{customdata[1]:,} PQRS<extra></extra>"
-    )
+    fig = go.Figure()
+
+    # Añadir trazadas por cada categoría para armar el Stacked Bar
+    for cat in categorias_unicas:
+        df_cat = df_total[df_total['Cat_fmt'] == cat]
+        if df_cat.empty:
+            continue
+            
+        fig.add_trace(go.Bar(
+            y=[df_cat['UPRES_fmt'].astype(str), df_cat['Periodo']],
+            x=df_cat['Pct'],
+            name=cat,
+            orientation='h',
+            marker=dict(color=color_map.get(cat, '#1b4332')),
+            text=df_cat['Pct'].apply(lambda v: f"{v:.0f}%" if v >= 6 else ""),
+            textposition='inside',
+            insidetextanchor='middle',
+            customdata=df_cat[['Cat_fmt', 'Cant']],
+            hovertemplate="<b>%{y[0]} - %{y[1]}</b><br>Categoría: %{customdata[0]}<br>Proporción: %{x:.1f}%<br>Cantidad: %{customdata[1]:,} PQRS<extra></extra>"
+        ))
 
     fig.update_layout(
         font=dict(family="Poppins, sans-serif"),
