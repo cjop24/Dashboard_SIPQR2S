@@ -34,17 +34,14 @@ st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
 
-    /* 1. Aplicar Poppins a elementos de texto comunes */
     html, body, p, h1, h2, h3, h4, h5, h6, label, input, button, select {
         font-family: 'Poppins', sans-serif !important;
     }
 
-    /* 2. Forzar que los contenedores principales usen Poppins */
     .stApp, .main, div[data-testid="stSidebarContent"] {
         font-family: 'Poppins', sans-serif !important;
     }
 
-    /* 3. RESTAURAR FUENTE NATIVA PARA LOS ICONOS DE STREAMLIT */
     [data-testid="stHeader"] *,
     [data-testid="stSidebarCollapseButton"] *,
     [data-testid="stSidebarNav"] *,
@@ -78,7 +75,6 @@ st.markdown("""
     h1 { font-size: 1.6rem !important; font-weight: 800; color: #0f172a; }
     h3 { font-size: 1.05rem !important; font-weight: 700; color: #1e293b; margin-top: 0.8rem; }
 
-    /* Ajuste para desplegables (Multiselect) */
     div[data-baseweb="select"] ul {
         max-width: 90vw !important;
     }
@@ -97,7 +93,6 @@ st.markdown("""
         word-break: break-word !important;
     }
     
-    /* Ocultar la etiqueta vacía del selector de pestañas principal */
     div[data-testid="stRadio"] > label {
         display: none;
     }
@@ -400,7 +395,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 # -----------------------------------------------------------------------------
-# BARRAS AL 100% (TOP 5 REAL DINÁMICO POR UPRES/PERIODO + OTROS + TOTAL)
+# BARRAS AL 100% (OPTIMIZADAS)
 # -----------------------------------------------------------------------------
 def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
     st.markdown(f"### {titulo_grafico}")
@@ -412,7 +407,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         st.info("No hay datos disponibles para la comparación.")
         return
 
-    # 1. Obtener Top 5 UPRES principales por volumen total acumulado entre A y B
     tot_a = df_a_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     tot_b = df_b_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     top_5_upres = (tot_a.add(tot_b, fill_value=0)).sort_values(ascending=False).head(5).index.tolist()
@@ -420,7 +414,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
     df_a_sub = df_a_clean[df_a_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)].copy()
     df_b_sub = df_b_clean[df_b_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)].copy()
 
-    # 2. Función interna que calcula el TOP 5 PROPIO de cada UPRES/Periodo
     def procesar_periodo_dinamico(df_in, lbl):
         if df_in.empty:
             return pd.DataFrame(), pd.DataFrame()
@@ -441,16 +434,13 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
                 'Total_Abs': total_real
             })
 
-            # Identificar el Top 5 específico de esta UPRES en este Periodo
             top_5_locales = df_u[col_target].value_counts().head(5).index.tolist()
 
-            # Mapear los datos: lo que no está en el Top 5 local pasa a 'Otros'
             df_u_mod = df_u.copy()
             df_u_mod['Cat_Group'] = df_u_mod[col_target].apply(
                 lambda c: c if c in top_5_locales else 'Otros'
             )
 
-            # Conteo por categoría/motivo
             g_u = df_u_mod.groupby('Cat_Group', observed=True).size().reset_index(name='Cant')
             g_u['UNIDAD DE ASIGNACIÓN'] = upres
             g_u['UPRES_fmt'] = acortar_texto_abreviado(upres)
@@ -458,8 +448,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
             g_u['Tot_UPRES'] = total_real
             g_u['Pct'] = (g_u['Cant'] / total_real) * 100
             
-            # Asignar un rango numérico de orden local para armar la barra de izq a der:
-            # Rank 1 al 5 para las categorías locales, Rank 99 para 'Otros'
             rank_map = {cat: i+1 for i, cat in enumerate(top_5_locales)}
             rank_map['Otros'] = 99
             
@@ -485,7 +473,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         st.info("No hay datos suficientes en los rangos seleccionados.")
         return
 
-    # 3. Mapeo Global de Colores para consistencia entre barras
     categorias_unicas_todas = [c for c in df_total['Cat_fmt'].unique() if c != 'Otros']
     paleta_amplia = [
         '#1b4332', '#1d3557', '#d4a373', '#e07a5f', '#2b2d42', 
@@ -493,9 +480,8 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         '#bc4749', '#a5a58d', '#6b705c', '#386641', '#6a040f'
     ]
     color_map = {cat: paleta_amplia[i % len(paleta_amplia)] for i, cat in enumerate(categorias_unicas_todas)}
-    color_map['Otros'] = '#8d99ae'  # Gris para elementos residuales
+    color_map['Otros'] = '#8d99ae'
 
-    # 4. Ordenamiento en el eje Y por UPRES
     top_5_upres_fmt = [acortar_texto_abreviado(u) for u in top_5_upres]
     df_total['UPRES_fmt'] = pd.Categorical(df_total['UPRES_fmt'], categories=reversed(top_5_upres_fmt), ordered=True)
     df_total = df_total.sort_values(['UPRES_fmt', 'Periodo', 'Rank_Local'])
@@ -506,8 +492,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
 
     fig = go.Figure()
 
-    # 5. Agregar las trazas ordenadas por Rango Local (Top 1 -> Top 5 -> Otros)
-    # Para que el apilado quede de izquierda a derecha (Top 1 primero), iteramos por los rangos locales
     rangos_locales_existentes = sorted(df_total['Rank_Local'].unique())
 
     for rank in rangos_locales_existentes:
@@ -515,7 +499,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         if df_rank.empty:
             continue
 
-        # Sub-agrupar por la categoría específica para mantener leyenda y colores
         for cat_nombre in df_rank['Cat_fmt'].unique():
             df_sub_cat = df_rank[df_rank['Cat_fmt'] == cat_nombre]
             
@@ -534,7 +517,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
                 hovertemplate="<b>%{y[0]} - %{y[1]}</b><br>Categoría: %{customdata[0]}<br>Proporción: %{x:.1f}%<br>Cantidad: %{customdata[1]:,} PQRS<extra></extra>"
             ))
 
-    # 6. Añadir total acumulado de PQRS al final de cada barra (Eje derecho)
     if not df_totales_absolutos.empty:
         fig.add_trace(go.Scatter(
             y=[df_totales_absolutos['UPRES_fmt'].astype(str), df_totales_absolutos['Periodo']],
@@ -546,14 +528,15 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
             hoverinfo='skip'
         ))
 
+    # BARRAS MÁS GRUESAS Y MÁS JUNTAS POR UPRES
     fig.update_layout(
         font=dict(family="Poppins, sans-serif"),
         barmode='stack',
-        bargap=0.35,          # Espaciado amplio entre bloques regionales
-        bargroupgap=0.1,      # Leve espacio entre Periodo A y B
+        bargap=0.45,          # Mayor separación entre distintas UPRES
+        bargroupgap=0.02,     # Barras Periodo A y Periodo B casi pegadas (más gruesas)
         yaxis=dict(title="", tickfont=dict(size=11)),
         xaxis=dict(title="Proporción Relativa (%)", range=[0, 110]),
-        height=540,
+        height=580,
         margin=dict(l=10, r=40, t=10, b=10),
         legend=dict(orientation="h", y=-0.18, x=0, title=None, font=dict(size=10))
     )
@@ -563,37 +546,20 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
 # -----------------------------------------------------------------------------
 # 3. MÓDULOS DE RENDERIZADO
 # -----------------------------------------------------------------------------
-def render_tab_individual(df_base_global, col_mot_esp):
+def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
     st.caption("Consola Ejecutiva de Atención al Usuario - Periodo Único")
 
-    min_f = df_base_global['fecha_dt'].min().date() if not df_base_global.empty else None
-    max_f = df_base_global['fecha_dt'].max().date() if not df_base_global.empty else None
-
+    # Inicialización limpia en session_state sin reruns encadenados
     if "fecha_ind_inicio" not in st.session_state:
         st.session_state["fecha_ind_inicio"] = min_f
     if "fecha_ind_fin" not in st.session_state:
         st.session_state["fecha_ind_fin"] = max_f
 
-    def auto_ajustar_fecha_ind_fin():
-        if st.session_state["fecha_ind_inicio"] > st.session_state["fecha_ind_fin"]:
-            st.session_state["fecha_ind_fin"] = st.session_state["fecha_ind_inicio"]
-
     col_fi1, col_fi2 = st.columns(2)
     with col_fi1:
-        fecha_ind_inicio = st.date_input(
-            "Fecha Inicio", 
-            min_value=min_f, 
-            max_value=max_f,
-            key="fecha_ind_inicio",
-            on_change=auto_ajustar_fecha_ind_fin
-        )
+        fecha_ind_inicio = st.date_input("Fecha Inicio", min_value=min_f, max_value=max_f, key="fecha_ind_inicio")
     with col_fi2:
-        fecha_ind_fin = st.date_input(
-            "Fecha Fin", 
-            min_value=min_f, 
-            max_value=max_f,
-            key="fecha_ind_fin"
-        )
+        fecha_ind_fin = st.date_input("Fecha Fin", min_value=min_f, max_value=max_f, key="fecha_ind_fin")
 
     df_base = df_base_global.copy()
     if fecha_ind_inicio and fecha_ind_fin:
@@ -672,7 +638,6 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     st.markdown("---")
 
-    # DONA 1: Tipo de Solicitud
     st.markdown("""
         <h3 style='display: flex; align-items: center; gap: 8px; margin-bottom: 0px;'>
             <i class="fa-solid fa-chart-pie" style="color: #2e7d32;"></i>
@@ -707,7 +672,6 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     st.markdown("---")
 
-    # DONA 2: Medio de Recepción
     st.markdown("""
         <h3 style='display: flex; align-items: center; gap: 8px; margin-bottom: 0px;'>
             <i class="fa-solid fa-inbox" style="color: #2e7d32;"></i>
@@ -783,12 +747,10 @@ def render_tab_individual(df_base_global, col_mot_esp):
     generar_grafico_upres_apilado(df_base, col_mot_esp, "Distribución por UPRES - Motivo Específico (Top 5)")
 
 
-def render_tab_comparativo(df_base_global, col_mot_esp):
+def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
     st.caption("Comparación Analítica Cruzada entre dos Ventanas de Tiempo")
 
-    min_hist = df_base_global['fecha_dt'].min().date() if not df_base_global.empty else None
-    max_hist = df_base_global['fecha_dt'].max().date() if not df_base_global.empty else None
-
+    # Inicialización limpia en session_state sin callbacks
     if "fecha_a_inicio" not in st.session_state:
         st.session_state["fecha_a_inicio"] = min_hist
     if "fecha_a_fin" not in st.session_state:
@@ -799,52 +761,22 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
     if "fecha_b_fin" not in st.session_state:
         st.session_state["fecha_b_fin"] = max_hist
 
-    def auto_ajustar_fecha_a_fin():
-        if st.session_state["fecha_a_inicio"] > st.session_state["fecha_a_fin"]:
-            st.session_state["fecha_a_fin"] = st.session_state["fecha_a_inicio"]
-
-    def auto_ajustar_fecha_b_fin():
-        if st.session_state["fecha_b_inicio"] > st.session_state["fecha_b_fin"]:
-            st.session_state["fecha_b_fin"] = st.session_state["fecha_b_inicio"]
-
     col_p1, col_p2 = st.columns(2)
     with col_p1:
         st.markdown("### Periodo A (Base)")
         col_a1, col_a2 = st.columns(2)
         with col_a1:
-            fecha_a_inicio = st.date_input(
-                "Fecha Inicio A", 
-                min_value=min_hist, 
-                max_value=max_hist, 
-                key="fecha_a_inicio",
-                on_change=auto_ajustar_fecha_a_fin
-            )
+            fecha_a_inicio = st.date_input("Fecha Inicio A", min_value=min_hist, max_value=max_hist, key="fecha_a_inicio")
         with col_a2:
-            fecha_a_fin = st.date_input(
-                "Fecha Fin A", 
-                min_value=min_hist, 
-                max_value=max_hist, 
-                key="fecha_a_fin"
-            )
+            fecha_a_fin = st.date_input("Fecha Fin A", min_value=min_hist, max_value=max_hist, key="fecha_a_fin")
 
     with col_p2:
         st.markdown("### Periodo B (Comparado)")
         col_b1, col_b2 = st.columns(2)
         with col_b1:
-            fecha_b_inicio = st.date_input(
-                "Fecha Inicio B", 
-                min_value=min_hist, 
-                max_value=max_hist, 
-                key="fecha_b_inicio",
-                on_change=auto_ajustar_fecha_b_fin
-            )
+            fecha_b_inicio = st.date_input("Fecha Inicio B", min_value=min_hist, max_value=max_hist, key="fecha_b_inicio")
         with col_b2:
-            fecha_b_fin = st.date_input(
-                "Fecha Fin B", 
-                min_value=min_hist, 
-                max_value=max_hist, 
-                key="fecha_b_fin"
-            )
+            fecha_b_fin = st.date_input("Fecha Fin B", min_value=min_hist, max_value=max_hist, key="fecha_b_fin")
 
     if fecha_a_inicio and fecha_a_fin and fecha_b_inicio and fecha_b_fin:
         if fecha_a_inicio > fecha_a_fin or fecha_b_inicio > fecha_b_fin:
@@ -959,7 +891,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         st.markdown("---")
         
-        # BARRAS AL 100% DINÁMICAS POR UPRES Y PERIODO
         generar_barras_100pct_comparativo(
             df_a, df_b, 
             'ESPECIALIDAD_CATEGORIA', 
@@ -1017,19 +948,10 @@ elif authentication_status:
     pass_encoded = urllib.parse.quote_plus(DB_PASS)
     engine = create_engine(f"postgresql://{DB_USER}:{pass_encoded}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
 
-    def obtener_conteo_total_sql():
-        try:
-            df_c = pd.read_sql('SELECT COUNT(*) AS total FROM "V_SIPQR2S_CONSOLIDADO";', con=engine)
-            return df_c['total'].iloc[0]
-        except Exception:
-            return 0
-
-    @st.cache_data(show_spinner="Cargando datos consolidados...")
-    def cargar_datos_consolidados(total_registros):
+    @st.cache_data(ttl="1h", show_spinner="Cargando datos consolidados...")
+    def cargar_datos_consolidados():
         query = '''
             SELECT 
-                "Consecutivo Ticket",
-                "Ticket",
                 "fecha_dt",
                 "RASES",
                 "UNIDAD DE ASIGNACIÓN",
@@ -1061,8 +983,11 @@ elif authentication_status:
         return df
 
     try:
-        conteo_actual_sql = obtener_conteo_total_sql()
-        df_raw = cargar_datos_consolidados(conteo_actual_sql)
+        df_raw = cargar_datos_consolidados()
+        
+        # Obtenemos las fechas globales una sola vez
+        min_global_date = df_raw['fecha_dt'].min().date() if not df_raw.empty else None
+        max_global_date = df_raw['fecha_dt'].max().date() if not df_raw.empty else None
     except Exception as e:
         st.error(f"Error conectando a la base de datos: {e}")
         st.stop()
@@ -1182,6 +1107,6 @@ elif authentication_status:
     st.markdown("---")
 
     if tab_seleccionada == "📊 Análisis Individual":
-        render_tab_individual(df_base_global, col_mot_esp)
+        render_tab_individual(df_base_global, col_mot_esp, min_global_date, max_global_date)
     elif tab_seleccionada == "🔄 Comparativo":
-        render_tab_comparativo(df_base_global, col_mot_esp)
+        render_tab_comparativo(df_base_global, col_mot_esp, min_global_date, max_global_date)
