@@ -139,7 +139,6 @@ def acortar_texto_abreviado(texto):
         return "N/A"
     s = str(texto).upper().strip()
     
-    # Mapeos completos para frases o títulos específicos
     frases_especificas = {
         'RECONOCIMIENTOS DEL SERVICIO DE POLICÍA': 'FELICITACIÓN',
         'RECONOCIMIENTOS DEL SERVICIO DE POLICIA': 'FELICITACIÓN',
@@ -191,7 +190,6 @@ def acortar_texto_abreviado(texto):
     words_clean = [abrev.get(w, w) for w in words if abrev.get(w, w) != '']
     res = " ".join(words_clean)
     
-    # Ajustes finales por si persisten variaciones
     res = res.replace("LÍNEA DIRECTOR GENERAL", "LÍNEA DIRECTOR").replace("LINEA DIRECTOR GENERAL", "LÍNEA DIRECTOR")
     return res if res else "N/A"
 
@@ -237,6 +235,80 @@ GEO_DEPARTAMENTOS_COL = {
     'VAUPES': [1.1983, -70.1733], 'VAUPÉS': [1.1983, -70.1733],
     'VICHADA': [4.4234, -67.9239]
 }
+
+def generar_grafico_mariposa(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
+    st.markdown(f"### {titulo_grafico}")
+    
+    df_a_cat = df_a[col_target].dropna().value_counts().reset_index()
+    df_a_cat.columns = ['Categoria', 'Cant_A']
+    
+    df_b_cat = df_b[col_target].dropna().value_counts().reset_index()
+    df_b_cat.columns = ['Categoria', 'Cant_B']
+    
+    df_comp = pd.merge(df_a_cat, df_b_cat, on='Categoria', how='outer').fillna(0)
+    if df_comp.empty:
+        st.info("No hay datos disponibles para la comparación.")
+        return
+
+    df_comp['Cat_fmt'] = df_comp['Categoria'].apply(acortar_texto_abreviado)
+    df_comp['Total_Vol'] = df_comp['Cant_A'] + df_comp['Cant_B']
+    df_comp = df_comp.sort_values('Total_Vol', ascending=True)
+
+    tot_a = df_comp['Cant_A'].sum()
+    tot_b = df_comp['Cant_B'].sum()
+
+    df_comp['Pct_A'] = (df_comp['Cant_A'] / tot_a * 100) if tot_a > 0 else 0
+    df_comp['Pct_B'] = (df_comp['Cant_B'] / tot_b * 100) if tot_b > 0 else 0
+
+    fig = go.Figure()
+
+    # Barras Periodo A (A la izquierda, valores negativos para proyectar horizontalmente)
+    fig.add_trace(go.Bar(
+        y=df_comp['Cat_fmt'],
+        x=-df_comp['Pct_A'],
+        name=lbl_a,
+        orientation='h',
+        marker=dict(color=COLOR_PERIODO_A),
+        text=df_comp['Pct_A'].apply(lambda v: f"{v:.1f}%"),
+        textposition='inside',
+        hovertemplate="<b>%{y} (" + lbl_a + ")</b><br>Porcentaje: %{text}<br>Cantidad: %{customdata:,}<extra></extra>",
+        customdata=df_comp['Cant_A']
+    ))
+
+    # Barras Periodo B (A la derecha, valores positivos)
+    fig.add_trace(go.Bar(
+        y=df_comp['Cat_fmt'],
+        x=df_comp['Pct_B'],
+        name=lbl_b,
+        orientation='h',
+        marker=dict(color=COLOR_PERIODO_B),
+        text=df_comp['Pct_B'].apply(lambda v: f"{v:.1f}%"),
+        textposition='inside',
+        hovertemplate="<b>%{y} (" + lbl_b + ")</b><br>Porcentaje: %{text}<br>Cantidad: %{customdata:,}<extra></extra>",
+        customdata=df_comp['Cant_B']
+    ))
+
+    max_pct = max(df_comp['Pct_A'].max(), df_comp['Pct_B'].max()) * 1.15
+    if max_pct == 0: max_pct = 100
+
+    fig.update_layout(
+        font=dict(family="Poppins, sans-serif"),
+        barmode='overlay',
+        bargap=0.2,
+        height=340,
+        margin=dict(l=10, r=10, t=30, b=10),
+        legend=dict(orientation="h", y=1.15, x=0, title=None, font=dict(size=10)),
+        xaxis=dict(
+            range=[-max_pct, max_pct],
+            showticklabels=False,
+            zeroline=True,
+            zerolinecolor='#e5e7eb',
+            zerolinewidth=2
+        ),
+        yaxis=dict(showgrid=False)
+    )
+
+    st.plotly_chart(aplicar_touch_safe(fig), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     st.markdown(f"### {titulo_grafico}")
@@ -545,7 +617,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     st.markdown("---")
     
-    # DONA 1: Tipo de Solicitud (Porcentajes adentro, tooltip al interactuar)
+    # DONA 1: Tipo de Solicitud
     st.markdown("""
         <h3 style='display: flex; align-items: center; gap: 8px; margin-bottom: 0px;'>
             <i class="fa-solid fa-chart-pie" style="color: #2e7d32;"></i>
@@ -580,7 +652,7 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     st.markdown("---")
 
-    # DONA 2: Medio de Recepción (Porcentajes adentro, tooltip al interactuar)
+    # DONA 2: Medio de Recepción
     st.markdown("""
         <h3 style='display: flex; align-items: center; gap: 8px; margin-bottom: 0px;'>
             <i class="fa-solid fa-inbox" style="color: #2e7d32;"></i>
@@ -640,8 +712,6 @@ def render_tab_individual(df_base_global, col_mot_esp):
     df_u1_raw.columns = ['UPRES', 'Cantidad']
     df_u1 = df_u1_raw[(df_u1_raw['Cantidad'] > 0) & (df_u1_raw['UPRES'].astype(str).str.strip() != '')].copy()
     df_u1['UPRES_fmt'] = df_u1['UPRES'].apply(acortar_texto_abreviado)
-    
-    # Limitado únicamente a las 10 UPRES con más PQRS
     df_u1 = df_u1.head(10)
     
     fig_upres_simple = px.bar(
@@ -686,8 +756,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             st.warning("⚠️ En uno de los periodos, la Fecha Inicio es mayor a la Fecha Fin.")
             return
 
-        lbl_a = f"Periodo A ({fecha_a_inicio.strftime('%d/%m/%Y')} – {fecha_a_fin.strftime('%d/%m/%Y')})"
-        lbl_b = f"Periodo B ({fecha_b_inicio.strftime('%d/%m/%Y')} – {fecha_b_fin.strftime('%d/%m/%Y')})"
         lbl_a_short = "Periodo A"
         lbl_b_short = "Periodo B"
         vs_header = f"{fecha_a_inicio.strftime('%d/%m/%Y')} – {fecha_a_fin.strftime('%d/%m/%Y')} 🆚 {fecha_b_inicio.strftime('%d/%m/%Y')} – {fecha_b_fin.strftime('%d/%m/%Y')}"
@@ -716,90 +784,13 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         mapa_color_comp = {lbl_a_short: COLOR_PERIODO_A, lbl_b_short: COLOR_PERIODO_B}
 
+        # IMPLEMENTACIÓN DE GRÁFICOS DE MARIPOSA PARA MEJOR VISUALIZACIÓN MÓVIL
         col_cp1, col_cp2 = st.columns(2)
         with col_cp1:
-            st.markdown("""
-                <h3 style='display: flex; align-items: center; gap: 8px;'>
-                    <i class="fa-solid fa-list-check" style="color: #2e7d32;"></i>
-                    Comparativo Tipo de Solicitud
-                </h3>
-            """, unsafe_allow_html=True)
-            df_ts_a = df_a['Tipo de Solicitud'].dropna().value_counts().reset_index()
-            df_ts_a.columns = ['Tipo de Solicitud', lbl_a_short]
-            
-            df_ts_b = df_b['Tipo de Solicitud'].dropna().value_counts().reset_index()
-            df_ts_b.columns = ['Tipo de Solicitud', lbl_b_short]
-            
-            df_ts_comp = pd.merge(df_ts_a, df_ts_b, on='Tipo de Solicitud', how='outer').fillna(0)
-            df_ts_comp['Total_Volume'] = df_ts_comp[lbl_a_short] + df_ts_comp[lbl_b_short]
-            
-            df_ts_comp = df_ts_comp.sort_values('Total_Volume', ascending=True)
-            df_ts_comp['Tipo_fmt'] = df_ts_comp['Tipo de Solicitud'].apply(acortar_texto_abreviado)
-            orden_categorias_ts = df_ts_comp['Tipo_fmt'].tolist()
-            
-            df_ts_melt = df_ts_comp.melt(id_vars=['Tipo_fmt', 'Total_Volume'], value_vars=[lbl_a_short, lbl_b_short], var_name='Periodo', value_name='Cantidad')
-            df_ts_melt = df_ts_melt[df_ts_melt['Cantidad'] > 0]
-            
-            fig_comp_ts = px.bar(
-                df_ts_melt, 
-                x='Cantidad', 
-                y='Tipo_fmt', 
-                color='Periodo', 
-                barmode='group', 
-                orientation='h', 
-                text_auto=',d', 
-                color_discrete_map=mapa_color_comp
-            )
-            fig_comp_ts.update_layout(
-                font=dict(family="Poppins, sans-serif"),
-                height=320, 
-                margin=dict(l=10, r=10, t=30, b=10), 
-                legend=dict(orientation="h", y=1.15, x=0, title=None, font=dict(size=10)),
-                yaxis=dict(categoryorder='array', categoryarray=orden_categorias_ts)
-            )
-            st.plotly_chart(aplicar_touch_safe(fig_comp_ts), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+            generar_grafico_mariposa(df_a, df_b, 'Tipo de Solicitud', "Comparativo Tipo de Solicitud", lbl_a=lbl_a_short, lbl_b=lbl_b_short)
 
         with col_cp2:
-            st.markdown("""
-                <h3 style='display: flex; align-items: center; gap: 8px;'>
-                    <i class="fa-solid fa-headset" style="color: #2e7d32;"></i>
-                    Comparativo Medio de Recepción
-                </h3>
-            """, unsafe_allow_html=True)
-            df_mr_a = df_a['Medio de Recepción'].dropna().value_counts().reset_index()
-            df_mr_a.columns = ['Medio de Recepción', lbl_a_short]
-            
-            df_mr_b = df_b['Medio de Recepción'].dropna().value_counts().reset_index()
-            df_mr_b.columns = ['Medio de Recepción', lbl_b_short]
-            
-            df_mr_comp = pd.merge(df_mr_a, df_mr_b, on='Medio de Recepción', how='outer').fillna(0)
-            df_mr_comp['Total_Volume'] = df_mr_comp[lbl_a_short] + df_mr_comp[lbl_b_short]
-            
-            df_mr_comp = df_mr_comp.sort_values('Total_Volume', ascending=True)
-            df_mr_comp['Medio_fmt'] = df_mr_comp['Medio de Recepción'].apply(acortar_texto_abreviado)
-            orden_categorias_mr = df_mr_comp['Medio_fmt'].tolist()
-            
-            df_mr_melt = df_mr_comp.melt(id_vars=['Medio_fmt', 'Total_Volume'], value_vars=[lbl_a_short, lbl_b_short], var_name='Periodo', value_name='Cantidad')
-            df_mr_melt = df_mr_melt[df_mr_melt['Cantidad'] > 0]
-            
-            fig_comp_mr = px.bar(
-                df_mr_melt, 
-                x='Cantidad', 
-                y='Medio_fmt', 
-                color='Periodo', 
-                barmode='group', 
-                orientation='h', 
-                text_auto=',d', 
-                color_discrete_map=mapa_color_comp
-            )
-            fig_comp_mr.update_layout(
-                font=dict(family="Poppins, sans-serif"),
-                height=320, 
-                margin=dict(l=10, r=10, t=30, b=10), 
-                legend=dict(orientation="h", y=1.15, x=0, title=None, font=dict(size=10)),
-                yaxis=dict(categoryorder='array', categoryarray=orden_categorias_mr)
-            )
-            st.plotly_chart(aplicar_touch_safe(fig_comp_mr), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+            generar_grafico_mariposa(df_a, df_b, 'Medio de Recepción', "Comparativo Medio de Recepción", lbl_a=lbl_a_short, lbl_b=lbl_b_short)
 
         st.markdown("---")
 
@@ -852,7 +843,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         df_comp_upres_simple = pd.concat([df_u_comp_a, df_u_comp_b])
         df_comp_upres_simple = df_comp_upres_simple[(df_comp_upres_simple['Cantidad'] > 0) & (df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].astype(str).str.strip() != '')].copy()
         
-        # Filtrar exclusivamente las 10 UPRES con mayor volumen combinado en ambos periodos
         totales_comp_upres = df_comp_upres_simple.groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Cantidad'].sum().reset_index(name='Total')
         top_10_comp_upres = totales_comp_upres.sort_values('Total', ascending=False).head(10)['UNIDAD DE ASIGNACIÓN'].tolist()
         df_comp_upres_simple = df_comp_upres_simple[df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].isin(top_10_comp_upres)].copy()
@@ -890,7 +880,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         )
 
 # -----------------------------------------------------------------------------
-# 4. AUTENTICACIÓN Y CARGA PRINCIPAL (OPCIÓN 3 INTEGRADA)
+# 4. AUTENTICACIÓN Y CARGA PRINCIPAL
 # -----------------------------------------------------------------------------
 with open('config.yaml') as file:
     config = yaml.load(file, Loader=SafeLoader)
@@ -930,7 +920,6 @@ elif authentication_status:
     pass_encoded = urllib.parse.quote_plus(DB_PASS)
     engine = create_engine(f"postgresql://{DB_USER}:{pass_encoded}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
 
-    # OPCIÓN 3: Función ultra rápida sin caché para verificar la cantidad actual de registros en SQL
     def obtener_conteo_total_sql():
         try:
             df_c = pd.read_sql('SELECT COUNT(*) AS total FROM "V_SIPQR2S_CONSOLIDADO";', con=engine)
@@ -938,8 +927,6 @@ elif authentication_status:
         except Exception:
             return 0
 
-    # OPCIÓN 3: Carga cacheada vinculada a 'total_registros'. Si 'total_registros' cambia en SQL,
-    # la caché se invalida e ignora de inmediato para todos los usuarios.
     @st.cache_data(show_spinner="Cargando datos consolidados...")
     def cargar_datos_consolidados(total_registros):
         query = '''
@@ -977,7 +964,6 @@ elif authentication_status:
         return df
 
     try:
-        # Obtenemos el conteo dinámico actual y lo enviamos a la función cacheada
         conteo_actual_sql = obtener_conteo_total_sql()
         df_raw = cargar_datos_consolidados(conteo_actual_sql)
     except Exception as e:
@@ -1075,7 +1061,7 @@ elif authentication_status:
     if sel_medios:
         df_base_global = df_base_global[df_base_global['Medio de Recepción'].isin(sel_medios)]
 
-    # Header Principal con Icono Estilizado Font Awesome
+    # Header Principal
     st.markdown("""
         <h1 style='display: flex; align-items: center; gap: 12px; margin-bottom: 0px;'>
             <i class="fa-solid fa-shield-halved" style="color: #1b5e20;"></i>
