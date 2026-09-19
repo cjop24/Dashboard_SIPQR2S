@@ -410,7 +410,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
     tot_b_absoluto = df_b_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     tot_a_absoluto = df_a_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     
-    # Se consolida priorizando el volumen total de registros de Periodo B
     tot_combinado = tot_b_absoluto.add(tot_a_absoluto * 0, fill_value=0)
     upres_ordenadas_b = tot_combinado.sort_values(ascending=False).head(5).index.tolist()
 
@@ -846,8 +845,13 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
         df_comp_rases['RASES_fmt'] = df_comp_rases['RASES'].apply(acortar_texto_abreviado)
 
         fig_comp_rases = px.bar(
-            df_comp_rases, x='RASES_fmt', y='Cantidad', color='Periodo', barmode='group',
-            text_auto=',d', color_discrete_map=mapa_color_comp
+            df_comp_rases, 
+            x='RASES_fmt', 
+            y='Cantidad', 
+            color='Periodo', 
+            barmode='group',
+            text_auto=',d', 
+            color_discrete_map=mapa_color_comp
         )
         fig_comp_rases.update_layout(
             font=dict(family="Poppins, sans-serif"), 
@@ -883,8 +887,13 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
         df_comp_upres_simple['UPRES_fmt'] = df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
 
         fig_comp_upres_simple = px.bar(
-            df_comp_upres_simple, x='UPRES_fmt', y='Cantidad', color='Periodo', barmode='group',
-            text_auto=',d', color_discrete_map=mapa_color_comp
+            df_comp_upres_simple, 
+            x='UPRES_fmt', 
+            y='Cantidad', 
+            color='Periodo', 
+            barmode='group',
+            text_auto=',d', 
+            color_discrete_map=mapa_color_comp
         )
         fig_comp_upres_simple.update_layout(
             font=dict(family="Poppins, sans-serif"), 
@@ -898,7 +907,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
 
         st.markdown("---")
 
-        # 1. Gráfico comparativo de Categoría Salud (Ordenado por total del Periodo B)
+        # 1. Gráfico comparativo de Categoría Salud
         generar_barras_100pct_comparativo(
             df_a, df_b, 
             'ESPECIALIDAD_CATEGORIA', 
@@ -907,7 +916,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
             lbl_b=lbl_b_short
         )
         
-        # 2. Gráfico comparativo de Motivo Específico (Ordenado por total del Periodo B)
+        # 2. Gráfico comparativo de Motivo Específico
         generar_barras_100pct_comparativo(
             df_a, df_b, 
             col_mot_esp, 
