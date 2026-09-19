@@ -400,88 +400,81 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 # -----------------------------------------------------------------------------
-# OPCIÓN 1: MAPA DE CALOR INTERACTIVO POR PERIODO (RESPONSIVE)
+# OPCIÓN 2: BARRAS HORIZONTALMENTE NORMALIZADAS AL 100% (COMPARATIVO)
 # -----------------------------------------------------------------------------
-def generar_heatmap_upres_interactivo(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
+def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
     st.markdown(f"### {titulo_grafico}")
-    
-    # Selector dinámico de modo para evitar amontonamiento de columnas
-    col_sel1, col_sel2 = st.columns([2, 1])
-    with col_sel1:
-        modo_vista = st.segmented_control(
-            "Ver matriz de datos:",
-            options=[lbl_a, lbl_b, "Diferencia (B - A)"],
-            default=lbl_a,
-            key=f"seg_heat_{col_target}"
-        )
-    
+
     df_a_clean = df_a.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
     df_b_clean = df_b.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
 
     if df_a_clean.empty and df_b_clean.empty:
-        st.info("No hay datos suficientes para generar el Mapa de Calor.")
+        st.info("No hay datos disponibles para la comparación.")
         return
 
-    # Top 5 UPRES y Categorías
+    # 1. Identificar Top 5 UPRES principales acumuladas
     tot_a = df_a_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     tot_b = df_b_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     top_5_upres = (tot_a.add(tot_b, fill_value=0)).sort_values(ascending=False).head(5).index.tolist()
 
-    df_a_sub = df_a_clean[df_a_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)]
-    df_b_sub = df_b_clean[df_b_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)]
+    # 2. Función interna para procesar las proporciones (%) por periodo
+    def procesar_periodo(df_in, lbl):
+        df_sub = df_in[df_in['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)].copy()
+        if df_sub.empty:
+            return pd.DataFrame()
+        g = df_sub.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant')
+        g['Tot_UPRES'] = g.groupby('UNIDAD DE ASIGNACIÓN')['Cant'].transform('sum')
+        g['Pct'] = (g['Cant'] / g['Tot_UPRES']) * 100
+        g['UPRES_Label'] = g['UNIDAD DE ASIGNACIÓN'].apply(lambda u: f"{acortar_texto_abreviado(u)} ({lbl})")
+        g['Cat_fmt'] = g[col_target].apply(acortar_texto_abreviado)
+        return g
 
-    cat_a = df_a_sub[col_target].value_counts()
-    cat_b = df_b_sub[col_target].value_counts()
-    top_5_cats = (cat_a.add(cat_b, fill_value=0)).sort_values(ascending=False).head(5).index.tolist()
+    df_p1 = procesar_periodo(df_a_clean, lbl_a)
+    df_p2 = procesar_periodo(df_b_clean, lbl_b)
+    df_total = pd.concat([df_p1, df_p2])
 
-    # Construcción de Matrices Pivote
-    g_a = df_a_sub[df_a_sub[col_target].isin(top_5_cats)].groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cantidad')
-    g_a['UPRES_fmt'] = g_a['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
-    g_a['Cat_fmt'] = g_a[col_target].apply(acortar_texto_abreviado)
-    piv_a = g_a.pivot(index='UPRES_fmt', columns='Cat_fmt', values='Cantidad').fillna(0)
+    if df_total.empty:
+        st.info("No hay datos suficientes en el rango seleccionado.")
+        return
 
-    g_b = df_b_sub[df_b_sub[col_target].isin(top_5_cats)].groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cantidad')
-    g_b['UPRES_fmt'] = g_b['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
-    g_b['Cat_fmt'] = g_b[col_target].apply(acortar_texto_abreviado)
-    piv_b = g_b.pivot(index='UPRES_fmt', columns='Cat_fmt', values='Cantidad').fillna(0)
+    # 3. Ordenar el eje Y en parejas (UPRES - Periodo A / UPRES - Periodo B)
+    orden_y = []
+    for u in reversed(top_5_upres):
+        u_fmt = acortar_texto_abreviado(u)
+        orden_y.append(f"{u_fmt} ({lbl_b})")
+        orden_y.append(f"{u_fmt} ({lbl_a})")
 
-    # Reordenar ejes uniformemente
-    upres_order = [acortar_texto_abreviado(u) for u in top_5_upres]
-    cats_order = [acortar_texto_abreviado(c) for c in top_5_cats]
+    # Paleta cromática distinguible
+    paleta_contraste = [
+        '#1b4332', '#1d3557', '#d4a373', '#e07a5f', '#2b2d42', 
+        '#2d6a4f', '#003049', '#52b788', '#3d405b', '#40916c'
+    ]
 
-    piv_a = piv_a.reindex(index=upres_order, columns=cats_order).fillna(0)
-    piv_b = piv_b.reindex(index=upres_order, columns=cats_order).fillna(0)
-
-    # Selección de datos según la pestaña activa
-    if modo_vista == lbl_a:
-        df_plot = piv_a
-        escala_color = "Greens"
-    elif modo_vista == lbl_b:
-        df_plot = piv_b
-        escala_color = "Reds"
-    else:
-        df_plot = piv_b - piv_a
-        escala_color = "RdBu_r"
-
-    fig = px.imshow(
-        df_plot.values,
-        labels=dict(x="Categoría / Motivo Específico", y="UPRES", color="PQRS"),
-        x=df_plot.columns,
-        y=df_plot.index,
-        color_continuous_scale=escala_color,
-        text_auto=True
+    fig = px.bar(
+        df_total,
+        y='UPRES_Label',
+        x='Pct',
+        color='Cat_fmt',
+        orientation='h',
+        text=df_total['Pct'].apply(lambda v: f"{v:.0f}%" if v >= 5 else ""),
+        color_discrete_sequence=paleta_contraste,
+        custom_data=['Cat_fmt', 'Cant']
     )
 
     fig.update_traces(
-        texttemplate="%{z:+,d}" if modo_vista == "Diferencia (B - A)" else "%{z:,d}",
-        hovertemplate="<b>UPRES:</b> %{y}<br><b>Motivo:</b> %{x}<br><b>Valor:</b> %{z} PQRS<extra></extra>"
+        textposition='inside',
+        insidetextanchor='middle',
+        hovertemplate="<b>%{y}</b><br>Categoría: %{customdata[0]}<br>Porcentaje: %{x:.1f}%<br>Cantidad: %{customdata[1]:,} PQRS<extra></extra>"
     )
 
     fig.update_layout(
         font=dict(family="Poppins, sans-serif"),
-        height=360,
+        barmode='stack',
+        yaxis=dict(categoryorder='array', categoryarray=orden_y, title=""),
+        xaxis=dict(title="Proporción Relativa (%)", range=[0, 100]),
+        height=480,
         margin=dict(l=10, r=10, t=10, b=10),
-        xaxis=dict(tickangle=-25)
+        legend=dict(orientation="h", y=-0.18, x=0, title=None, font=dict(size=10))
     )
 
     st.plotly_chart(aplicar_touch_safe(fig), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
@@ -885,19 +878,19 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         st.markdown("---")
         
-        # MAPAS DE CALOR INTERACTIVOS (OPCIÓN 1)
-        generar_heatmap_upres_interactivo(
+        # APLICACIÓN DE LA OPCIÓN 2: BARRAS NORMALIZADAS AL 100%
+        generar_barras_100pct_comparativo(
             df_a, df_b, 
             'ESPECIALIDAD_CATEGORIA', 
-            "Mapa de Calor: Comparativo UPRES vs Categoría Salud (Top 5)",
+            "Comparativo Distribución (%) por UPRES - Categoría Salud (Top 5)",
             lbl_a=lbl_a_short,
             lbl_b=lbl_b_short
         )
         
-        generar_heatmap_upres_interactivo(
+        generar_barras_100pct_comparativo(
             df_a, df_b, 
             col_mot_esp, 
-            "Mapa de Calor: Comparativo UPRES vs Motivo Específico (Top 5)",
+            "Comparativo Distribución (%) por UPRES - Motivo Específico (Top 5)",
             lbl_a=lbl_a_short,
             lbl_b=lbl_b_short
         )
