@@ -262,7 +262,6 @@ def generar_grafico_mariposa(df_a, df_b, col_target, titulo_grafico, lbl_a="Peri
 
     fig = go.Figure()
 
-    # Barras Periodo A (A la izquierda, valores negativos para proyectar horizontalmente)
     fig.add_trace(go.Bar(
         y=df_comp['Cat_fmt'],
         x=-df_comp['Pct_A'],
@@ -275,7 +274,6 @@ def generar_grafico_mariposa(df_a, df_b, col_target, titulo_grafico, lbl_a="Peri
         customdata=df_comp['Cant_A']
     ))
 
-    # Barras Periodo B (A la derecha, valores positivos)
     fig.add_trace(go.Bar(
         y=df_comp['Cat_fmt'],
         x=df_comp['Pct_B'],
@@ -521,20 +519,30 @@ def render_tab_individual(df_base_global, col_mot_esp):
 
     min_f = df_base_global['fecha_dt'].min().date() if not df_base_global.empty else None
     max_f = df_base_global['fecha_dt'].max().date() if not df_base_global.empty else None
-    
+
+    # Inicialización de estado para las fechas del Análisis Individual
+    if "fecha_ind_inicio" not in st.session_state:
+        st.session_state["fecha_ind_inicio"] = min_f
+    if "fecha_ind_fin" not in st.session_state:
+        st.session_state["fecha_ind_fin"] = max_f
+
+    def auto_ajustar_fecha_ind_fin():
+        # Si la fecha de inicio supera la fecha de fin actual, la fecha fin se ajusta automáticamente
+        if st.session_state["fecha_ind_inicio"] > st.session_state["fecha_ind_fin"]:
+            st.session_state["fecha_ind_fin"] = st.session_state["fecha_ind_inicio"]
+
     col_fi1, col_fi2 = st.columns(2)
     with col_fi1:
         fecha_ind_inicio = st.date_input(
             "Fecha Inicio", 
-            value=min_f, 
             min_value=min_f, 
             max_value=max_f,
-            key="fecha_ind_inicio"
+            key="fecha_ind_inicio",
+            on_change=auto_ajustar_fecha_ind_fin
         )
     with col_fi2:
         fecha_ind_fin = st.date_input(
             "Fecha Fin", 
-            value=max_f, 
             min_value=min_f, 
             max_value=max_f,
             key="fecha_ind_fin"
@@ -734,22 +742,63 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
     min_hist = df_base_global['fecha_dt'].min().date() if not df_base_global.empty else None
     max_hist = df_base_global['fecha_dt'].max().date() if not df_base_global.empty else None
 
+    # Inicialización de estado para los periodos A y B del Comparativo
+    if "fecha_a_inicio" not in st.session_state:
+        st.session_state["fecha_a_inicio"] = min_hist
+    if "fecha_a_fin" not in st.session_state:
+        st.session_state["fecha_a_fin"] = min_hist + pd.Timedelta(days=30) if min_hist else max_hist
+
+    if "fecha_b_inicio" not in st.session_state:
+        st.session_state["fecha_b_inicio"] = max_hist - pd.Timedelta(days=30) if max_hist else min_hist
+    if "fecha_b_fin" not in st.session_state:
+        st.session_state["fecha_b_fin"] = max_hist
+
+    def auto_ajustar_fecha_a_fin():
+        if st.session_state["fecha_a_inicio"] > st.session_state["fecha_a_fin"]:
+            st.session_state["fecha_a_fin"] = st.session_state["fecha_a_inicio"]
+
+    def auto_ajustar_fecha_b_fin():
+        if st.session_state["fecha_b_inicio"] > st.session_state["fecha_b_fin"]:
+            st.session_state["fecha_b_fin"] = st.session_state["fecha_b_inicio"]
+
     col_p1, col_p2 = st.columns(2)
     with col_p1:
         st.markdown("### Periodo A (Base)")
         col_a1, col_a2 = st.columns(2)
         with col_a1:
-            fecha_a_inicio = st.date_input("Fecha Inicio A", value=min_hist, min_value=min_hist, max_value=max_hist, key="fecha_a_inicio")
+            fecha_a_inicio = st.date_input(
+                "Fecha Inicio A", 
+                min_value=min_hist, 
+                max_value=max_hist, 
+                key="fecha_a_inicio",
+                on_change=auto_ajustar_fecha_a_fin
+            )
         with col_a2:
-            fecha_a_fin = st.date_input("Fecha Fin A", value=min_hist + pd.Timedelta(days=30) if min_hist else max_hist, min_value=min_hist, max_value=max_hist, key="fecha_a_fin")
+            fecha_a_fin = st.date_input(
+                "Fecha Fin A", 
+                min_value=min_hist, 
+                max_value=max_hist, 
+                key="fecha_a_fin"
+            )
 
     with col_p2:
         st.markdown("### Periodo B (Comparado)")
         col_b1, col_b2 = st.columns(2)
         with col_b1:
-            fecha_b_inicio = st.date_input("Fecha Inicio B", value=max_hist - pd.Timedelta(days=30) if max_hist else min_hist, min_value=min_hist, max_value=max_hist, key="fecha_b_inicio")
+            fecha_b_inicio = st.date_input(
+                "Fecha Inicio B", 
+                min_value=min_hist, 
+                max_value=max_hist, 
+                key="fecha_b_inicio",
+                on_change=auto_ajustar_fecha_b_fin
+            )
         with col_b2:
-            fecha_b_fin = st.date_input("Fecha Fin B", value=max_hist, min_value=min_hist, max_value=max_hist, key="fecha_b_fin")
+            fecha_b_fin = st.date_input(
+                "Fecha Fin B", 
+                min_value=min_hist, 
+                max_value=max_hist, 
+                key="fecha_b_fin"
+            )
 
     if fecha_a_inicio and fecha_a_fin and fecha_b_inicio and fecha_b_fin:
         if fecha_a_inicio > fecha_a_fin or fecha_b_inicio > fecha_b_fin:
@@ -784,7 +833,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         mapa_color_comp = {lbl_a_short: COLOR_PERIODO_A, lbl_b_short: COLOR_PERIODO_B}
 
-        # IMPLEMENTACIÓN DE GRÁFICOS DE MARIPOSA PARA MEJOR VISUALIZACIÓN MÓVIL
         col_cp1, col_cp2 = st.columns(2)
         with col_cp1:
             generar_grafico_mariposa(df_a, df_b, 'Tipo de Solicitud', "Comparativo Tipo de Solicitud", lbl_a=lbl_a_short, lbl_b=lbl_b_short)
