@@ -45,7 +45,7 @@ st.markdown("""
         font-family: 'Poppins', sans-serif !important;
     }
 
-    /* 3. RESTAURAR FUENTE NATIVA PARA LOS ICONOS DE STREAMLIT (Línea clave) */
+    /* 3. RESTAURAR FUENTE NATIVA PARA LOS ICONOS DE STREAMLIT */
     [data-testid="stHeader"] *,
     [data-testid="stSidebarCollapseButton"] *,
     [data-testid="stSidebarNav"] *,
@@ -804,7 +804,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         )
 
 # -----------------------------------------------------------------------------
-# 4. AUTENTICACIÓN Y CARGA PRINCIPAL
+# 4. AUTENTICACIÓN Y CARGA PRINCIPAL (OPCIÓN 3 INTEGRADA)
 # -----------------------------------------------------------------------------
 with open('config.yaml') as file:
     config = yaml.load(file, Loader=SafeLoader)
@@ -844,8 +844,18 @@ elif authentication_status:
     pass_encoded = urllib.parse.quote_plus(DB_PASS)
     engine = create_engine(f"postgresql://{DB_USER}:{pass_encoded}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
 
-    @st.cache_data(ttl=43200, show_spinner="Cargando datos optimizados...")
-    def cargar_datos_consolidados():
+    # OPCIÓN 3: Función ultra rápida sin caché para verificar la cantidad actual de registros en SQL
+    def obtener_conteo_total_sql():
+        try:
+            df_c = pd.read_sql('SELECT COUNT(*) AS total FROM "V_SIPQR2S_CONSOLIDADO";', con=engine)
+            return df_c['total'].iloc[0]
+        except Exception:
+            return 0
+
+    # OPCIÓN 3: Carga cacheada vinculada a 'total_registros'. Si 'total_registros' cambia en SQL,
+    # la caché se invalida e ignora de inmediato para todos los usuarios.
+    @st.cache_data(show_spinner="Cargando datos consolidados...")
+    def cargar_datos_consolidados(total_registros):
         query = '''
             SELECT 
                 "Consecutivo Ticket",
@@ -881,7 +891,9 @@ elif authentication_status:
         return df
 
     try:
-        df_raw = cargar_datos_consolidados()
+        # Obtenemos el conteo dinámico actual y lo enviamos a la función cacheada
+        conteo_actual_sql = obtener_conteo_total_sql()
+        df_raw = cargar_datos_consolidados(conteo_actual_sql)
     except Exception as e:
         st.error(f"Error conectando a la base de datos: {e}")
         st.stop()
