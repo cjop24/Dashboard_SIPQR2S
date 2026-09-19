@@ -1,24 +1,23 @@
-import os
 import json
-import streamlit as st
-import pandas as pd
+import os
+import re
+import urllib.parse
+from dotenv import load_dotenv
 import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from sqlalchemy import create_engine
-import urllib.parse
+import streamlit as st
 import streamlit_authenticator as stauth
+from sqlalchemy import create_engine
 import yaml
 from yaml.loader import SafeLoader
-import re
-from dotenv import load_dotenv
 
-# Cargar variables de entorno desde .env local
+# -----------------------------------------------------------------------------
+# 1. CONFIGURACIÓN INICIAL DE STREAMLIT Y ESTILOS
+# -----------------------------------------------------------------------------
 load_dotenv()
 
-# -----------------------------------------------------------------------------
-# 1. CONFIGURACIÓN RESPONSIVA Y ESTILOS DE FUENTE E ICONOS
-# -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Dashboard SIPQR2S",
     page_icon="🛡️",
@@ -26,7 +25,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Inyección de Font Awesome y Google Fonts (Poppins)
+# Inyección CSS: Font Awesome y Google Fonts (Poppins)
 st.markdown("""
     <!-- Font Awesome CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -42,6 +41,7 @@ st.markdown("""
         font-family: 'Poppins', sans-serif !important;
     }
 
+    /* Restaurar fuente nativa para iconos de Streamlit */
     [data-testid="stHeader"] *,
     [data-testid="stSidebarCollapseButton"] *,
     [data-testid="stSidebarNav"] *,
@@ -100,12 +100,54 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 2. FUNCIONES AUXILIARES Y FORMATO
+# 2. CONSTANTES Y FUNCIONES AUXILIARES
 # -----------------------------------------------------------------------------
 ARCH_PREFERENCIAS = "preferencias_usuario.json"
-
 COLOR_PERIODO_A = '#2e7d32'  # Verde RASES
 COLOR_PERIODO_B = '#c62828'  # Rojo RASES
+
+CONFIG_PLOTLY_TOUCH = {
+    'displayModeBar': False,
+    'scrollZoom': False,
+    'doubleClick': False,
+    'showAxisDragHandles': False
+}
+
+GEO_DEPARTAMENTOS_COL = {
+    'BOGOTA': [4.6097, -74.0817], 'BOGOTÁ': [4.6097, -74.0817], 'BOGOTÁ D.C.': [4.6097, -74.0817], 'BOGOTA D.C.': [4.6097, -74.0817],
+    'ANTIOQUIA': [6.5569, -75.8302], 'URABA': [6.5569, -75.8302], 'URABÁ': [6.5569, -75.8302], 
+    'REGION URABA': [6.5569, -75.8302], 'REGIÓN URABÁ': [6.5569, -75.8302],
+    'ATLANTICO': [10.6317, -74.9613], 'ATLÁNTICO': [10.6317, -74.9613],
+    'BOLIVAR': [8.6707, -74.0300], 'BOLÍVAR': [8.6707, -74.0300],
+    'BOYACA': [5.7125, -72.9323], 'BOYACÁ': [5.7125, -72.9323],
+    'CUNDINAMARCA': [5.0260, -74.0000],
+    'VALLE': [3.8000, -76.5000], 'VALLE DEL CAUCA': [3.8000, -76.5000],
+    'SANTANDER': [6.6437, -73.6486],
+    'CALDAS': [5.0689, -75.5174], 
+    'CAUCA': [2.4448, -76.6147],
+    'CESAR': [10.4631, -73.2532], 
+    'CORDOBA': [8.7479, -75.8814], 'CÓRDOBA': [8.7479, -75.8814],
+    'HUILA': [2.9273, -75.2819],
+    'MAGDALENA': [10.4114, -74.4056], 
+    'META': [3.2719, -73.0877], 
+    'NARIÑO': [1.5218, -77.6025],
+    'NORTE DE SANTANDER': [8.0322, -73.0000], 
+    'QUINDIO': [4.5339, -75.6811], 'QUINDÍO': [4.5339, -75.6811],
+    'RISARALDA': [4.8133, -75.6961],
+    'TOLIMA': [4.0000, -75.2500], 
+    'AMAZONAS': [-4.2153, -69.9406], 
+    'ARAUCA': [7.0847, -70.7591],
+    'CASANARE': [5.3378, -72.3959], 
+    'CHOCO': [5.6947, -76.6611], 'CHOCÓ': [5.6947, -76.6611],
+    'GUAINIA': [2.5819, -67.5819], 'GUAINÍA': [2.5819, -67.5819],
+    'GUAVIARE': [2.5648, -72.6459], 
+    'LA GUAJIRA': [11.5444, -72.9072], 
+    'PUTUMAYO': [0.4326, -75.8814],
+    'SAN ANDRES': [12.5847, -81.7006], 'SAN ANDRÉS': [12.5847, -81.7006],
+    'SUCRE': [9.3047, -75.3978], 
+    'VAUPES': [1.1983, -70.1733], 'VAUPÉS': [1.1983, -70.1733],
+    'VICHADA': [4.4234, -67.9239]
+}
 
 def cargar_preferencias():
     if os.path.exists(ARCH_PREFERENCIAS):
@@ -190,52 +232,11 @@ def acortar_texto_abreviado(texto):
     words_clean = [abrev.get(w, w) for w in words if abrev.get(w, w) != '']
     res = " ".join(words_clean)
     
-    res = res.replace("LÍNEA DIRECTOR GENERAL", "LÍNEA DIRECTOR").replace("LINEA DIRECTOR GENERAL", "LÍNEA DIRECTOR")
-    return res if res else "N/A"
+    return res.replace("LÍNEA DIRECTOR GENERAL", "LÍNEA DIRECTOR").replace("LINEA DIRECTOR GENERAL", "LÍNEA DIRECTOR") if res else "N/A"
 
-CONFIG_PLOTLY_TOUCH = {
-    'displayModeBar': False,
-    'scrollZoom': False,
-    'doubleClick': False,
-    'showAxisDragHandles': False
-}
-
-GEO_DEPARTAMENTOS_COL = {
-    'BOGOTA': [4.6097, -74.0817], 'BOGOTÁ': [4.6097, -74.0817], 'BOGOTÁ D.C.': [4.6097, -74.0817], 'BOGOTA D.C.': [4.6097, -74.0817],
-    'ANTIOQUIA': [6.5569, -75.8302], 'URABA': [6.5569, -75.8302], 'URABÁ': [6.5569, -75.8302], 
-    'REGION URABA': [6.5569, -75.8302], 'REGIÓN URABÁ': [6.5569, -75.8302],
-    'ATLANTICO': [10.6317, -74.9613], 'ATLÁNTICO': [10.6317, -74.9613],
-    'BOLIVAR': [8.6707, -74.0300], 'BOLÍVAR': [8.6707, -74.0300],
-    'BOYACA': [5.7125, -72.9323], 'BOYACÁ': [5.7125, -72.9323],
-    'CUNDINAMARCA': [5.0260, -74.0000],
-    'VALLE': [3.8000, -76.5000], 'VALLE DEL CAUCA': [3.8000, -76.5000],
-    'SANTANDER': [6.6437, -73.6486],
-    'CALDAS': [5.0689, -75.5174], 
-    'CAUCA': [2.4448, -76.6147],
-    'CESAR': [10.4631, -73.2532], 
-    'CORDOBA': [8.7479, -75.8814], 'CÓRDOBA': [8.7479, -75.8814],
-    'HUILA': [2.9273, -75.2819],
-    'MAGDALENA': [10.4114, -74.4056], 
-    'META': [3.2719, -73.0877], 
-    'NARIÑO': [1.5218, -77.6025],
-    'NORTE DE SANTANDER': [8.0322, -73.0000], 
-    'QUINDIO': [4.5339, -75.6811], 'QUINDÍO': [4.5339, -75.6811],
-    'RISARALDA': [4.8133, -75.6961],
-    'TOLIMA': [4.0000, -75.2500], 
-    'AMAZONAS': [-4.2153, -69.9406], 
-    'ARAUCA': [7.0847, -70.7591],
-    'CASANARE': [5.3378, -72.3959], 
-    'CHOCO': [5.6947, -76.6611], 'CHOCÓ': [5.6947, -76.6611],
-    'GUAINIA': [2.5819, -67.5819], 'GUAINÍA': [2.5819, -67.5819],
-    'GUAVIARE': [2.5648, -72.6459], 
-    'LA GUAJIRA': [11.5444, -72.9072], 
-    'PUTUMAYO': [0.4326, -75.8814],
-    'SAN ANDRES': [12.5847, -81.7006], 'SAN ANDRÉS': [12.5847, -81.7006],
-    'SUCRE': [9.3047, -75.3978], 
-    'VAUPES': [1.1983, -70.1733], 'VAUPÉS': [1.1983, -70.1733],
-    'VICHADA': [4.4234, -67.9239]
-}
-
+# -----------------------------------------------------------------------------
+# 3. GENERACIÓN DE GRÁFICOS
+# -----------------------------------------------------------------------------
 def generar_grafico_mariposa(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
     st.markdown(f"### {titulo_grafico}")
     
@@ -287,7 +288,8 @@ def generar_grafico_mariposa(df_a, df_b, col_target, titulo_grafico, lbl_a="Peri
     ))
 
     max_pct = max(df_comp['Pct_A'].max(), df_comp['Pct_B'].max()) * 1.15
-    if max_pct == 0: max_pct = 100
+    if max_pct == 0: 
+        max_pct = 100
 
     fig.update_layout(
         font=dict(family="Poppins, sans-serif"),
@@ -394,9 +396,6 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     
     st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-# -----------------------------------------------------------------------------
-# BARRAS AL 100% (UPRES ORDENADAS DE MAYOR A MENOR SEGÚN PERIODO B)
-# -----------------------------------------------------------------------------
 def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
     st.markdown(f"### {titulo_grafico}")
 
@@ -407,12 +406,12 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         st.info("No hay datos disponibles para la comparación.")
         return
 
-    # 1. Obtener Top 5 UPRES ordenadas estrictamente de MAYOR A MENOR según el PERIODO B
-    tot_b = df_b_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
-    tot_a = df_a_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
+    # 1. Obtener Top 5 UPRES ordenadas estrictamente por el TOTAL ABSOLUTO del PERIODO B
+    tot_b_absoluto = df_b_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
+    tot_a_absoluto = df_a_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     
-    # Se consolida priorizando el volumen de Periodo B
-    upres_ordenadas_b = tot_b.add(tot_a * 0.00001, fill_value=0).sort_values(ascending=False).head(5).index.tolist()
+    tot_combinado = tot_b_absoluto.add(tot_a_absoluto * 0, fill_value=0)
+    upres_ordenadas_b = tot_combinado.sort_values(ascending=False).head(5).index.tolist()
 
     df_a_sub = df_a_clean[df_a_clean['UNIDAD DE ASIGNACIÓN'].isin(upres_ordenadas_b)].copy()
     df_b_sub = df_b_clean[df_b_clean['UNIDAD DE ASIGNACIÓN'].isin(upres_ordenadas_b)].copy()
@@ -485,10 +484,8 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
     color_map = {cat: paleta_amplia[i % len(paleta_amplia)] for i, cat in enumerate(categorias_unicas_todas)}
     color_map['Otros'] = '#8d99ae'
 
-    # ORDENAR EJE Y PARA QUE LA MAYOR SEGÚN PERIODO B QUEDE ARRIBA
+    # Ordenar eje Y de arriba hacia abajo (Inversión necesaria para Plotly)
     top_5_upres_fmt = [acortar_texto_abreviado(u) for u in upres_ordenadas_b]
-    
-    # En Plotly, el eje Y dibuja de abajo a arriba, por lo que invertimos la lista para que el #1 quede arriba
     upres_orden_eje_y = list(reversed(top_5_upres_fmt))
 
     df_total['UPRES_fmt'] = pd.Categorical(df_total['UPRES_fmt'], categories=upres_orden_eje_y, ordered=True)
@@ -556,7 +553,7 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
     st.plotly_chart(aplicar_touch_safe(fig), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 # -----------------------------------------------------------------------------
-# 3. MÓDULOS DE RENDERIZADO
+# 4. MÓDULOS DE RENDERIZADO DE PESTAÑAS
 # -----------------------------------------------------------------------------
 def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
     st.caption("Consola Ejecutiva de Atención al Usuario - Periodo Único")
@@ -757,7 +754,6 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
     generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES - Categoría Salud (Top 5)")
     generar_grafico_upres_apilado(df_base, col_mot_esp, "Distribución por UPRES - Motivo Específico (Top 5)")
 
-
 def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
     st.caption("Comparación Analítica Cruzada entre dos Ventanas de Tiempo")
 
@@ -918,10 +914,14 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
         )
 
 # -----------------------------------------------------------------------------
-# 4. AUTENTICACIÓN Y CARGA PRINCIPAL
+# 5. AUTENTICACIÓN Y EJECUCIÓN
 # -----------------------------------------------------------------------------
-with open('config.yaml') as file:
-    config = yaml.load(file, Loader=SafeLoader)
+try:
+    with open('config.yaml', 'r', encoding='utf-8') as file:
+        config = yaml.load(file, Loader=SafeLoader)
+except FileNotFoundError:
+    st.error("❌ No se encontró el archivo de configuración `config.yaml`.")
+    st.stop()
 
 authenticator = stauth.Authenticate(
     config['credentials'],
@@ -932,12 +932,12 @@ authenticator = stauth.Authenticate(
 
 name, authentication_status, username = authenticator.login('main')
 
-if authentication_status == False:
+if authentication_status is False:
     st.error("Usuario o contraseña incorrectos")
-elif authentication_status == None:
+elif authentication_status is None:
     st.warning("Por favor ingrese sus credenciales para acceder")
-
 elif authentication_status:
+    # Carga de credenciales Postgres de Streamlit Secrets o .env
     try:
         DB_USER = st.secrets["postgres"]["user"]
         DB_PASS = st.secrets["postgres"]["password"]
@@ -994,7 +994,6 @@ elif authentication_status:
 
     try:
         df_raw = cargar_datos_consolidados()
-        
         min_global_date = df_raw['fecha_dt'].min().date() if not df_raw.empty else None
         max_global_date = df_raw['fecha_dt'].max().date() if not df_raw.empty else None
     except Exception as e:
@@ -1013,18 +1012,9 @@ elif authentication_status:
         st.session_state["sel_medios"] = []
         guardar_preferencias({})
 
-    if "sel_rases" not in st.session_state:
-        st.session_state["sel_rases"] = prefs.get("sel_rases", [])
-    if "sel_unidades" not in st.session_state:
-        st.session_state["sel_unidades"] = prefs.get("sel_unidades", [])
-    if "sel_cat" not in st.session_state:
-        st.session_state["sel_cat"] = prefs.get("sel_cat", [])
-    if "sel_motivos" not in st.session_state:
-        st.session_state["sel_motivos"] = prefs.get("sel_motivos", [])
-    if "sel_tipos" not in st.session_state:
-        st.session_state["sel_tipos"] = prefs.get("sel_tipos", [])
-    if "sel_medios" not in st.session_state:
-        st.session_state["sel_medios"] = prefs.get("sel_medios", [])
+    for clave_filtro in ["sel_rases", "sel_unidades", "sel_cat", "sel_motivos", "sel_tipos", "sel_medios"]:
+        if clave_filtro not in st.session_state:
+            st.session_state[clave_filtro] = prefs.get(clave_filtro, [])
 
     st.sidebar.markdown(f"👤 **{name}**")
     authenticator.logout('Cerrar Sesión', 'sidebar')
@@ -1037,13 +1027,11 @@ elif authentication_status:
     lista_unidades = sorted([x for x in df_raw['UNIDAD DE ASIGNACIÓN'].dropna().unique() if str(x).strip() != ''])
     sel_unidades = st.sidebar.multiselect("UPRES", options=lista_unidades, key="sel_unidades")
 
-    cat_ordenadas = df_raw['ESPECIALIDAD_CATEGORIA'].dropna().value_counts().index.tolist()
-    cat_ordenadas = [c for c in cat_ordenadas if str(c).strip() != '']
+    cat_ordenadas = [c for c in df_raw['ESPECIALIDAD_CATEGORIA'].dropna().value_counts().index if str(c).strip() != '']
     sel_cat = st.sidebar.multiselect("Categoría Salud", options=cat_ordenadas, placeholder="Seleccione categoría...", key="sel_cat")
 
     col_mot_esp = 'MOTIVO ESPECÍFICO' if 'MOTIVO ESPECÍFICO' in df_raw.columns else 'MOTIVO GENERAL'
-    motivos_ordenados = df_raw[col_mot_esp].dropna().value_counts().index.tolist()
-    motivos_ordenados = [m for m in motivos_ordenados if str(m).strip() != '']
+    motivos_ordenados = [m for m in df_raw[col_mot_esp].dropna().value_counts().index if str(m).strip() != '']
     sel_motivos = st.sidebar.multiselect("Motivo Específico", options=motivos_ordenados, placeholder="Seleccione motivo...", key="sel_motivos")
 
     lista_tipos = sorted([x for x in df_raw['Tipo de Solicitud'].dropna().unique() if str(x).strip() != ''])
@@ -1078,6 +1066,7 @@ elif authentication_status:
             on_click=restablecer_filtros_callback
         )
 
+    # Filtrado dinámico
     df_base_global = df_raw.copy()
     if sel_rases:
         df_base_global = df_base_global[df_base_global['RASES'].isin(sel_rases)]
@@ -1092,7 +1081,7 @@ elif authentication_status:
     if sel_medios:
         df_base_global = df_base_global[df_base_global['Medio de Recepción'].isin(sel_medios)]
 
-    # Header Principal
+    # ENCABEZADO
     st.markdown("""
         <h1 style='display: flex; align-items: center; gap: 12px; margin-bottom: 0px;'>
             <i class="fa-solid fa-shield-halved" style="color: #1b5e20;"></i>
