@@ -400,7 +400,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 # -----------------------------------------------------------------------------
-# BARRAS AL 100% (TOP 1 A TOP 5 + OTROS + TOTAL AL FINAL)
+# BARRAS AL 100% (TOP 5 REAL DINÁMICO POR UPRES/PERIODO + OTROS + TOTAL)
 # -----------------------------------------------------------------------------
 def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
     st.markdown(f"### {titulo_grafico}")
@@ -412,7 +412,7 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         st.info("No hay datos disponibles para la comparación.")
         return
 
-    # 1. Obtener Top 5 UPRES principales por volumen total acumulado
+    # 1. Obtener Top 5 UPRES principales por volumen total acumulado entre A y B
     tot_a = df_a_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     tot_b = df_b_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     top_5_upres = (tot_a.add(tot_b, fill_value=0)).sort_values(ascending=False).head(5).index.tolist()
@@ -420,61 +420,85 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
     df_a_sub = df_a_clean[df_a_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)].copy()
     df_b_sub = df_b_clean[df_b_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)].copy()
 
-    # 2. Identificar el Top 5 global de motivos/categorías entre ambos periodos
-    cat_a = df_a_sub[col_target].value_counts()
-    cat_b = df_b_sub[col_target].value_counts()
-    top_5_cats = (cat_a.add(cat_b, fill_value=0)).sort_values(ascending=False).head(5).index.tolist()
-
-    # 3. Procesar datos para incluir Top 1 a Top 5 y 'Otros'
-    def procesar_periodo(df_in, lbl):
+    # 2. Función interna que calcula el TOP 5 PROPIO de cada UPRES/Periodo
+    def procesar_periodo_dinamico(df_in, lbl):
         if df_in.empty:
             return pd.DataFrame(), pd.DataFrame()
-        
-        # Clonar datos y reemplazar todo lo fuera del Top 5 por 'Otros'
-        df_mod = df_in.copy()
-        df_mod['Cat_Group'] = df_mod[col_target].apply(
-            lambda c: c if c in top_5_cats else 'Otros'
-        )
-        
-        # Conteo agrupado
-        g = df_mod.groupby(['UNIDAD DE ASIGNACIÓN', 'Cat_Group'], observed=True).size().reset_index(name='Cant')
-        
-        # Conteo del total absoluto real por UPRES para el indicador final
-        totales = df_in.groupby('UNIDAD DE ASIGNACIÓN', observed=True).size().reset_index(name='Total_Abs')
-        totales['UPRES_fmt'] = totales['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
-        totales['Periodo'] = lbl
 
-        g['Tot_UPRES'] = g.groupby('UNIDAD DE ASIGNACIÓN')['Cant'].transform('sum')
-        g['Pct'] = (g['Cant'] / g['Tot_UPRES']) * 100
-        g['UPRES_fmt'] = g['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
-        g['Periodo'] = lbl
-        g['Cat_fmt'] = g['Cat_Group'].apply(lambda c: 'Otros' if c == 'Otros' else acortar_texto_abreviado(c))
-        
-        return g, totales
+        registros_agrupados = []
+        totales_absolutos = []
 
-    df_p1, tot_p1 = procesar_periodo(df_a_sub, lbl_a)
-    df_p2, tot_p2 = procesar_periodo(df_b_sub, lbl_b)
-    
-    df_total = pd.concat([df_p1, df_p2])
-    df_totales_absolutos = pd.concat([tot_p1, tot_p2])
+        for upres in top_5_upres:
+            df_u = df_in[df_in['UNIDAD DE ASIGNACIÓN'] == upres]
+            if df_u.empty:
+                continue
+
+            total_real = len(df_u)
+            totales_absolutos.append({
+                'UNIDAD DE ASIGNACIÓN': upres,
+                'UPRES_fmt': acortar_texto_abreviado(upres),
+                'Periodo': lbl,
+                'Total_Abs': total_real
+            })
+
+            # Identificar el Top 5 específico de esta UPRES en este Periodo
+            top_5_locales = df_u[col_target].value_counts().head(5).index.tolist()
+
+            # Mapear los datos: lo que no está en el Top 5 local pasa a 'Otros'
+            df_u_mod = df_u.copy()
+            df_u_mod['Cat_Group'] = df_u_mod[col_target].apply(
+                lambda c: c if c in top_5_locales else 'Otros'
+            )
+
+            # Conteo por categoría/motivo
+            g_u = df_u_mod.groupby('Cat_Group', observed=True).size().reset_index(name='Cant')
+            g_u['UNIDAD DE ASIGNACIÓN'] = upres
+            g_u['UPRES_fmt'] = acortar_texto_abreviado(upres)
+            g_u['Periodo'] = lbl
+            g_u['Tot_UPRES'] = total_real
+            g_u['Pct'] = (g_u['Cant'] / total_real) * 100
+            
+            # Asignar un rango numérico de orden local para armar la barra de izq a der:
+            # Rank 1 al 5 para las categorías locales, Rank 99 para 'Otros'
+            rank_map = {cat: i+1 for i, cat in enumerate(top_5_locales)}
+            rank_map['Otros'] = 99
+            
+            g_u['Rank_Local'] = g_u['Cat_Group'].map(rank_map)
+            g_u['Cat_fmt'] = g_u['Cat_Group'].apply(lambda c: 'Otros' if c == 'Otros' else acortar_texto_abreviado(c))
+
+            registros_agrupados.append(g_u)
+
+        if not registros_agrupados:
+            return pd.DataFrame(), pd.DataFrame()
+
+        df_res = pd.concat(registros_agrupados, ignore_index=True)
+        df_tot = pd.DataFrame(totales_absolutos)
+        return df_res, df_tot
+
+    df_p1, tot_p1 = procesar_periodo_dinamico(df_a_sub, lbl_a)
+    df_p2, tot_p2 = procesar_periodo_dinamico(df_b_sub, lbl_b)
+
+    df_total = pd.concat([df_p1, df_p2], ignore_index=True)
+    df_totales_absolutos = pd.concat([tot_p1, tot_p2], ignore_index=True)
 
     if df_total.empty:
         st.info("No hay datos suficientes en los rangos seleccionados.")
         return
 
-    # 4. Orden estricto de izquierda a derecha: Top 1 -> Top 5 -> Otros
-    top_5_cats_fmt = [acortar_texto_abreviado(c) for c in top_5_cats]
-    orden_categorias = top_5_cats_fmt + ['Otros']
+    # 3. Mapeo Global de Colores para consistencia entre barras
+    categorias_unicas_todas = [c for c in df_total['Cat_fmt'].unique() if c != 'Otros']
+    paleta_amplia = [
+        '#1b4332', '#1d3557', '#d4a373', '#e07a5f', '#2b2d42', 
+        '#2d6a4f', '#003049', '#52b788', '#3d405b', '#40916c',
+        '#bc4749', '#a5a58d', '#6b705c', '#386641', '#6a040f'
+    ]
+    color_map = {cat: paleta_amplia[i % len(paleta_amplia)] for i, cat in enumerate(categorias_unicas_todas)}
+    color_map['Otros'] = '#8d99ae'  # Gris para elementos residuales
 
-    # Asignación de paleta de colores coherente (Top 1 al 5 + Gris para Otros)
-    paleta_base = ['#2d6a4f', '#1d3557', '#e07a5f', '#d4a373', '#3d405b']
-    color_map = {cat: paleta_base[i % len(paleta_base)] for i, cat in enumerate(top_5_cats_fmt)}
-    color_map['Otros'] = '#8d99ae'  # Gris neutral para la categoría residual
-
-    # 5. Ordenar UPRES en el eje Y
+    # 4. Ordenamiento en el eje Y por UPRES
     top_5_upres_fmt = [acortar_texto_abreviado(u) for u in top_5_upres]
     df_total['UPRES_fmt'] = pd.Categorical(df_total['UPRES_fmt'], categories=reversed(top_5_upres_fmt), ordered=True)
-    df_total = df_total.sort_values(['UPRES_fmt', 'Periodo'])
+    df_total = df_total.sort_values(['UPRES_fmt', 'Periodo', 'Rank_Local'])
 
     if not df_totales_absolutos.empty:
         df_totales_absolutos['UPRES_fmt'] = pd.Categorical(df_totales_absolutos['UPRES_fmt'], categories=reversed(top_5_upres_fmt), ordered=True)
@@ -482,30 +506,39 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
 
     fig = go.Figure()
 
-    # Añadir trazadas en el orden específico
-    for cat in orden_categorias:
-        df_cat = df_total[df_total['Cat_fmt'] == cat]
-        if df_cat.empty:
-            continue
-            
-        fig.add_trace(go.Bar(
-            y=[df_cat['UPRES_fmt'].astype(str), df_cat['Periodo']],
-            x=df_cat['Pct'],
-            name=cat,
-            orientation='h',
-            marker=dict(color=color_map.get(cat, '#8d99ae')),
-            text=df_cat['Pct'].apply(lambda v: f"{v:.0f}%" if v >= 5 else ""),
-            textposition='inside',
-            insidetextanchor='middle',
-            customdata=df_cat[['Cat_fmt', 'Cant']],
-            hovertemplate="<b>%{y[0]} - %{y[1]}</b><br>Categoría: %{customdata[0]}<br>Proporción: %{x:.1f}%<br>Cantidad: %{customdata[1]:,} PQRS<extra></extra>"
-        ))
+    # 5. Agregar las trazas ordenadas por Rango Local (Top 1 -> Top 5 -> Otros)
+    # Para que el apilado quede de izquierda a derecha (Top 1 primero), iteramos por los rangos locales
+    rangos_locales_existentes = sorted(df_total['Rank_Local'].unique())
 
-    # 6. Añadir marcador con el valor total acumulado al final de cada barra (100%)
+    for rank in rangos_locales_existentes:
+        df_rank = df_total[df_total['Rank_Local'] == rank]
+        if df_rank.empty:
+            continue
+
+        # Sub-agrupar por la categoría específica para mantener leyenda y colores
+        for cat_nombre in df_rank['Cat_fmt'].unique():
+            df_sub_cat = df_rank[df_rank['Cat_fmt'] == cat_nombre]
+            
+            fig.add_trace(go.Bar(
+                y=[df_sub_cat['UPRES_fmt'].astype(str), df_sub_cat['Periodo']],
+                x=df_sub_cat['Pct'],
+                name=cat_nombre,
+                legendgroup=cat_nombre,
+                showlegend=True if cat_nombre not in [t.name for t in fig.data] else False,
+                orientation='h',
+                marker=dict(color=color_map.get(cat_nombre, '#8d99ae')),
+                text=df_sub_cat['Pct'].apply(lambda v: f"{v:.0f}%" if v >= 5 else ""),
+                textposition='inside',
+                insidetextanchor='middle',
+                customdata=df_sub_cat[['Cat_fmt', 'Cant']],
+                hovertemplate="<b>%{y[0]} - %{y[1]}</b><br>Categoría: %{customdata[0]}<br>Proporción: %{x:.1f}%<br>Cantidad: %{customdata[1]:,} PQRS<extra></extra>"
+            ))
+
+    # 6. Añadir total acumulado de PQRS al final de cada barra (Eje derecho)
     if not df_totales_absolutos.empty:
         fig.add_trace(go.Scatter(
             y=[df_totales_absolutos['UPRES_fmt'].astype(str), df_totales_absolutos['Periodo']],
-            x=[101.5] * len(df_totales_absolutos),  # Posición fija ligeramente fuera de la barra
+            x=[101.5] * len(df_totales_absolutos),
             mode='text',
             text=df_totales_absolutos['Total_Abs'].apply(lambda v: f"<b>{v:,}</b>"),
             textposition='middle right',
@@ -516,13 +549,13 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
     fig.update_layout(
         font=dict(family="Poppins, sans-serif"),
         barmode='stack',
-        bargap=0.35,          # Espacio entre bloques de UPRES
-        bargroupgap=0.1,      # Espacio entre Periodo A y Periodo B
+        bargap=0.35,          # Espaciado amplio entre bloques regionales
+        bargroupgap=0.1,      # Leve espacio entre Periodo A y B
         yaxis=dict(title="", tickfont=dict(size=11)),
-        xaxis=dict(title="Proporción Relativa (%)", range=[0, 110]),  # Rango extendido para dar espacio al total
+        xaxis=dict(title="Proporción Relativa (%)", range=[0, 110]),
         height=540,
         margin=dict(l=10, r=40, t=10, b=10),
-        legend=dict(orientation="h", y=-0.15, x=0, title=None, font=dict(size=10))
+        legend=dict(orientation="h", y=-0.18, x=0, title=None, font=dict(size=10))
     )
 
     st.plotly_chart(aplicar_touch_safe(fig), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
@@ -926,11 +959,11 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         st.markdown("---")
         
-        # BARRAS AL 100% AGRUPADAS POR UPRES CON TOP 5 + OTROS + TOTAL
+        # BARRAS AL 100% DINÁMICAS POR UPRES Y PERIODO
         generar_barras_100pct_comparativo(
             df_a, df_b, 
             'ESPECIALIDAD_CATEGORIA', 
-            "Comparativo Distribución (%) por UPRES - Categoría Salud (Top 5)",
+            "Comparativo Distribución (%) por UPRES - Categoría Salud (Top 5 por UPRES)",
             lbl_a=lbl_a_short,
             lbl_b=lbl_b_short
         )
@@ -938,7 +971,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
         generar_barras_100pct_comparativo(
             df_a, df_b, 
             col_mot_esp, 
-            "Comparativo Distribución (%) por UPRES - Motivo Específico (Top 5)",
+            "Comparativo Distribución (%) por UPRES - Motivo Específico (Top 5 por UPRES)",
             lbl_a=lbl_a_short,
             lbl_b=lbl_b_short
         )
