@@ -97,7 +97,7 @@ st.markdown("""
         word-break: break-word !important;
     }
     
-    /* Ocultar la etiqueta vacía del selector de pestañas */
+    /* Ocultar la etiqueta vacía del selector de pestañas principal */
     div[data-testid="stRadio"] > label {
         display: none;
     }
@@ -399,9 +399,21 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     
     st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-# NUEVA FUNCIÓN: MAPA DE CALOR COMPARATIVO
-def generar_heatmap_upres_comparativo(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
+# -----------------------------------------------------------------------------
+# OPCIÓN 1: MAPA DE CALOR INTERACTIVO POR PERIODO (RESPONSIVE)
+# -----------------------------------------------------------------------------
+def generar_heatmap_upres_interactivo(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
     st.markdown(f"### {titulo_grafico}")
+    
+    # Selector dinámico de modo para evitar amontonamiento de columnas
+    col_sel1, col_sel2 = st.columns([2, 1])
+    with col_sel1:
+        modo_vista = st.segmented_control(
+            "Ver matriz de datos:",
+            options=[lbl_a, lbl_b, "Diferencia (B - A)"],
+            default=lbl_a,
+            key=f"seg_heat_{col_target}"
+        )
     
     df_a_clean = df_a.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
     df_b_clean = df_b.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
@@ -410,7 +422,7 @@ def generar_heatmap_upres_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         st.info("No hay datos suficientes para generar el Mapa de Calor.")
         return
 
-    # Obtener Top 5 UPRES por volumen general
+    # Top 5 UPRES y Categorías
     tot_a = df_a_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     tot_b = df_b_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     top_5_upres = (tot_a.add(tot_b, fill_value=0)).sort_values(ascending=False).head(5).index.tolist()
@@ -418,58 +430,58 @@ def generar_heatmap_upres_comparativo(df_a, df_b, col_target, titulo_grafico, lb
     df_a_sub = df_a_clean[df_a_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)]
     df_b_sub = df_b_clean[df_b_clean['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)]
 
-    # Obtener Top 5 Categorías más frecuentes
     cat_a = df_a_sub[col_target].value_counts()
     cat_b = df_b_sub[col_target].value_counts()
     top_5_cats = (cat_a.add(cat_b, fill_value=0)).sort_values(ascending=False).head(5).index.tolist()
 
-    # Agrupación de datos
+    # Construcción de Matrices Pivote
     g_a = df_a_sub[df_a_sub[col_target].isin(top_5_cats)].groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cantidad')
-    g_a['Columna'] = g_a[col_target].apply(lambda c: f"{acortar_texto_abreviado(c)} ({lbl_a})")
+    g_a['UPRES_fmt'] = g_a['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+    g_a['Cat_fmt'] = g_a[col_target].apply(acortar_texto_abreviado)
+    piv_a = g_a.pivot(index='UPRES_fmt', columns='Cat_fmt', values='Cantidad').fillna(0)
 
     g_b = df_b_sub[df_b_sub[col_target].isin(top_5_cats)].groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cantidad')
-    g_b['Columna'] = g_b[col_target].apply(lambda c: f"{acortar_texto_abreviado(c)} ({lbl_b})")
+    g_b['UPRES_fmt'] = g_b['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+    g_b['Cat_fmt'] = g_b[col_target].apply(acortar_texto_abreviado)
+    piv_b = g_b.pivot(index='UPRES_fmt', columns='Cat_fmt', values='Cantidad').fillna(0)
 
-    df_heat = pd.concat([g_a, g_b])
-    df_heat['UPRES_fmt'] = df_heat['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+    # Reordenar ejes uniformemente
+    upres_order = [acortar_texto_abreviado(u) for u in top_5_upres]
+    cats_order = [acortar_texto_abreviado(c) for c in top_5_cats]
 
-    # Crear matriz pivote
-    pivot_df = df_heat.pivot(index='UPRES_fmt', columns='Columna', values='Cantidad').fillna(0)
-    
-    # Ordenar filas por UPRES principales y columnas alternando A y B
-    upres_order = [acortar_texto_abreviado(u) for u in top_5_upres if acortar_texto_abreviado(u) in pivot_df.index]
-    pivot_df = pivot_df.reindex(upres_order)
+    piv_a = piv_a.reindex(index=upres_order, columns=cats_order).fillna(0)
+    piv_b = piv_b.reindex(index=upres_order, columns=cats_order).fillna(0)
 
-    cols_ordenadas = []
-    for c in top_5_cats:
-        c_fmt = acortar_texto_abreviado(c)
-        col_a_name = f"{c_fmt} ({lbl_a})"
-        col_b_name = f"{c_fmt} ({lbl_b})"
-        if col_a_name in pivot_df.columns: cols_ordenadas.append(col_a_name)
-        if col_b_name in pivot_df.columns: cols_ordenadas.append(col_b_name)
-    
-    pivot_df = pivot_df.reindex(columns=cols_ordenadas)
+    # Selección de datos según la pestaña activa
+    if modo_vista == lbl_a:
+        df_plot = piv_a
+        escala_color = "Greens"
+    elif modo_vista == lbl_b:
+        df_plot = piv_b
+        escala_color = "Reds"
+    else:
+        df_plot = piv_b - piv_a
+        escala_color = "RdBu_r"
 
-    # Renderizar el Mapa de Calor con Plotly
     fig = px.imshow(
-        pivot_df.values,
-        labels=dict(x="Motivo / Periodo", y="UPRES", color="PQRS"),
-        x=pivot_df.columns,
-        y=pivot_df.index,
-        color_continuous_scale="Greens",
+        df_plot.values,
+        labels=dict(x="Categoría / Motivo Específico", y="UPRES", color="PQRS"),
+        x=df_plot.columns,
+        y=df_plot.index,
+        color_continuous_scale=escala_color,
         text_auto=True
     )
-    
+
     fig.update_traces(
-        texttemplate="%{z:,d}",
-        hovertemplate="<b>UPRES:</b> %{y}<br><b>Motivo:</b> %{x}<br><b>Cantidad:</b> %{z:,} PQRS<extra></extra>"
+        texttemplate="%{z:+,d}" if modo_vista == "Diferencia (B - A)" else "%{z:,d}",
+        hovertemplate="<b>UPRES:</b> %{y}<br><b>Motivo:</b> %{x}<br><b>Valor:</b> %{z} PQRS<extra></extra>"
     )
-    
+
     fig.update_layout(
         font=dict(family="Poppins, sans-serif"),
-        height=380,
-        margin=dict(l=10, r=10, t=20, b=10),
-        xaxis=dict(tickangle=-30)
+        height=360,
+        margin=dict(l=10, r=10, t=10, b=10),
+        xaxis=dict(tickangle=-25)
     )
 
     st.plotly_chart(aplicar_touch_safe(fig), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
@@ -873,8 +885,8 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         st.markdown("---")
         
-        # SUSTITUCIÓN POR MAPAS DE CALOR COMPARATIVOS
-        generar_heatmap_upres_comparativo(
+        # MAPAS DE CALOR INTERACTIVOS (OPCIÓN 1)
+        generar_heatmap_upres_interactivo(
             df_a, df_b, 
             'ESPECIALIDAD_CATEGORIA', 
             "Mapa de Calor: Comparativo UPRES vs Categoría Salud (Top 5)",
@@ -882,7 +894,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             lbl_b=lbl_b_short
         )
         
-        generar_heatmap_upres_comparativo(
+        generar_heatmap_upres_interactivo(
             df_a, df_b, 
             col_mot_esp, 
             "Mapa de Calor: Comparativo UPRES vs Motivo Específico (Top 5)",
