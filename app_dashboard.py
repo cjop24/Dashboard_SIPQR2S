@@ -139,6 +139,18 @@ def acortar_texto_abreviado(texto):
         return "N/A"
     s = str(texto).upper().strip()
     
+    # Mapeos completos para frases o títulos específicos
+    frases_especificas = {
+        'RECONOCIMIENTOS DEL SERVICIO DE POLICÍA': 'FELICITACIÓN',
+        'RECONOCIMIENTOS DEL SERVICIO DE POLICIA': 'FELICITACIÓN',
+        'SISTEMA SGDEA MINDEFENSA': 'MINDEFENSA',
+        'SGDEA MINDEFENSA': 'MINDEFENSA',
+        'LÍNEA DIRECTOR GENERAL': 'LÍNEA DIRECTOR',
+        'LINEA DIRECTOR GENERAL': 'LÍNEA DIRECTOR'
+    }
+    if s in frases_especificas:
+        return frases_especificas[s]
+
     preposiciones_y_articulos = r'\b(DE|DEL|LA|EL|LOS|LAS|EN|POR|CON|SIN|PARA|SOBRE|ANTE|A|Y|O|U|AL|UN|UNO|UNAS|UNOS|SU|SUS)\b'
     s = re.sub(preposiciones_y_articulos, ' ', s)
     s = re.sub(r'\s+', ' ', s).strip()
@@ -168,12 +180,20 @@ def acortar_texto_abreviado(texto):
         'PRESTACION': 'PREST.',
         'PRESTACIÓN': 'PREST.',
         'USUARIO': 'USUAR.',
-        'USUARIOS': 'USUAR.'
+        'USUARIOS': 'USUAR.',
+        'RECONOCIMIENTOS': 'FELICITACIÓN',
+        'RECONOCIMIENTO': 'FELICITACIÓN',
+        'SGDEA': '',
+        'SISTEMA': ''
     }
     
     words = s.split()
-    words_clean = [abrev.get(w, w) for w in words]
-    return " ".join(words_clean)
+    words_clean = [abrev.get(w, w) for w in words if abrev.get(w, w) != '']
+    res = " ".join(words_clean)
+    
+    # Ajustes finales por si persisten variaciones
+    res = res.replace("LÍNEA DIRECTOR GENERAL", "LÍNEA DIRECTOR").replace("LINEA DIRECTOR GENERAL", "LÍNEA DIRECTOR")
+    return res if res else "N/A"
 
 CONFIG_PLOTLY_TOUCH = {
     'displayModeBar': False,
@@ -535,11 +555,12 @@ def render_tab_individual(df_base_global, col_mot_esp):
     df_pie_sol = df_base['Tipo de Solicitud'].dropna().value_counts().reset_index()
     df_pie_sol.columns = ['Tipo de Solicitud', 'Cantidad']
     df_pie_sol = df_pie_sol[df_pie_sol['Cantidad'] > 0]
+    df_pie_sol['Tipo_fmt'] = df_pie_sol['Tipo de Solicitud'].apply(acortar_texto_abreviado)
     
     fig_pie1 = px.pie(
         df_pie_sol, 
         values='Cantidad', 
-        names='Tipo de Solicitud', 
+        names='Tipo_fmt', 
         hole=0.4, 
         color_discrete_sequence=px.colors.sequential.Greens_r
     )
@@ -569,11 +590,12 @@ def render_tab_individual(df_base_global, col_mot_esp):
     df_pie_med = df_base['Medio de Recepción'].dropna().value_counts().reset_index()
     df_pie_med.columns = ['Medio de Recepción', 'Cantidad']
     df_pie_med = df_pie_med[df_pie_med['Cantidad'] > 0]
+    df_pie_med['Medio_fmt'] = df_pie_med['Medio de Recepción'].apply(acortar_texto_abreviado)
     
     fig_pie2 = px.pie(
         df_pie_med, 
         values='Cantidad', 
-        names='Medio de Recepción', 
+        names='Medio_fmt', 
         hole=0.4, 
         color_discrete_sequence=px.colors.sequential.YlGn_r
     )
@@ -712,15 +734,16 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             df_ts_comp['Total_Volume'] = df_ts_comp[lbl_a_short] + df_ts_comp[lbl_b_short]
             
             df_ts_comp = df_ts_comp.sort_values('Total_Volume', ascending=True)
-            orden_categorias_ts = df_ts_comp['Tipo de Solicitud'].tolist()
+            df_ts_comp['Tipo_fmt'] = df_ts_comp['Tipo de Solicitud'].apply(acortar_texto_abreviado)
+            orden_categorias_ts = df_ts_comp['Tipo_fmt'].tolist()
             
-            df_ts_melt = df_ts_comp.melt(id_vars=['Tipo de Solicitud', 'Total_Volume'], value_vars=[lbl_a_short, lbl_b_short], var_name='Periodo', value_name='Cantidad')
+            df_ts_melt = df_ts_comp.melt(id_vars=['Tipo_fmt', 'Total_Volume'], value_vars=[lbl_a_short, lbl_b_short], var_name='Periodo', value_name='Cantidad')
             df_ts_melt = df_ts_melt[df_ts_melt['Cantidad'] > 0]
             
             fig_comp_ts = px.bar(
                 df_ts_melt, 
                 x='Cantidad', 
-                y='Tipo de Solicitud', 
+                y='Tipo_fmt', 
                 color='Periodo', 
                 barmode='group', 
                 orientation='h', 
@@ -753,15 +776,16 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
             df_mr_comp['Total_Volume'] = df_mr_comp[lbl_a_short] + df_mr_comp[lbl_b_short]
             
             df_mr_comp = df_mr_comp.sort_values('Total_Volume', ascending=True)
-            orden_categorias_mr = df_mr_comp['Medio de Recepción'].tolist()
+            df_mr_comp['Medio_fmt'] = df_mr_comp['Medio de Recepción'].apply(acortar_texto_abreviado)
+            orden_categorias_mr = df_mr_comp['Medio_fmt'].tolist()
             
-            df_mr_melt = df_mr_comp.melt(id_vars=['Medio de Recepción', 'Total_Volume'], value_vars=[lbl_a_short, lbl_b_short], var_name='Periodo', value_name='Cantidad')
+            df_mr_melt = df_mr_comp.melt(id_vars=['Medio_fmt', 'Total_Volume'], value_vars=[lbl_a_short, lbl_b_short], var_name='Periodo', value_name='Cantidad')
             df_mr_melt = df_mr_melt[df_mr_melt['Cantidad'] > 0]
             
             fig_comp_mr = px.bar(
                 df_mr_melt, 
                 x='Cantidad', 
-                y='Medio de Recepción', 
+                y='Medio_fmt', 
                 color='Periodo', 
                 barmode='group', 
                 orientation='h', 
