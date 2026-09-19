@@ -400,7 +400,7 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 # -----------------------------------------------------------------------------
-# OPCIÓN 2: BARRAS HORIZONTALMENTE NORMALIZADAS AL 100% (COMPARATIVO)
+# OPCIÓN 2: BARRAS AL 100% AGRUPADAS POR UPRES Y PERIODO
 # -----------------------------------------------------------------------------
 def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
     st.markdown(f"### {titulo_grafico}")
@@ -412,12 +412,12 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         st.info("No hay datos disponibles para la comparación.")
         return
 
-    # 1. Identificar Top 5 UPRES principales acumuladas
+    # 1. Obtener Top 5 UPRES principales por volumen total acumulado
     tot_a = df_a_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     tot_b = df_b_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     top_5_upres = (tot_a.add(tot_b, fill_value=0)).sort_values(ascending=False).head(5).index.tolist()
 
-    # 2. Función interna para procesar las proporciones (%) por periodo
+    # 2. Procesar porcentajes y cantidades
     def procesar_periodo(df_in, lbl):
         df_sub = df_in[df_in['UNIDAD DE ASIGNACIÓN'].isin(top_5_upres)].copy()
         if df_sub.empty:
@@ -425,7 +425,8 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         g = df_sub.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant')
         g['Tot_UPRES'] = g.groupby('UNIDAD DE ASIGNACIÓN')['Cant'].transform('sum')
         g['Pct'] = (g['Cant'] / g['Tot_UPRES']) * 100
-        g['UPRES_Label'] = g['UNIDAD DE ASIGNACIÓN'].apply(lambda u: f"{acortar_texto_abreviado(u)} ({lbl})")
+        g['UPRES_fmt'] = g['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+        g['Periodo'] = lbl
         g['Cat_fmt'] = g[col_target].apply(acortar_texto_abreviado)
         return g
 
@@ -434,17 +435,16 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
     df_total = pd.concat([df_p1, df_p2])
 
     if df_total.empty:
-        st.info("No hay datos suficientes en el rango seleccionado.")
+        st.info("No hay datos suficientes en los rangos seleccionados.")
         return
 
-    # 3. Ordenar el eje Y en parejas (UPRES - Periodo A / UPRES - Periodo B)
-    orden_y = []
-    for u in reversed(top_5_upres):
-        u_fmt = acortar_texto_abreviado(u)
-        orden_y.append(f"{u_fmt} ({lbl_b})")
-        orden_y.append(f"{u_fmt} ({lbl_a})")
+    # 3. Construir gráfico con eje Y jerárquico [UPRES, Periodo]
+    top_5_upres_fmt = [acortar_texto_abreviado(u) for u in top_5_upres]
+    
+    # Ordenar UPRES de arriba a abajo en el gráfico
+    df_total['UPRES_fmt'] = pd.Categorical(df_total['UPRES_fmt'], categories=reversed(top_5_upres_fmt), ordered=True)
+    df_total = df_total.sort_values(['UPRES_fmt', 'Periodo'])
 
-    # Paleta cromática distinguible
     paleta_contraste = [
         '#1b4332', '#1d3557', '#d4a373', '#e07a5f', '#2b2d42', 
         '#2d6a4f', '#003049', '#52b788', '#3d405b', '#40916c'
@@ -452,11 +452,11 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
 
     fig = px.bar(
         df_total,
-        y='UPRES_Label',
+        y=['UPRES_fmt', 'Periodo'],
         x='Pct',
         color='Cat_fmt',
         orientation='h',
-        text=df_total['Pct'].apply(lambda v: f"{v:.0f}%" if v >= 5 else ""),
+        text=df_total['Pct'].apply(lambda v: f"{v:.0f}%" if v >= 6 else ""),
         color_discrete_sequence=paleta_contraste,
         custom_data=['Cat_fmt', 'Cant']
     )
@@ -464,17 +464,17 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
     fig.update_traces(
         textposition='inside',
         insidetextanchor='middle',
-        hovertemplate="<b>%{y}</b><br>Categoría: %{customdata[0]}<br>Porcentaje: %{x:.1f}%<br>Cantidad: %{customdata[1]:,} PQRS<extra></extra>"
+        hovertemplate="<b>%{y[0]} - %{y[1]}</b><br>Categoría: %{customdata[0]}<br>Proporción: %{x:.1f}%<br>Cantidad: %{customdata[1]:,} PQRS<extra></extra>"
     )
 
     fig.update_layout(
         font=dict(family="Poppins, sans-serif"),
         barmode='stack',
-        yaxis=dict(categoryorder='array', categoryarray=orden_y, title=""),
+        yaxis=dict(title="", tickfont=dict(size=11)),
         xaxis=dict(title="Proporción Relativa (%)", range=[0, 100]),
-        height=480,
+        height=520,
         margin=dict(l=10, r=10, t=10, b=10),
-        legend=dict(orientation="h", y=-0.18, x=0, title=None, font=dict(size=10))
+        legend=dict(orientation="h", y=-0.15, x=0, title=None, font=dict(size=10))
     )
 
     st.plotly_chart(aplicar_touch_safe(fig), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
@@ -878,7 +878,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp):
 
         st.markdown("---")
         
-        # APLICACIÓN DE LA OPCIÓN 2: BARRAS NORMALIZADAS AL 100%
+        # BARRAS AL 100% AGRUPADAS POR UPRES
         generar_barras_100pct_comparativo(
             df_a, df_b, 
             'ESPECIALIDAD_CATEGORIA', 
