@@ -692,13 +692,13 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
             fig_mapa = px.choropleth_mapbox(**kwargs_mapa)
 
         # Configuración específica para el mapa para navegación cómoda en móviles:
-        fig_mapa.update_layout(
+fig_mapa.update_layout(
             font=dict(family="Poppins, sans-serif"), 
             height=580, 
             margin=dict(l=0, r=0, t=10, b=0),
             dragmode=False, # Evita que arrastrar la pantalla mueva accidentalmente el mapa al hacer scroll
             coloraxis_colorbar=dict(
-                title="Volumen PQRS",
+                title="PQRS", # <--- Cambiado de "Volumen PQRS" a "PQRS"
                 thicknessmode="pixels", thickness=15,
                 lenmode="pixels", len=300
             )
