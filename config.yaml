@@ -4,6 +4,10 @@ credentials:
       email: "carlosj.ochoa@correo.policia.gov.co"
       name: "cjop1"
       password: "$2b$12$XWQ8GMtR4y2kDBrw8Aix0eeb.TyTxeYsiThyYwbRyWEC5Bd9/6qdy" # Hash bcrypt para At3usSipqr2s0
+    alexander_obando:
+      email: "alexander.obando@correo.policia.gov.co"
+      name: "Director de Sanidad"
+      password: "$2b$12$JFPZ5U3raEAm2d6yvCX8uOPg8HqiNBbW3iP8DFlE7z9teJnoq14vK" # Hash bcrypt para Faro6!Pez9Ma
     hellen_jimenez:
       email: "hellen.jimenez@correo.policia.gov.co"
       name: "jefeAteus"
