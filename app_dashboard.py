@@ -120,7 +120,7 @@ CONFIG_PLOTLY_MAPA = {
     'displayModeBar': True,
     'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
     'scrollZoom': False,           # Evita que el scroll general de la página mueva el mapa por accidente
-    'doubleClick': 'reset+pan',    # El doble clic/toque restablece o activa el enfoque en el punto
+    'doubleClick': 'reset+pan',    # El doble clic/toque restablece o activa el enfoque
     'showAxisDragHandles': False
 }
 
@@ -691,19 +691,17 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
             kwargs_mapa['mapbox_style'] = "carto-positron"
             fig_mapa = px.choropleth_mapbox(**kwargs_mapa)
 
-        # Configuración específica para el mapa para navegación cómoda en móviles:
-fig_mapa.update_layout(
+        fig_mapa.update_layout(
             font=dict(family="Poppins, sans-serif"), 
             height=580, 
             margin=dict(l=0, r=0, t=10, b=0),
-            dragmode=False, # Evita que arrastrar la pantalla mueva accidentalmente el mapa al hacer scroll
+            dragmode=False,
             coloraxis_colorbar=dict(
-                title="PQRS", # <--- Cambiado de "Volumen PQRS" a "PQRS"
+                title="PQRS",
                 thicknessmode="pixels", thickness=15,
                 lenmode="pixels", len=300
             )
         )
-        
         st.plotly_chart(fig_mapa, use_container_width=True, config=CONFIG_PLOTLY_MAPA)
     else:
         st.info("Visualización del mapa de calor no disponible temporalmente.")
