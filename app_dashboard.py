@@ -639,32 +639,38 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
         
         df_geo = df_geo_base.dropna(subset=['Departamento']).groupby('Departamento', observed=True).size().reset_index(name='Cantidad')
 
-        fig_mapa = px.choropleth_mapbox(
-            df_geo,
-            geojson=colombia_geojson,
-            locations='Departamento',
-            featureidkey="properties.NOMBRE_DPT",
-            color='Cantidad',
-            color_continuous_scale="Greens",
-            range_color=(0, df_geo['Cantidad'].max() if not df_geo.empty else 100),
-            mapbox_style="carto-positron",
-            zoom=4.5,
-            center={"lat": 4.5709, "lon": -74.2973},
-            opacity=0.78,
-            labels={'Cantidad': 'PQRS Recepcionadas', 'Departamento': 'Departamento'}
-        )
+        # Compatibilidad Plotly Express (px.choropleth_map para versiones modernas, px.choropleth_mapbox para versiones previas)
+        func_choropleth = getattr(px, "choropleth_map", getattr(px, "choropleth_mapbox", None))
 
-        fig_mapa.update_layout(
-            font=dict(family="Poppins, sans-serif"), 
-            height=580, 
-            margin=dict(l=0, r=0, t=10, b=0),
-            coloraxis_colorbar=dict(
-                title="Volumen PQRS",
-                thicknessmode="pixels", thickness=15,
-                lenmode="pixels", len=300
+        if func_choropleth:
+            fig_mapa = func_choropleth(
+                df_geo,
+                geojson=colombia_geojson,
+                locations='Departamento',
+                featureidkey="properties.NOMBRE_DPT",
+                color='Cantidad',
+                color_continuous_scale="Greens",
+                range_color=(0, df_geo['Cantidad'].max() if not df_geo.empty else 100),
+                mapbox_style="carto-positron" if hasattr(px, "choropleth_mapbox") else "carto-positron",
+                zoom=4.5,
+                center={"lat": 4.5709, "lon": -74.2973},
+                opacity=0.78,
+                labels={'Cantidad': 'PQRS Recepcionadas', 'Departamento': 'Departamento'}
             )
-        )
-        st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
+            fig_mapa.update_layout(
+                font=dict(family="Poppins, sans-serif"), 
+                height=580, 
+                margin=dict(l=0, r=0, t=10, b=0),
+                coloraxis_colorbar=dict(
+                    title="Volumen PQRS",
+                    thicknessmode="pixels", thickness=15,
+                    lenmode="pixels", len=300
+                )
+            )
+            st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+        else:
+            st.info("Visualización del mapa no compatible con la versión instalada de Plotly.")
     else:
         st.info("Visualización del mapa de calor no disponible temporalmente.")
 
