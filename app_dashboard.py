@@ -125,39 +125,39 @@ CONFIG_PLOTLY_MAPA = {
 }
 
 MAPEO_UPRES_CODIGO_DANE = {
-    'BOGOTA': '11', 'BOGOTÁ': '11', 'BOGOTÁ D.C.': '11', 'BOGOTA D.C.': '11', 'SANTAFE': '11',
-    'ANTIOQUIA': '05', 'URABA': '05', 'URABÁ': '05',
-    'ATLANTICO': '08', 'ATLÁNTICO': '08',
-    'BOLIVAR': '13', 'BOLÍVAR': '13',
-    'BOYACA': '15', 'BOYACÁ': '15',
-    'CALDAS': '17',
-    'CAQUETA': '18', 'CAQUETÁ': '18',
-    'CAUCA': '19',
-    'CESAR': '20',
-    'CORDOBA': '23', 'CÓRDOBA': '23',
-    'CUNDINAMARCA': '25',
+    'BOGOTA': '11', 'BOGOTÁ': '11', 'BOGOTÁ D.C.': '11', 'BOGOTA D.C.': '11', 'SANTAFE': '11', 'MEBOG': '11',
+    'ANTIOQUIA': '05', 'URABA': '05', 'URABÁ': '05', 'DEAMA': '05', 'DEURA': '05',
+    'ATLANTICO': '08', 'ATLÁNTICO': '08', 'DEATA': '08',
+    'BOLIVAR': '13', 'BOLÍVAR': '13', 'DEMAM': '13',
+    'BOYACA': '15', 'BOYACÁ': '15', 'DEBOY': '15',
+    'CALDAS': '17', 'DECAL': '17',
+    'CAQUETA': '18', 'CAQUETÁ': '18', 'DECAQ': '18',
+    'CAUCA': '19', 'DECAU': '19',
+    'CESAR': '20', 'DECES': '20',
+    'CORDOBA': '23', 'CÓRDOBA': '23', 'DECOR': '23',
+    'CUNDINAMARCA': '25', 'DECUN': '25',
     'CHOCO': '27', 'CHOCÓ': '27',
-    'HUILA': '41',
-    'LA GUAJIRA': '44', 'GUAJIRA': '44',
-    'MAGDALENA': '47',
-    'META': '50',
-    'NARIÑO': '52',
-    'NORTE DE SANTANDER': '54',
-    'QUINDIO': '63', 'QUINDÍO': '63',
-    'RISARALDA': '66',
-    'SANTANDER': '68',
-    'SUCRE': '70',
-    'TOLIMA': '73',
+    'HUILA': '41', 'DEHUI': '41',
+    'LA GUAJIRA': '44', 'GUAJIRA': '44', 'DEGUA': '44',
+    'MAGDALENA': '47', 'DEMAG': '47',
+    'META': '50', 'DEMET': '50',
+    'NARIÑO': '52', 'DENAR': '52',
+    'NORTE DE SANTANDER': '54', 'DENOR': '54',
+    'QUINDIO': '63', 'QUINDÍO': '63', 'DEQUI': '63',
+    'RISARALDA': '66', 'DERIS': '66',
+    'SANTANDER': '68', 'DESAN': '68',
+    'SUCRE': '70', 'DESUC': '70',
+    'TOLIMA': '73', 'DETOL': '73',
     'VALLE': '76', 'VALLE DEL CAUCA': '76', 'VALLE CAUCA': '76', 'DEVAL': '76', 
-    'ARAUCA': '81',
-    'CASANARE': '85',
-    'PUTUMAYO': '86',
-    'SAN ANDRES': '88', 'SAN ANDRÉS': '88',
-    'AMAZONAS': '91',
+    'ARAUCA': '81', 'DEARA': '81',
+    'CASANARE': '85', 'DECAS': '85',
+    'PUTUMAYO': '86', 'DEPUT': '86',
+    'SAN ANDRES': '88', 'SAN ANDRÉS': '88', 'DESAN_ANDRES': '88',
+    'AMAZONAS': '91', 'DEAMA_ZONAS': '91',
     'GUAINIA': '94', 'GUAINÍA': '94',
-    'GUAVIARE': '95',
+    'GUAVIARE': '95', 'DEGUAV': '95',
     'VAUPES': '97', 'VAUPÉS': '97',
-    'VICHADA': '99'
+    'VICHADA': '99', 'DEVIC': '99'
 }
 
 NOMBRES_DEPARTAMENTOS_MOSTRAR = {
@@ -173,15 +173,24 @@ NOMBRES_DEPARTAMENTOS_MOSTRAR = {
 
 @st.cache_data(ttl="24h")
 def cargar_geojson_colombia():
-    url = "https://gist.githubusercontent.com/john-guerra/43c7656821069d00dcbc/raw/be6a6e239cd5b5b803c6e7c2ec405b793a9064dd/Colombia.geo.json"
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req) as response:
-        geojson = json.loads(response.read().decode())
+    ruta_local = "Colombia.geo_2.json"
+    if not os.path.exists(ruta_local):
+        ruta_local = "colombia.geo.json"
+
+    if os.path.exists(ruta_local):
+        with open(ruta_local, "r", encoding="utf-8") as f:
+            geojson = json.load(f)
+    else:
+        url = "https://gist.githubusercontent.com/john-guerra/43c7656821069d00dcbc/raw/be6a6e239cd5b5b803c6e7c2ec405b793a9064dd/Colombia.geo.json"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            geojson = json.loads(response.read().decode())
     
     for feature in geojson.get('features', []):
         props = feature.get('properties', {})
-        code = str(props.get('DPTO', '')).zfill(2)
-        props['DPTO_CODE'] = code
+        code_val = str(props.get('DPTO', props.get('DPTO_CODE', ''))).zfill(2)
+        props['DPTO_CODE'] = code_val
+        feature['properties'] = props
         
     return geojson
 
@@ -189,6 +198,10 @@ def obtener_codigo_dane(u):
     if pd.isna(u) or not u:
         return None
     u_str = str(u).upper().strip()
+    
+    if u_str in MAPEO_UPRES_CODIGO_DANE:
+        return MAPEO_UPRES_CODIGO_DANE[u_str]
+        
     for clave, codigo in MAPEO_UPRES_CODIGO_DANE.items():
         if clave in u_str:
             return codigo
@@ -665,6 +678,7 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
         df_geo_base['CODIGO_DANE'] = df_geo_base['UNIDAD DE ASIGNACIÓN'].apply(obtener_codigo_dane)
         
         df_geo = df_geo_base.dropna(subset=['CODIGO_DANE']).groupby('CODIGO_DANE', observed=True).size().reset_index(name='Cantidad')
+        df_geo['CODIGO_DANE'] = df_geo['CODIGO_DANE'].astype(str).str.zfill(2)
         df_geo['Nombre_Dept'] = df_geo['CODIGO_DANE'].map(NOMBRES_DEPARTAMENTOS_MOSTRAR)
 
         has_choropleth_map = hasattr(px, "choropleth_map")
