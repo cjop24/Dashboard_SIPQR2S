@@ -148,7 +148,7 @@ MAPEO_UPRES_CODIGO_DANE = {
     'SANTANDER': '68',
     'SUCRE': '70',
     'TOLIMA': '73',
-    'VALLE': '76', 'VALLE DEL CAUCA': '76',
+    'VALLE': '76', 'VALLE DEL CAUCA': '76', 'VALLE CAUCA': '76', 'DEVAL': '76', 
     'ARAUCA': '81',
     'CASANARE': '85',
     'PUTUMAYO': '86',
