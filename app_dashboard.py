@@ -2,6 +2,7 @@ import json
 import os
 import re
 import urllib.parse
+import urllib.request
 from dotenv import load_dotenv
 import numpy as np
 import pandas as pd
@@ -100,7 +101,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 2. CONSTANTES Y FUNCIONES AUXILIARES
+# 2. CONSTANTES, MAPEOS Y FUNCIONES AUXILIARES
 # -----------------------------------------------------------------------------
 ARCH_PREFERENCIAS = "preferencias_usuario.json"
 COLOR_PERIODO_A = '#2e7d32'  # Verde RASES
@@ -113,41 +114,58 @@ CONFIG_PLOTLY_TOUCH = {
     'showAxisDragHandles': False
 }
 
-GEO_DEPARTAMENTOS_COL = {
-    'BOGOTA': [4.6097, -74.0817], 'BOGOTÁ': [4.6097, -74.0817], 'BOGOTÁ D.C.': [4.6097, -74.0817], 'BOGOTA D.C.': [4.6097, -74.0817],
-    'ANTIOQUIA': [6.5569, -75.8302], 'URABA': [6.5569, -75.8302], 'URABÁ': [6.5569, -75.8302], 
-    'REGION URABA': [6.5569, -75.8302], 'REGIÓN URABÁ': [6.5569, -75.8302],
-    'ATLANTICO': [10.6317, -74.9613], 'ATLÁNTICO': [10.6317, -74.9613],
-    'BOLIVAR': [8.6707, -74.0300], 'BOLÍVAR': [8.6707, -74.0300],
-    'BOYACA': [5.7125, -72.9323], 'BOYACÁ': [5.7125, -72.9323],
-    'CUNDINAMARCA': [5.0260, -74.0000],
-    'VALLE': [3.8000, -76.5000], 'VALLE DEL CAUCA': [3.8000, -76.5000],
-    'SANTANDER': [6.6437, -73.6486],
-    'CALDAS': [5.0689, -75.5174], 
-    'CAUCA': [2.4448, -76.6147],
-    'CESAR': [10.4631, -73.2532], 
-    'CORDOBA': [8.7479, -75.8814], 'CÓRDOBA': [8.7479, -75.8814],
-    'HUILA': [2.9273, -75.2819],
-    'MAGDALENA': [10.4114, -74.4056], 
-    'META': [3.2719, -73.0877], 
-    'NARIÑO': [1.5218, -77.6025],
-    'NORTE DE SANTANDER': [8.0322, -73.0000], 
-    'QUINDIO': [4.5339, -75.6811], 'QUINDÍO': [4.5339, -75.6811],
-    'RISARALDA': [4.8133, -75.6961],
-    'TOLIMA': [4.0000, -75.2500], 
-    'AMAZONAS': [-4.2153, -69.9406], 
-    'ARAUCA': [7.0847, -70.7591],
-    'CASANARE': [5.3378, -72.3959], 
-    'CHOCO': [5.6947, -76.6611], 'CHOCÓ': [5.6947, -76.6611],
-    'GUAINIA': [2.5819, -67.5819], 'GUAINÍA': [2.5819, -67.5819],
-    'GUAVIARE': [2.5648, -72.6459], 
-    'LA GUAJIRA': [11.5444, -72.9072], 
-    'PUTUMAYO': [0.4326, -75.8814],
-    'SAN ANDRES': [12.5847, -81.7006], 'SAN ANDRÉS': [12.5847, -81.7006],
-    'SUCRE': [9.3047, -75.3978], 
-    'VAUPES': [1.1983, -70.1733], 'VAUPÉS': [1.1983, -70.1733],
-    'VICHADA': [4.4234, -67.9239]
+# Mapeo de UPRES hacia los nombres exactos de departamentos en el GeoJSON
+MAPEO_UPRES_DEPARTAMENTO = {
+    'BOGOTA': 'BOGOTA D.C.', 'BOGOTÁ': 'BOGOTA D.C.', 'BOGOTÁ D.C.': 'BOGOTA D.C.', 'BOGOTA D.C.': 'BOGOTA D.C.',
+    'ANTIOQUIA': 'ANTIOQUIA', 'URABA': 'ANTIOQUIA', 'URABÁ': 'ANTIOQUIA', 'REGION URABA': 'ANTIOQUIA', 'REGIÓN URABÁ': 'ANTIOQUIA',
+    'ATLANTICO': 'ATLANTICO', 'ATLÁNTICO': 'ATLANTICO',
+    'BOLIVAR': 'BOLIVAR', 'BOLÍVAR': 'BOLIVAR',
+    'BOYACA': 'BOYACA', 'BOYACÁ': 'BOYACA',
+    'CUNDINAMARCA': 'CUNDINAMARCA',
+    'VALLE': 'VALLE DEL CAUCA', 'VALLE DEL CAUCA': 'VALLE DEL CAUCA', 'VALLE CAUCA': 'VALLE DEL CAUCA',
+    'SANTANDER': 'SANTANDER',
+    'CALDAS': 'CALDAS', 
+    'CAUCA': 'CAUCA',
+    'CESAR': 'CESAR', 
+    'CORDOBA': 'CORDOBA', 'CÓRDOBA': 'CORDOBA',
+    'HUILA': 'HUILA',
+    'MAGDALENA': 'MAGDALENA', 
+    'META': 'META', 
+    'NARIÑO': 'NARIÑO',
+    'NORTE DE SANTANDER': 'NORTE DE SANTANDER', 
+    'QUINDIO': 'QUINDIO', 'QUINDÍO': 'QUINDIO',
+    'RISARALDA': 'RISARALDA',
+    'TOLIMA': 'TOLIMA', 
+    'AMAZONAS': 'AMAZONAS', 
+    'ARAUCA': 'ARAUCA',
+    'CASANARE': 'CASANARE', 
+    'CHOCO': 'CHOCO', 'CHOCÓ': 'CHOCO',
+    'GUAINIA': 'GUAINIA', 'GUAINÍA': 'GUAINIA',
+    'GUAVIARE': 'GUAVIARE', 
+    'LA GUAJIRA': 'LA GUAJIRA', 
+    'PUTUMAYO': 'PUTUMAYO',
+    'SAN ANDRES': 'SAN ANDRES Y PROVIDENCIA', 'SAN ANDRÉS': 'SAN ANDRES Y PROVIDENCIA',
+    'SUCRE': 'SUCRE', 
+    'VAUPES': 'VAUPES', 'VAUPÉS': 'VAUPES',
+    'VICHADA': 'VICHADA'
 }
+
+@st.cache_data(ttl="24h")
+def cargar_geojson_colombia():
+    url = "https://gist.githubusercontent.com/john-guerra/43c7656821069d00dcbc/raw/be6a6e239cd5b5b803c6e7c2ec405b793a9064dd/Colombia.geo.json"
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req) as response:
+        geojson = json.loads(response.read().decode())
+    return geojson
+
+def obtener_departamento_standard(u):
+    if pd.isna(u) or not u:
+        return None
+    u_str = str(u).upper().strip()
+    for clave, dep_std in MAPEO_UPRES_DEPARTAMENTO.items():
+        if clave in u_str:
+            return dep_std
+    return None
 
 def cargar_preferencias():
     if os.path.exists(ARCH_PREFERENCIAS):
@@ -601,48 +619,54 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
 
     st.markdown("---")
 
+    # MAPA DE CALOR POR DEPARTAMENTOS
     st.markdown("""
         <h3 style='display: flex; align-items: center; gap: 8px;'>
             <i class="fa-solid fa-map-location-dot" style="color: #2e7d32;"></i>
-            MAPA: Distribución Geográfica PQRS por UPRES
+            MAPA DE CALOR: Distribución Geográfica PQRS por Departamento
         </h3>
     """, unsafe_allow_html=True)
     
-    df_geo_base = df_base.dropna(subset=['UNIDAD DE ASIGNACIÓN'])
-    df_geo = df_geo_base.groupby('UNIDAD DE ASIGNACIÓN', observed=True).size().reset_index(name='Cantidad')
-    df_geo = df_geo[df_geo['Cantidad'] > 0]
-    
-    lats, lons = [], []
-    for u in df_geo['UNIDAD DE ASIGNACIÓN']:
-        matched = False
-        for dep, coords in GEO_DEPARTAMENTOS_COL.items():
-            if dep in str(u).upper():
-                lats.append(coords[0])
-                lons.append(coords[1])
-                matched = True
-                break
-        if not matched:
-            lats.append(4.6097)
-            lons.append(-74.0817)
+    try:
+        colombia_geojson = cargar_geojson_colombia()
+    except Exception as e:
+        st.warning("No se pudo cargar la cartografía GeoJSON para el mapa de calor.")
+        colombia_geojson = None
 
-    df_geo['lat'] = lats
-    df_geo['lon'] = lons
-    
-    fig_mapa = px.scatter_map(
-        df_geo, 
-        lat='lat', 
-        lon='lon', 
-        size='Cantidad', 
-        hover_name='UNIDAD DE ASIGNACIÓN',
-        hover_data={'Cantidad': True, 'lat': False, 'lon': False},
-        color='Cantidad',
-        color_continuous_scale=px.colors.sequential.Greens,
-        zoom=4.8,
-        center={"lat": 4.5709, "lon": -74.2973},
-        map_style="carto-positron"
-    )
-    fig_mapa.update_layout(font=dict(family="Poppins, sans-serif"), height=580, margin=dict(l=0, r=0, t=10, b=0))
-    st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+    if colombia_geojson:
+        df_geo_base = df_base.dropna(subset=['UNIDAD DE ASIGNACIÓN']).copy()
+        df_geo_base['Departamento'] = df_geo_base['UNIDAD DE ASIGNACIÓN'].apply(obtener_departamento_standard)
+        
+        df_geo = df_geo_base.dropna(subset=['Departamento']).groupby('Departamento', observed=True).size().reset_index(name='Cantidad')
+
+        fig_mapa = px.choropleth_mapbox(
+            df_geo,
+            geojson=colombia_geojson,
+            locations='Departamento',
+            featureidkey="properties.NOMBRE_DPT",
+            color='Cantidad',
+            color_continuous_scale="Greens",
+            range_color=(0, df_geo['Cantidad'].max() if not df_geo.empty else 100),
+            mapbox_style="carto-positron",
+            zoom=4.5,
+            center={"lat": 4.5709, "lon": -74.2973},
+            opacity=0.78,
+            labels={'Cantidad': 'PQRS Recepcionadas', 'Departamento': 'Departamento'}
+        )
+
+        fig_mapa.update_layout(
+            font=dict(family="Poppins, sans-serif"), 
+            height=580, 
+            margin=dict(l=0, r=0, t=10, b=0),
+            coloraxis_colorbar=dict(
+                title="Volumen PQRS",
+                thicknessmode="pixels", thickness=15,
+                lenmode="pixels", len=300
+            )
+        )
+        st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+    else:
+        st.info("Visualización del mapa de calor no disponible temporalmente.")
 
     st.markdown("---")
 
@@ -907,7 +931,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
 
         st.markdown("---")
 
-        # 1. Gráfico comparativo de Categoría Salud
         generar_barras_100pct_comparativo(
             df_a, df_b, 
             'ESPECIALIDAD_CATEGORIA', 
@@ -916,7 +939,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
             lbl_b=lbl_b_short
         )
         
-        # 2. Gráfico comparativo de Motivo Específico
         generar_barras_100pct_comparativo(
             df_a, df_b, 
             col_mot_esp, 
@@ -1011,7 +1033,6 @@ elif authentication_status:
         st.error(f"Error conectando a la base de datos: {e}")
         st.stop()
 
-    # Gestión de Filtros en Sidebar
     prefs = cargar_preferencias()
 
     def restablecer_filtros_callback():
@@ -1077,7 +1098,6 @@ elif authentication_status:
             on_click=restablecer_filtros_callback
         )
 
-    # Filtrado dinámico
     df_base_global = df_raw.copy()
     if sel_rases:
         df_base_global = df_base_global[df_base_global['RASES'].isin(sel_rases)]
@@ -1092,7 +1112,6 @@ elif authentication_status:
     if sel_medios:
         df_base_global = df_base_global[df_base_global['Medio de Recepción'].isin(sel_medios)]
 
-    # ENCABEZADO
     st.markdown("""
         <h1 style='display: flex; align-items: center; gap: 12px; margin-bottom: 0px;'>
             <i class="fa-solid fa-shield-halved" style="color: #1b5e20;"></i>
