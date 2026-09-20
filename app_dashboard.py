@@ -114,42 +114,52 @@ CONFIG_PLOTLY_TOUCH = {
     'showAxisDragHandles': False
 }
 
-# Mapeo ajustado a la nomenclatura exacta del GeoJSON de john-guerra
-MAPEO_UPRES_DEPARTAMENTO = {
-    'BOGOTA': 'SANTAFE DE BOGOTA D.C.', 'BOGOTÁ': 'SANTAFE DE BOGOTA D.C.', 
-    'BOGOTÁ D.C.': 'SANTAFE DE BOGOTA D.C.', 'BOGOTA D.C.': 'SANTAFE DE BOGOTA D.C.',
-    'SANTAFE DE BOGOTA': 'SANTAFE DE BOGOTA D.C.', 'CUNDINAMARCA / BOGOTA': 'SANTAFE DE BOGOTA D.C.',
-    'ANTIOQUIA': 'ANTIOQUIA', 'URABA': 'ANTIOQUIA', 'URABÁ': 'ANTIOQUIA', 'REGION URABA': 'ANTIOQUIA', 'REGIÓN URABÁ': 'ANTIOQUIA',
-    'ATLANTICO': 'ATLANTICO', 'ATLÁNTICO': 'ATLANTICO',
-    'BOLIVAR': 'BOLIVAR', 'BOLÍVAR': 'BOLIVAR',
-    'BOYACA': 'BOYACA', 'BOYACÁ': 'BOYACA',
-    'CUNDINAMARCA': 'CUNDINAMARCA',
-    'VALLE': 'VALLE DEL CAUCA', 'VALLE DEL CAUCA': 'VALLE DEL CAUCA', 'VALLE CAUCA': 'VALLE DEL CAUCA',
-    'SANTANDER': 'SANTANDER',
-    'CALDAS': 'CALDAS', 
-    'CAUCA': 'CAUCA',
-    'CESAR': 'CESAR', 
-    'CORDOBA': 'CORDOBA', 'CÓRDOBA': 'CORDOBA',
-    'HUILA': 'HUILA',
-    'MAGDALENA': 'MAGDALENA', 
-    'META': 'META', 
-    'NARIÑO': 'NARIÑO',
-    'NORTE DE SANTANDER': 'NORTE DE SANTANDER', 
-    'QUINDIO': 'QUINDIO', 'QUINDÍO': 'QUINDIO',
-    'RISARALDA': 'RISARALDA',
-    'TOLIMA': 'TOLIMA', 
-    'AMAZONAS': 'AMAZONAS', 
-    'ARAUCA': 'ARAUCA',
-    'CASANARE': 'CASANARE', 
-    'CHOCO': 'CHOCO', 'CHOCÓ': 'CHOCO',
-    'GUAINIA': 'GUAINIA', 'GUAINÍA': 'GUAINIA',
-    'GUAVIARE': 'GUAVIARE', 
-    'LA GUAJIRA': 'LA GUAJIRA', 
-    'PUTUMAYO': 'PUTUMAYO',
-    'SAN ANDRES': 'SAN ANDRES Y PROVIDENCIA', 'SAN ANDRÉS': 'SAN ANDRES Y PROVIDENCIA',
-    'SUCRE': 'SUCRE', 
-    'VAUPES': 'VAUPES', 'VAUPÉS': 'VAUPES',
-    'VICHADA': 'VICHADA'
+# Mapeo de UPRES hacia el código DANE oficial del departamento (Garantiza mapeo unívoco)
+MAPEO_UPRES_CODIGO_DANE = {
+    'BOGOTA': '11', 'BOGOTÁ': '11', 'BOGOTÁ D.C.': '11', 'BOGOTA D.C.': '11', 'SANTAFE': '11',
+    'ANTIOQUIA': '05', 'URABA': '05', 'URABÁ': '05',
+    'ATLANTICO': '08', 'ATLÁNTICO': '08',
+    'BOLIVAR': '13', 'BOLÍVAR': '13',
+    'BOYACA': '15', 'BOYACÁ': '15',
+    'CALDAS': '17',
+    'CAQUETA': '18', 'CAQUETÁ': '18',
+    'CAUCA': '19',
+    'CESAR': '20',
+    'CORDOBA': '23', 'CÓRDOBA': '23',
+    'CUNDINAMARCA': '25',
+    'CHOCO': '27', 'CHOCÓ': '27',
+    'HUILA': '41',
+    'LA GUAJIRA': '44', 'GUAJIRA': '44',
+    'MAGDALENA': '47',
+    'META': '50',
+    'NARIÑO': '52',
+    'NORTE DE SANTANDER': '54',
+    'QUINDIO': '63', 'QUINDÍO': '63',
+    'RISARALDA': '66',
+    'SANTANDER': '68',
+    'SUCRE': '70',
+    'TOLIMA': '73',
+    'VALLE': '76', 'VALLE DEL CAUCA': '76',
+    'ARAUCA': '81',
+    'CASANARE': '85',
+    'PUTUMAYO': '86',
+    'SAN ANDRES': '88', 'SAN ANDRÉS': '88',
+    'AMAZONAS': '91',
+    'GUAINIA': '94', 'GUAINÍA': '94',
+    'GUAVIARE': '95',
+    'VAUPES': '97', 'VAUPÉS': '97',
+    'VICHADA': '99'
+}
+
+NOMBRES_DEPARTAMENTOS_MOSTRAR = {
+    '11': 'Bogotá D.C.', '05': 'Antioquia', '08': 'Atlántico', '13': 'Bolívar',
+    '15': 'Boyacá', '17': 'Caldas', '18': 'Caquetá', '19': 'Cauca', '20': 'Cesar',
+    '23': 'Córdoba', '25': 'Cundinamarca', '27': 'Chocó', '41': 'Huila',
+    '44': 'La Guajira', '47': 'Magdalena', '50': 'Meta', '52': 'Nariño',
+    '54': 'Norte de Santander', '63': 'Quindío', '66': 'Risaralda', '68': 'Santander',
+    '70': 'Sucre', '73': 'Tolima', '76': 'Valle del Cauca', '81': 'Arauca',
+    '85': 'Casanare', '86': 'Putumayo', '88': 'San Andrés y Providencia',
+    '91': 'Amazonas', '94': 'Guainía', '95': 'Guaviare', '97': 'Vaupés', '99': 'Vichada'
 }
 
 @st.cache_data(ttl="24h")
@@ -158,18 +168,22 @@ def cargar_geojson_colombia():
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     with urllib.request.urlopen(req) as response:
         geojson = json.loads(response.read().decode())
+    
+    # Normalizar la propiedad DPTO en el GeoJSON para asegurar el formato de 2 dígitos (ej: '11', '05')
+    for feature in geojson.get('features', []):
+        props = feature.get('properties', {})
+        code = str(props.get('DPTO', '')).zfill(2)
+        props['DPTO_CODE'] = code
+        
     return geojson
 
-def obtener_departamento_standard(u):
+def obtener_codigo_dane(u):
     if pd.isna(u) or not u:
         return None
     u_str = str(u).upper().strip()
-    
-    # 1. Búsqueda por coincidencia en diccionario
-    for clave, dep_std in MAPEO_UPRES_DEPARTAMENTO.items():
+    for clave, codigo in MAPEO_UPRES_CODIGO_DANE.items():
         if clave in u_str:
-            return dep_std
-            
+            return codigo
     return None
 
 def cargar_preferencias():
@@ -624,7 +638,7 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
 
     st.markdown("---")
 
-    # MAPA DE CALOR POR DEPARTAMENTOS
+    # MAPA DE CALOR POR DEPARTAMENTOS POR CÓDIGO DANE (Garantiza inclusión de Bogotá D.C.)
     st.markdown("""
         <h3 style='display: flex; align-items: center; gap: 8px;'>
             <i class="fa-solid fa-map-location-dot" style="color: #2e7d32;"></i>
@@ -640,25 +654,26 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
 
     if colombia_geojson:
         df_geo_base = df_base.dropna(subset=['UNIDAD DE ASIGNACIÓN']).copy()
-        df_geo_base['Departamento'] = df_geo_base['UNIDAD DE ASIGNACIÓN'].apply(obtener_departamento_standard)
+        df_geo_base['CODIGO_DANE'] = df_geo_base['UNIDAD DE ASIGNACIÓN'].apply(obtener_codigo_dane)
         
-        df_geo = df_geo_base.dropna(subset=['Departamento']).groupby('Departamento', observed=True).size().reset_index(name='Cantidad')
+        df_geo = df_geo_base.dropna(subset=['CODIGO_DANE']).groupby('CODIGO_DANE', observed=True).size().reset_index(name='Cantidad')
+        df_geo['Nombre_Dept'] = df_geo['CODIGO_DANE'].map(NOMBRES_DEPARTAMENTOS_MOSTRAR)
 
-        # Compatibilidad de función y parámetro según versión de Plotly
         has_choropleth_map = hasattr(px, "choropleth_map")
         
         kwargs_mapa = {
             'data_frame': df_geo,
             'geojson': colombia_geojson,
-            'locations': 'Departamento',
-            'featureidkey': "properties.NOMBRE_DPT",
+            'locations': 'CODIGO_DANE',
+            'featureidkey': "properties.DPTO_CODE",
             'color': 'Cantidad',
             'color_continuous_scale': "Greens",
             'range_color': (0, df_geo['Cantidad'].max() if not df_geo.empty else 100),
             'zoom': 4.5,
             'center': {"lat": 4.5709, "lon": -74.2973},
-            'opacity': 0.78,
-            'labels': {'Cantidad': 'PQRS Recepcionadas', 'Departamento': 'Departamento'}
+            'opacity': 0.85,
+            'hover_data': {'CODIGO_DANE': False, 'Nombre_Dept': True, 'Cantidad': True},
+            'labels': {'Cantidad': 'PQRS Recepcionadas', 'Nombre_Dept': 'Departamento'}
         }
 
         if has_choropleth_map:
