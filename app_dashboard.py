@@ -542,18 +542,51 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
     color_map = {cat: paleta_amplia[i % len(paleta_amplia)] for i, cat in enumerate(categorias_unicas_todas)}
     color_map['Otros'] = '#8d99ae'
 
-    # Ordenar eje Y de arriba hacia abajo (Inversión necesaria para Plotly)
+    # NOTA: en un eje Y MULTICATEGORÍA (y=[UPRES, Periodo]) Plotly IGNORA 'categoryorder'/
+    # 'categoryarray' (limitación conocida y no corregida de la librería en ejes anidados
+    # de 2 niveles). El orden real que se dibuja depende únicamente del orden en que los
+    # datos aparecen dentro de las trazas: la categoría que aparece PRIMERO se dibuja ABAJO
+    # y la que aparece DE ÚLTIMA se dibuja ARRIBA. Por eso más abajo se agrega una "traza
+    # ancla" invisible que fija ese orden de forma explícita y completa (ver comentario ahí).
+    #
+    # Esta lista queda en orden ASCENDENTE (menor a mayor por Periodo B) porque así es como
+    # debe alimentarse la traza ancla para que, de arriba hacia abajo, quede: Bogotá (mayor)
+    # -> ... -> Santander (menor).
     top_5_upres_fmt = [acortar_texto_abreviado(u) for u in upres_ordenadas_b]
-    upres_orden_eje_y = list(reversed(top_5_upres_fmt))
+    upres_orden_ascendente = list(reversed(top_5_upres_fmt))
 
-    df_total['UPRES_fmt'] = pd.Categorical(df_total['UPRES_fmt'], categories=upres_orden_eje_y, ordered=True)
+    df_total['UPRES_fmt'] = pd.Categorical(df_total['UPRES_fmt'], categories=upres_orden_ascendente, ordered=True)
     df_total = df_total.sort_values(['UPRES_fmt', 'Periodo', 'Rank_Local'])
 
     if not df_totales_absolutos.empty:
-        df_totales_absolutos['UPRES_fmt'] = pd.Categorical(df_totales_absolutos['UPRES_fmt'], categories=upres_orden_eje_y, ordered=True)
+        df_totales_absolutos['UPRES_fmt'] = pd.Categorical(df_totales_absolutos['UPRES_fmt'], categories=upres_orden_ascendente, ordered=True)
         df_totales_absolutos = df_totales_absolutos.sort_values(['UPRES_fmt', 'Periodo'])
 
     fig = go.Figure()
+
+    # ---------------------------------------------------------------------
+    # TRAZA ANCLA (invisible): fija de una sola vez y de forma determinística
+    # el orden COMPLETO del eje Y multicategoría (las 5 UPRES x los 2 periodos).
+    # Es necesaria porque las categorías reales (Top 5 locales) varían de una
+    # UPRES a otra, así que las trazas de datos reales solo cubren combinaciones
+    # PARCIALES; sin esta ancla, el orden final de las UPRES termina dependiendo
+    # de qué combinación parcial aparece primero, en vez del total de Periodo B.
+    # Debe ser SIEMPRE la primera traza añadida a la figura (x=0, invisible).
+    anchor_upres, anchor_periodo = [], []
+    for u in upres_orden_ascendente:
+        for periodo in (lbl_a, lbl_b):
+            anchor_upres.append(u)
+            anchor_periodo.append(periodo)
+
+    fig.add_trace(go.Bar(
+        y=[anchor_upres, anchor_periodo],
+        x=[0] * len(anchor_upres),
+        orientation='h',
+        marker=dict(color='rgba(0,0,0,0)'),
+        showlegend=False,
+        hoverinfo='skip',
+        width=0.001
+    ))
 
     rangos_locales_existentes = sorted(df_total['Rank_Local'].unique())
 
@@ -597,10 +630,12 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         bargap=0.45,
         bargroupgap=0.02,
         yaxis=dict(
-            title="", 
+            title="",
             tickfont=dict(size=11),
-            categoryorder='array',
-            categoryarray=upres_orden_eje_y
+            # El orden real queda fijado por la traza ancla añadida al inicio de la figura
+            # (ver más arriba). 'categoryorder'/'categoryarray' no tienen efecto en ejes Y
+            # multicategoría, por eso aquí solo se deja 'trace' explícito.
+            categoryorder='trace'
         ),
         xaxis=dict(title="Proporción Relativa (%)", range=[0, 110]),
         height=580,
