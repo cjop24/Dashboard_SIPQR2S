@@ -107,6 +107,7 @@ ARCH_PREFERENCIAS = "preferencias_usuario.json"
 COLOR_PERIODO_A = '#2e7d32'  # Verde RASES
 COLOR_PERIODO_B = '#c62828'  # Rojo RASES
 
+# Configuración base para gráficos estándar
 CONFIG_PLOTLY_TOUCH = {
     'displayModeBar': False,
     'scrollZoom': False,
@@ -114,7 +115,15 @@ CONFIG_PLOTLY_TOUCH = {
     'showAxisDragHandles': False
 }
 
-# Mapeo de UPRES hacia el código DANE oficial del departamento (Garantiza mapeo unívoco)
+# Configuración interactiva optimizada para el mapa de calor en móviles
+CONFIG_PLOTLY_MAPA = {
+    'displayModeBar': True,
+    'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
+    'scrollZoom': False,           # Evita que el scroll general de la página mueva el mapa por accidente
+    'doubleClick': 'reset+pan',    # El doble clic/toque restablece o activa el enfoque en el punto
+    'showAxisDragHandles': False
+}
+
 MAPEO_UPRES_CODIGO_DANE = {
     'BOGOTA': '11', 'BOGOTÁ': '11', 'BOGOTÁ D.C.': '11', 'BOGOTA D.C.': '11', 'SANTAFE': '11',
     'ANTIOQUIA': '05', 'URABA': '05', 'URABÁ': '05',
@@ -169,7 +178,6 @@ def cargar_geojson_colombia():
     with urllib.request.urlopen(req) as response:
         geojson = json.loads(response.read().decode())
     
-    # Normalizar la propiedad DPTO en el GeoJSON para asegurar el formato de 2 dígitos (ej: '11', '05')
     for feature in geojson.get('features', []):
         props = feature.get('properties', {})
         code = str(props.get('DPTO', '')).zfill(2)
@@ -638,7 +646,7 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
 
     st.markdown("---")
 
-    # MAPA DE CALOR POR DEPARTAMENTOS POR CÓDIGO DANE (Garantiza inclusión de Bogotá D.C.)
+    # MAPA DE CALOR POR DEPARTAMENTOS POR CÓDIGO DANE
     st.markdown("""
         <h3 style='display: flex; align-items: center; gap: 8px;'>
             <i class="fa-solid fa-map-location-dot" style="color: #2e7d32;"></i>
@@ -683,17 +691,20 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
             kwargs_mapa['mapbox_style'] = "carto-positron"
             fig_mapa = px.choropleth_mapbox(**kwargs_mapa)
 
+        # Configuración específica para el mapa para navegación cómoda en móviles:
         fig_mapa.update_layout(
             font=dict(family="Poppins, sans-serif"), 
             height=580, 
             margin=dict(l=0, r=0, t=10, b=0),
+            dragmode=False, # Evita que arrastrar la pantalla mueva accidentalmente el mapa al hacer scroll
             coloraxis_colorbar=dict(
                 title="Volumen PQRS",
                 thicknessmode="pixels", thickness=15,
                 lenmode="pixels", len=300
             )
         )
-        st.plotly_chart(aplicar_touch_safe(fig_mapa), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+        
+        st.plotly_chart(fig_mapa, use_container_width=True, config=CONFIG_PLOTLY_MAPA)
     else:
         st.info("Visualización del mapa de calor no disponible temporalmente.")
 
