@@ -114,9 +114,11 @@ CONFIG_PLOTLY_TOUCH = {
     'showAxisDragHandles': False
 }
 
-# Mapeo de UPRES hacia los nombres exactos de departamentos en el GeoJSON
+# Mapeo ajustado a la nomenclatura exacta del GeoJSON de john-guerra
 MAPEO_UPRES_DEPARTAMENTO = {
-    'BOGOTA': 'BOGOTA D.C.', 'BOGOTÁ': 'BOGOTA D.C.', 'BOGOTÁ D.C.': 'BOGOTA D.C.', 'BOGOTA D.C.': 'BOGOTA D.C.',
+    'BOGOTA': 'SANTAFE DE BOGOTA D.C.', 'BOGOTÁ': 'SANTAFE DE BOGOTA D.C.', 
+    'BOGOTÁ D.C.': 'SANTAFE DE BOGOTA D.C.', 'BOGOTA D.C.': 'SANTAFE DE BOGOTA D.C.',
+    'SANTAFE DE BOGOTA': 'SANTAFE DE BOGOTA D.C.', 'CUNDINAMARCA / BOGOTA': 'SANTAFE DE BOGOTA D.C.',
     'ANTIOQUIA': 'ANTIOQUIA', 'URABA': 'ANTIOQUIA', 'URABÁ': 'ANTIOQUIA', 'REGION URABA': 'ANTIOQUIA', 'REGIÓN URABÁ': 'ANTIOQUIA',
     'ATLANTICO': 'ATLANTICO', 'ATLÁNTICO': 'ATLANTICO',
     'BOLIVAR': 'BOLIVAR', 'BOLÍVAR': 'BOLIVAR',
@@ -162,9 +164,12 @@ def obtener_departamento_standard(u):
     if pd.isna(u) or not u:
         return None
     u_str = str(u).upper().strip()
+    
+    # 1. Búsqueda por coincidencia en diccionario
     for clave, dep_std in MAPEO_UPRES_DEPARTAMENTO.items():
         if clave in u_str:
             return dep_std
+            
     return None
 
 def cargar_preferencias():
