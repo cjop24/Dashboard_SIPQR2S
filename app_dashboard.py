@@ -107,7 +107,6 @@ ARCH_PREFERENCIAS = "preferencias_usuario.json"
 COLOR_PERIODO_A = '#2e7d32'  # Verde RASES
 COLOR_PERIODO_B = '#c62828'  # Rojo RASES
 
-# Configuración base para gráficos estándar
 CONFIG_PLOTLY_TOUCH = {
     'displayModeBar': False,
     'scrollZoom': False,
@@ -115,12 +114,11 @@ CONFIG_PLOTLY_TOUCH = {
     'showAxisDragHandles': False
 }
 
-# Configuración interactiva optimizada para el mapa de calor en móviles
 CONFIG_PLOTLY_MAPA = {
     'displayModeBar': True,
     'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
-    'scrollZoom': False,           # Evita que el scroll general de la página mueva el mapa por accidente
-    'doubleClick': 'reset+pan',    # El doble clic/toque restablece o activa el enfoque
+    'scrollZoom': False,
+    'doubleClick': 'reset+pan',
     'showAxisDragHandles': False
 }
 
@@ -293,7 +291,7 @@ def acortar_texto_abreviado(texto):
     return res.replace("LÍNEA DIRECTOR GENERAL", "LÍNEA DIRECTOR").replace("LINEA DIRECTOR GENERAL", "LÍNEA DIRECTOR") if res else "N/A"
 
 # -----------------------------------------------------------------------------
-# 3. GENERACIÓN DE GRÁFICOS
+# 3. GENERACIÓN DE GRÁFICOS COMPLEJOS
 # -----------------------------------------------------------------------------
 def generar_grafico_mariposa(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
     st.markdown(f"### {titulo_grafico}")
@@ -464,7 +462,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         st.info("No hay datos disponibles para la comparación.")
         return
 
-    # 1. Obtener Top 5 UPRES ordenadas estrictamente por el TOTAL ABSOLUTO del PERIODO B
     tot_b_absoluto = df_b_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     tot_a_absoluto = df_a_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
     
@@ -542,16 +539,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
     color_map = {cat: paleta_amplia[i % len(paleta_amplia)] for i, cat in enumerate(categorias_unicas_todas)}
     color_map['Otros'] = '#8d99ae'
 
-    # NOTA: en un eje Y MULTICATEGORÍA (y=[UPRES, Periodo]) Plotly IGNORA 'categoryorder'/
-    # 'categoryarray' (limitación conocida y no corregida de la librería en ejes anidados
-    # de 2 niveles). El orden real que se dibuja depende únicamente del orden en que los
-    # datos aparecen dentro de las trazas: la categoría que aparece PRIMERO se dibuja ABAJO
-    # y la que aparece DE ÚLTIMA se dibuja ARRIBA. Por eso más abajo se agrega una "traza
-    # ancla" invisible que fija ese orden de forma explícita y completa (ver comentario ahí).
-    #
-    # Esta lista queda en orden ASCENDENTE (menor a mayor por Periodo B) porque así es como
-    # debe alimentarse la traza ancla para que, de arriba hacia abajo, quede: Bogotá (mayor)
-    # -> ... -> Santander (menor).
     top_5_upres_fmt = [acortar_texto_abreviado(u) for u in upres_ordenadas_b]
     upres_orden_ascendente = list(reversed(top_5_upres_fmt))
 
@@ -564,14 +551,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
 
     fig = go.Figure()
 
-    # ---------------------------------------------------------------------
-    # TRAZA ANCLA (invisible): fija de una sola vez y de forma determinística
-    # el orden COMPLETO del eje Y multicategoría (las 5 UPRES x los 2 periodos).
-    # Es necesaria porque las categorías reales (Top 5 locales) varían de una
-    # UPRES a otra, así que las trazas de datos reales solo cubren combinaciones
-    # PARCIALES; sin esta ancla, el orden final de las UPRES termina dependiendo
-    # de qué combinación parcial aparece primero, en vez del total de Periodo B.
-    # Debe ser SIEMPRE la primera traza añadida a la figura (x=0, invisible).
     anchor_upres, anchor_periodo = [], []
     for u in upres_orden_ascendente:
         for periodo in (lbl_a, lbl_b):
@@ -632,9 +611,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         yaxis=dict(
             title="",
             tickfont=dict(size=11),
-            # El orden real queda fijado por la traza ancla añadida al inicio de la figura
-            # (ver más arriba). 'categoryorder'/'categoryarray' no tienen efecto en ejes Y
-            # multicategoría, por eso aquí solo se deja 'trace' explícito.
             categoryorder='trace'
         ),
         xaxis=dict(title="Proporción Relativa (%)", range=[0, 110]),
@@ -648,7 +624,7 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
 # -----------------------------------------------------------------------------
 # 4. MÓDULOS DE RENDERIZADO DE PESTAÑAS
 # -----------------------------------------------------------------------------
-def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
+def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, dict_rases_users, dict_upres_users):
     st.caption("Consola Ejecutiva de Atención al Usuario - Periodo Único")
 
     if "fecha_ind_inicio" not in st.session_state:
@@ -704,8 +680,7 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
     
     try:
         colombia_geojson = cargar_geojson_colombia()
-    except Exception as e:
-        st.warning("No se pudo cargar la cartografía GeoJSON para el mapa de calor.")
+    except Exception:
         colombia_geojson = None
 
     if colombia_geojson:
@@ -825,39 +800,87 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
 
     st.markdown("---")
 
-    st.markdown("""
-        <h3 style='display: flex; align-items: center; gap: 8px;'>
-            <i class="fa-solid fa-sitemap" style="color: #2e7d32;"></i>
-            PQRS por RASES
-        </h3>
-    """, unsafe_allow_html=True)
+    # -----------------------------------------------------------------------------
+    # PQRS POR RASES (CON ALTERNANCIA DE TASA POR 1.000 USUARIOS)
+    # -----------------------------------------------------------------------------
+    col_tit_r, col_btn_r = st.columns([3, 1])
+    with col_tit_r:
+        st.markdown("""
+            <h3 style='display: flex; align-items: center; gap: 8px;'>
+                <i class="fa-solid fa-sitemap" style="color: #2e7d32;"></i>
+                PQRS por RASES
+            </h3>
+        """, unsafe_allow_html=True)
+    with col_btn_r:
+        ver_tasa_rases = st.toggle("PQRS por cada 1000 usuarios", key="tasa_rases_ind")
+
     df_g1_raw = df_base['RASES'].dropna().value_counts().reset_index()
     df_g1_raw.columns = ['RASES', 'Cantidad']
     df_g1 = df_g1_raw[(df_g1_raw['Cantidad'] > 0) & (df_g1_raw['RASES'].astype(str).str.strip() != '')].copy()
     df_g1['RASES_fmt'] = df_g1['RASES'].apply(acortar_texto_abreviado)
-    
-    fig1 = px.bar(df_g1, x='RASES_fmt', y='Cantidad', text_auto=',d', color_discrete_sequence=[COLOR_PERIODO_A])
-    fig1.update_layout(font=dict(family="Poppins, sans-serif"), xaxis_title="", yaxis_title="", height=300, margin=dict(l=5, r=5, t=10, b=10))
+    df_g1['Usuarios'] = df_g1['RASES'].map(dict_rases_users).fillna(0)
+
+    if ver_tasa_rases:
+        df_g1['Valor_Graficar'] = df_g1.apply(
+            lambda r: (r['Cantidad'] / r['Usuarios'] * 1000) if r['Usuarios'] > 0 else 0, axis=1
+        )
+        y_label_r = "Tasa por 1.000 Usu."
+        fmt_text_r = ':.2f'
+    else:
+        df_g1['Valor_Graficar'] = df_g1['Cantidad']
+        y_label_r = "Cantidad PQRS"
+        fmt_text_r = ',d'
+
+    fig1 = px.bar(
+        df_g1, 
+        x='RASES_fmt', 
+        y='Valor_Graficar', 
+        text_auto=fmt_text_r, 
+        color_discrete_sequence=[COLOR_PERIODO_A],
+        labels={'Valor_Graficar': y_label_r, 'RASES_fmt': ''}
+    )
+    fig1.update_layout(font=dict(family="Poppins, sans-serif"), xaxis_title="", yaxis_title="", height=320, margin=dict(l=5, r=5, t=10, b=10))
     st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    st.markdown("""
-        <h3 style='display: flex; align-items: center; gap: 8px;'>
-            <i class="fa-solid fa-hospital" style="color: #2e7d32;"></i>
-            PQRS por UPRES
-        </h3>
-    """, unsafe_allow_html=True)
+    # -----------------------------------------------------------------------------
+    # PQRS POR UPRES (CON ALTERNANCIA DE TASA POR 1.000 USUARIOS)
+    # -----------------------------------------------------------------------------
+    col_tit_u, col_btn_u = st.columns([3, 1])
+    with col_tit_u:
+        st.markdown("""
+            <h3 style='display: flex; align-items: center; gap: 8px;'>
+                <i class="fa-solid fa-hospital" style="color: #2e7d32;"></i>
+                PQRS por UPRES
+            </h3>
+        """, unsafe_allow_html=True)
+    with col_btn_u:
+        ver_tasa_upres = st.toggle("PQRS por cada 1000 usuarios", key="tasa_upres_ind")
+
     df_u1_raw = df_base['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
     df_u1_raw.columns = ['UPRES', 'Cantidad']
     df_u1 = df_u1_raw[(df_u1_raw['Cantidad'] > 0) & (df_u1_raw['UPRES'].astype(str).str.strip() != '')].copy()
     df_u1['UPRES_fmt'] = df_u1['UPRES'].apply(acortar_texto_abreviado)
     df_u1 = df_u1.head(10)
-    
+    df_u1['Usuarios'] = df_u1['UPRES'].map(dict_upres_users).fillna(0)
+
+    if ver_tasa_upres:
+        df_u1['Valor_Graficar'] = df_u1.apply(
+            lambda r: (r['Cantidad'] / r['Usuarios'] * 1000) if r['Usuarios'] > 0 else 0, axis=1
+        )
+        y_label_u = "Tasa por 1.000 Usu."
+        fmt_text_u = ':.2f'
+    else:
+        df_u1['Valor_Graficar'] = df_u1['Cantidad']
+        y_label_u = "Cantidad PQRS"
+        fmt_text_u = ',d'
+
     fig_upres_simple = px.bar(
         df_u1, 
         x='UPRES_fmt', 
-        y='Cantidad', 
-        text_auto=',d',
-        color_discrete_sequence=[COLOR_PERIODO_A]
+        y='Valor_Graficar', 
+        text_auto=fmt_text_u,
+        color_discrete_sequence=[COLOR_PERIODO_A],
+        labels={'Valor_Graficar': y_label_u, 'UPRES_fmt': ''}
     )
     fig_upres_simple.update_layout(font=dict(family="Poppins, sans-serif"), xaxis_title="", yaxis_title="", height=350, margin=dict(l=5, r=5, t=10, b=10))
     st.plotly_chart(aplicar_touch_safe(fig_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
@@ -865,7 +888,7 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f):
     generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES - Categoría Salud (Top 5)")
     generar_grafico_upres_apilado(df_base, col_mot_esp, "Distribución por UPRES - Motivo Específico (Top 5)")
 
-def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
+def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, dict_rases_users, dict_upres_users):
     st.caption("Comparación Analítica Cruzada entre dos Ventanas de Tiempo")
 
     if "fecha_a_inicio" not in st.session_state:
@@ -937,12 +960,20 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
 
         st.markdown("---")
 
-        st.markdown("""
-            <h3 style='display: flex; align-items: center; gap: 8px;'>
-                <i class="fa-solid fa-diagram-project" style="color: #2e7d32;"></i>
-                Comparativo por RASES
-            </h3>
-        """, unsafe_allow_html=True)
+        # -----------------------------------------------------------------------------
+        # COMPARATIVO POR RASES (TASA VS CANTIDAD)
+        # -----------------------------------------------------------------------------
+        col_tit_cr, col_btn_cr = st.columns([3, 1])
+        with col_tit_cr:
+            st.markdown("""
+                <h3 style='display: flex; align-items: center; gap: 8px;'>
+                    <i class="fa-solid fa-diagram-project" style="color: #2e7d32;"></i>
+                    Comparativo por RASES
+                </h3>
+            """, unsafe_allow_html=True)
+        with col_btn_cr:
+            ver_tasa_comp_rases = st.toggle("PQRS por cada 1000 usuarios", key="tasa_rases_comp")
+
         df_r_a = df_a['RASES'].dropna().value_counts().reset_index()
         df_r_a.columns = ['RASES', 'Cantidad']
         df_r_a['Periodo'] = lbl_a_short
@@ -954,14 +985,24 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
         df_comp_rases = pd.concat([df_r_a, df_r_b])
         df_comp_rases = df_comp_rases[(df_comp_rases['Cantidad'] > 0) & (df_comp_rases['RASES'].astype(str).str.strip() != '')].copy()
         df_comp_rases['RASES_fmt'] = df_comp_rases['RASES'].apply(acortar_texto_abreviado)
+        df_comp_rases['Usuarios'] = df_comp_rases['RASES'].map(dict_rases_users).fillna(0)
+
+        if ver_tasa_comp_rases:
+            df_comp_rases['Valor_Graficar'] = df_comp_rases.apply(
+                lambda r: (r['Cantidad'] / r['Usuarios'] * 1000) if r['Usuarios'] > 0 else 0, axis=1
+            )
+            fmt_comp_r = ':.2f'
+        else:
+            df_comp_rases['Valor_Graficar'] = df_comp_rases['Cantidad']
+            fmt_comp_r = ',d'
 
         fig_comp_rases = px.bar(
             df_comp_rases, 
             x='RASES_fmt', 
-            y='Cantidad', 
+            y='Valor_Graficar', 
             color='Periodo', 
             barmode='group',
-            text_auto=',d', 
+            text_auto=fmt_comp_r, 
             color_discrete_map=mapa_color_comp
         )
         fig_comp_rases.update_layout(
@@ -974,12 +1015,20 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
         )
         st.plotly_chart(aplicar_touch_safe(fig_comp_rases), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        st.markdown("""
-            <h3 style='display: flex; align-items: center; gap: 8px;'>
-                <i class="fa-solid fa-hospital-user" style="color: #2e7d32;"></i>
-                Comparativo PQRS por UPRES
-            </h3>
-        """, unsafe_allow_html=True)
+        # -----------------------------------------------------------------------------
+        # COMPARATIVO POR UPRES (TASA VS CANTIDAD)
+        # -----------------------------------------------------------------------------
+        col_tit_cu, col_btn_cu = st.columns([3, 1])
+        with col_tit_cu:
+            st.markdown("""
+                <h3 style='display: flex; align-items: center; gap: 8px;'>
+                    <i class="fa-solid fa-hospital-user" style="color: #2e7d32;"></i>
+                    Comparativo PQRS por UPRES
+                </h3>
+            """, unsafe_allow_html=True)
+        with col_btn_cu:
+            ver_tasa_comp_upres = st.toggle("PQRS por cada 1000 usuarios", key="tasa_upres_comp")
+
         df_u_comp_a = df_a['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
         df_u_comp_a.columns = ['UNIDAD DE ASIGNACIÓN', 'Cantidad']
         df_u_comp_a['Periodo'] = lbl_a_short
@@ -996,14 +1045,24 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist):
         df_comp_upres_simple = df_comp_upres_simple[df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].isin(top_10_comp_upres)].copy()
         
         df_comp_upres_simple['UPRES_fmt'] = df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+        df_comp_upres_simple['Usuarios'] = df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].map(dict_upres_users).fillna(0)
+
+        if ver_tasa_comp_upres:
+            df_comp_upres_simple['Valor_Graficar'] = df_comp_upres_simple.apply(
+                lambda r: (r['Cantidad'] / r['Usuarios'] * 1000) if r['Usuarios'] > 0 else 0, axis=1
+            )
+            fmt_comp_u = ':.2f'
+        else:
+            df_comp_upres_simple['Valor_Graficar'] = df_comp_upres_simple['Cantidad']
+            fmt_comp_u = ',d'
 
         fig_comp_upres_simple = px.bar(
             df_comp_upres_simple, 
             x='UPRES_fmt', 
-            y='Cantidad', 
+            y='Valor_Graficar', 
             color='Periodo', 
             barmode='group',
-            text_auto=',d', 
+            text_auto=fmt_comp_u, 
             color_discrete_map=mapa_color_comp
         )
         fig_comp_upres_simple.update_layout(
@@ -1112,8 +1171,22 @@ elif authentication_status:
                 
         return df
 
+    @st.cache_data(ttl="1h")
+    def cargar_maestro_usuarios():
+        try:
+            query = 'SELECT "RASES", "UNIDAD" AS "UPRES", "USUARIOS" FROM "UPRES_RASES";'
+            df_u = pd.read_sql(query, con=engine)
+            df_u['USUARIOS'] = pd.to_numeric(df_u['USUARIOS'], errors='coerce').fillna(0)
+            
+            dict_upres_users = df_u.groupby('UPRES')['USUARIOS'].sum().to_dict()
+            dict_rases_users = df_u.groupby('RASES')['USUARIOS'].sum().to_dict()
+            return dict_rases_users, dict_upres_users
+        except Exception:
+            return {}, {}
+
     try:
         df_raw = cargar_datos_consolidados()
+        dict_rases_users, dict_upres_users = cargar_maestro_usuarios()
         min_global_date = df_raw['fecha_dt'].min().date() if not df_raw.empty else None
         max_global_date = df_raw['fecha_dt'].max().date() if not df_raw.empty else None
     except Exception as e:
@@ -1222,6 +1295,6 @@ elif authentication_status:
     st.markdown("---")
 
     if tab_seleccionada == "📊 Análisis Individual":
-        render_tab_individual(df_base_global, col_mot_esp, min_global_date, max_global_date)
+        render_tab_individual(df_base_global, col_mot_esp, min_global_date, max_global_date, dict_rases_users, dict_upres_users)
     elif tab_seleccionada == "🔄 Comparativo":
-        render_tab_comparativo(df_base_global, col_mot_esp, min_global_date, max_global_date)
+        render_tab_comparativo(df_base_global, col_mot_esp, min_global_date, max_global_date, dict_rases_users, dict_upres_users)
