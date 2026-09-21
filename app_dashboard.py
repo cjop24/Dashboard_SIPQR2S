@@ -825,21 +825,28 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, dict_rases_
             lambda r: (r['Cantidad'] / r['Usuarios'] * 1000) if r['Usuarios'] > 0 else 0, axis=1
         )
         y_label_r = "Tasa por 1.000 Usu."
-        fmt_text_r = ':.2f'
+        df_g1['Texto_Barra'] = df_g1['Valor_Graficar'].apply(lambda v: f"{v:.2f}")
+        hovertemplate_r = "<b>%{x}</b><br>Tasa: %{y:.2f} por 1.000 usuarios<br>Cantidad PQRS: %{customdata[0]:,}<br>Usuarios: %{customdata[1]:,}<extra></extra>"
     else:
         df_g1['Valor_Graficar'] = df_g1['Cantidad']
         y_label_r = "Cantidad PQRS"
-        fmt_text_r = ',d'
+        df_g1['Texto_Barra'] = df_g1['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
+        hovertemplate_r = "<b>%{x}</b><br>Cantidad: %{y:,} PQRS<br>Usuarios: %{customdata[1]:,}<extra></extra>"
 
     fig1 = px.bar(
         df_g1, 
         x='RASES_fmt', 
         y='Valor_Graficar', 
-        text_auto=fmt_text_r, 
+        text='Texto_Barra', 
         color_discrete_sequence=[COLOR_PERIODO_A],
-        labels={'Valor_Graficar': y_label_r, 'RASES_fmt': ''}
+        labels={'Valor_Graficar': y_label_r, 'RASES_fmt': ''},
+        custom_data=['Cantidad', 'Usuarios']
     )
-    fig1.update_layout(font=dict(family="Poppins, sans-serif"), xaxis_title="", yaxis_title="", height=320, margin=dict(l=5, r=5, t=10, b=10))
+    fig1.update_traces(
+        textposition='outside',
+        hovertemplate=hovertemplate_r
+    )
+    fig1.update_layout(font=dict(family="Poppins, sans-serif"), xaxis_title="", yaxis_title="", height=330, margin=dict(l=5, r=5, t=20, b=10))
     st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     # -----------------------------------------------------------------------------
@@ -868,21 +875,28 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, dict_rases_
             lambda r: (r['Cantidad'] / r['Usuarios'] * 1000) if r['Usuarios'] > 0 else 0, axis=1
         )
         y_label_u = "Tasa por 1.000 Usu."
-        fmt_text_u = ':.2f'
+        df_u1['Texto_Barra'] = df_u1['Valor_Graficar'].apply(lambda v: f"{v:.2f}")
+        hovertemplate_u = "<b>%{x}</b><br>Tasa: %{y:.2f} por 1.000 usuarios<br>Cantidad PQRS: %{customdata[0]:,}<br>Usuarios: %{customdata[1]:,}<extra></extra>"
     else:
         df_u1['Valor_Graficar'] = df_u1['Cantidad']
         y_label_u = "Cantidad PQRS"
-        fmt_text_u = ',d'
+        df_u1['Texto_Barra'] = df_u1['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
+        hovertemplate_u = "<b>%{x}</b><br>Cantidad: %{y:,} PQRS<br>Usuarios: %{customdata[1]:,}<extra></extra>"
 
     fig_upres_simple = px.bar(
         df_u1, 
         x='UPRES_fmt', 
         y='Valor_Graficar', 
-        text_auto=fmt_text_u,
+        text='Texto_Barra',
         color_discrete_sequence=[COLOR_PERIODO_A],
-        labels={'Valor_Graficar': y_label_u, 'UPRES_fmt': ''}
+        labels={'Valor_Graficar': y_label_u, 'UPRES_fmt': ''},
+        custom_data=['Cantidad', 'Usuarios']
     )
-    fig_upres_simple.update_layout(font=dict(family="Poppins, sans-serif"), xaxis_title="", yaxis_title="", height=350, margin=dict(l=5, r=5, t=10, b=10))
+    fig_upres_simple.update_traces(
+        textposition='outside',
+        hovertemplate=hovertemplate_u
+    )
+    fig_upres_simple.update_layout(font=dict(family="Poppins, sans-serif"), xaxis_title="", yaxis_title="", height=360, margin=dict(l=5, r=5, t=20, b=10))
     st.plotly_chart(aplicar_touch_safe(fig_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES - Categoría Salud (Top 5)")
@@ -991,25 +1005,32 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, dict
             df_comp_rases['Valor_Graficar'] = df_comp_rases.apply(
                 lambda r: (r['Cantidad'] / r['Usuarios'] * 1000) if r['Usuarios'] > 0 else 0, axis=1
             )
-            fmt_comp_r = ':.2f'
+            df_comp_rases['Texto_Barra'] = df_comp_rases['Valor_Graficar'].apply(lambda v: f"{v:.2f}")
+            hovertemplate_cr = "<b>%{x} (%{fullData.name})</b><br>Tasa: %{y:.2f} por 1.000 usuarios<br>Cantidad PQRS: %{customdata[0]:,}<br>Usuarios: %{customdata[1]:,}<extra></extra>"
         else:
             df_comp_rases['Valor_Graficar'] = df_comp_rases['Cantidad']
-            fmt_comp_r = ',d'
+            df_comp_rases['Texto_Barra'] = df_comp_rases['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
+            hovertemplate_cr = "<b>%{x} (%{fullData.name})</b><br>Cantidad: %{y:,} PQRS<br>Usuarios: %{customdata[1]:,}<extra></extra>"
 
         fig_comp_rases = px.bar(
             df_comp_rases, 
             x='RASES_fmt', 
             y='Valor_Graficar', 
+            text='Texto_Barra',
             color='Periodo', 
             barmode='group',
-            text_auto=fmt_comp_r, 
-            color_discrete_map=mapa_color_comp
+            color_discrete_map=mapa_color_comp,
+            custom_data=['Cantidad', 'Usuarios']
+        )
+        fig_comp_rases.update_traces(
+            textposition='outside',
+            hovertemplate=hovertemplate_cr
         )
         fig_comp_rases.update_layout(
             font=dict(family="Poppins, sans-serif"), 
             xaxis_title="", 
             yaxis_title="", 
-            height=320, 
+            height=340, 
             margin=dict(l=10, r=10, t=30, b=10), 
             legend=dict(orientation="h", y=1.15, x=0, title=None, font=dict(size=10))
         )
@@ -1051,25 +1072,32 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, dict
             df_comp_upres_simple['Valor_Graficar'] = df_comp_upres_simple.apply(
                 lambda r: (r['Cantidad'] / r['Usuarios'] * 1000) if r['Usuarios'] > 0 else 0, axis=1
             )
-            fmt_comp_u = ':.2f'
+            df_comp_upres_simple['Texto_Barra'] = df_comp_upres_simple['Valor_Graficar'].apply(lambda v: f"{v:.2f}")
+            hovertemplate_cu = "<b>%{x} (%{fullData.name})</b><br>Tasa: %{y:.2f} por 1.000 usuarios<br>Cantidad PQRS: %{customdata[0]:,}<br>Usuarios: %{customdata[1]:,}<extra></extra>"
         else:
             df_comp_upres_simple['Valor_Graficar'] = df_comp_upres_simple['Cantidad']
-            fmt_comp_u = ',d'
+            df_comp_upres_simple['Texto_Barra'] = df_comp_upres_simple['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
+            hovertemplate_cu = "<b>%{x} (%{fullData.name})</b><br>Cantidad: %{y:,} PQRS<br>Usuarios: %{customdata[1]:,}<extra></extra>"
 
         fig_comp_upres_simple = px.bar(
             df_comp_upres_simple, 
             x='UPRES_fmt', 
             y='Valor_Graficar', 
+            text='Texto_Barra',
             color='Periodo', 
             barmode='group',
-            text_auto=fmt_comp_u, 
-            color_discrete_map=mapa_color_comp
+            color_discrete_map=mapa_color_comp,
+            custom_data=['Cantidad', 'Usuarios']
+        )
+        fig_comp_upres_simple.update_traces(
+            textposition='outside',
+            hovertemplate=hovertemplate_cu
         )
         fig_comp_upres_simple.update_layout(
             font=dict(family="Poppins, sans-serif"), 
             xaxis_title="", 
             yaxis_title="", 
-            height=350, 
+            height=360, 
             margin=dict(l=10, r=10, t=30, b=10), 
             legend=dict(orientation="h", y=1.15, x=0, title=None, font=dict(size=10))
         )
