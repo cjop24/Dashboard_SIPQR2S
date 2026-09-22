@@ -233,7 +233,6 @@ def acortar_texto_abreviado(texto):
         return "N/A"
     s = str(texto).upper().strip()
     
-    # Normalización para Bogotá D.C.
     if "BOGOTA" in s or "BOGOTÁ" in s:
         return "BOGOTÁ D.C."
 
@@ -284,9 +283,7 @@ def acortar_texto_abreviado(texto):
     
     words = s.split()
     words_clean = [abrev.get(w, w) for w in words if abrev.get(w, w) != '']
-    res = " ".join(words_clean)
-    
-    return res
+    return " ".join(words_clean)
 
 # -----------------------------------------------------------------------------
 # CÁLCULO DINÁMICO DE USUARIOS POR PERÍODO / MES
@@ -678,7 +675,7 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
     top_upres_nom = top_upres_s.index[0] if not top_upres_s.empty else "N/A"
     top_upres_val = top_upres_s.iloc[0] if not top_upres_s.empty else 0
 
-    top_rases_s = df_base['RASES'].dropna().value_counts()
+    top_rases_s = df_base[~df_base['RASES'].astype(str).str.upper().str.contains('NIVEL CENTRAL')]['RASES'].dropna().value_counts()
     top_rases_nom = top_rases_s.index[0] if not top_rases_s.empty else "N/A"
     top_rases_val = top_rases_s.iloc[0] if not top_rases_s.empty else 0
 
@@ -830,7 +827,7 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
     st.markdown("---")
 
     # -----------------------------------------------------------------------------
-    # PQRS POR RASES (CON ALTERNANCIA DE TASA POR 1.000 USUARIOS)
+    # PQRS POR RASES (CON ALTERNANCIA DE TASA POR 1.000 USUARIOS ATENDIDOS - SIN NIVEL CENTRAL)
     # -----------------------------------------------------------------------------
     col_tit_r, col_btn_r = st.columns([3, 1])
     with col_tit_r:
@@ -841,11 +838,18 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
             </h3>
         """, unsafe_allow_html=True)
     with col_btn_r:
-        ver_tasa_rases = st.toggle("PQRS por cada 1000 usuarios", key="tasa_rases_ind")
+        ver_tasa_rases = st.toggle("PQRS por cada 1000 usuarios atendidos", key="tasa_rases_ind")
 
     df_g1_raw = df_base['RASES'].dropna().value_counts().reset_index()
     df_g1_raw.columns = ['RASES', 'Cantidad']
-    df_g1 = df_g1_raw[(df_g1_raw['Cantidad'] > 0) & (df_g1_raw['RASES'].astype(str).str.strip() != '')].copy()
+
+    # Filtrado estricto: Eliminar vacíos, nulos y "NIVEL CENTRAL"
+    df_g1 = df_g1_raw[
+        (df_g1_raw['Cantidad'] > 0) & 
+        (df_g1_raw['RASES'].astype(str).str.strip() != '') &
+        (~df_g1_raw['RASES'].astype(str).str.upper().str.contains('NIVEL CENTRAL'))
+    ].copy()
+
     df_g1['RASES_fmt'] = df_g1['RASES'].apply(acortar_texto_abreviado)
     df_g1['Usuarios'] = df_g1['RASES'].map(dict_rases_users).fillna(0)
 
@@ -888,7 +892,7 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
     st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     # -----------------------------------------------------------------------------
-    # PQRS POR UPRES (CON ALTERNANCIA DE TASA POR 1.000 USUARIOS)
+    # PQRS POR UPRES (CON ALTERNANCIA DE TASA POR 1.000 USUARIOS ATENDIDOS)
     # -----------------------------------------------------------------------------
     col_tit_u, col_btn_u = st.columns([3, 1])
     with col_tit_u:
@@ -899,7 +903,7 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
             </h3>
         """, unsafe_allow_html=True)
     with col_btn_u:
-        ver_tasa_upres = st.toggle("PQRS por cada 1000 usuarios", key="tasa_upres_ind")
+        ver_tasa_upres = st.toggle("PQRS por cada 1000 usuarios atendidos", key="tasa_upres_ind")
 
     df_u1_raw = df_base['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
     df_u1_raw.columns = ['UPRES', 'Cantidad']
@@ -1024,7 +1028,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
         st.markdown("---")
 
         # -----------------------------------------------------------------------------
-        # COMPARATIVO POR RASES (TASA VS CANTIDAD)
+        # COMPARATIVO POR RASES (TASA VS CANTIDAD - SIN NIVEL CENTRAL)
         # -----------------------------------------------------------------------------
         col_tit_cr, col_btn_cr = st.columns([3, 1])
         with col_tit_cr:
@@ -1035,7 +1039,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
                 </h3>
             """, unsafe_allow_html=True)
         with col_btn_cr:
-            ver_tasa_comp_rases = st.toggle("PQRS por cada 1000 usuarios", key="tasa_rases_comp")
+            ver_tasa_comp_rases = st.toggle("PQRS por cada 1000 usuarios atendidos", key="tasa_rases_comp")
 
         df_r_a = df_a['RASES'].dropna().value_counts().reset_index()
         df_r_a.columns = ['RASES', 'Cantidad']
@@ -1048,7 +1052,14 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
         df_r_b['Usuarios'] = df_r_b['RASES'].map(dict_rases_users_b).fillna(0)
 
         df_comp_rases = pd.concat([df_r_a, df_r_b])
-        df_comp_rases = df_comp_rases[(df_comp_rases['Cantidad'] > 0) & (df_comp_rases['RASES'].astype(str).str.strip() != '')].copy()
+
+        # Filtrado estricto: Eliminar vacíos, nulos y "NIVEL CENTRAL"
+        df_comp_rases = df_comp_rases[
+            (df_comp_rases['Cantidad'] > 0) & 
+            (df_comp_rases['RASES'].astype(str).str.strip() != '') &
+            (~df_comp_rases['RASES'].astype(str).str.upper().str.contains('NIVEL CENTRAL'))
+        ].copy()
+
         df_comp_rases['RASES_fmt'] = df_comp_rases['RASES'].apply(acortar_texto_abreviado)
 
         if ver_tasa_comp_rases:
@@ -1101,7 +1112,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
                 </h3>
             """, unsafe_allow_html=True)
         with col_btn_cu:
-            ver_tasa_comp_upres = st.toggle("PQRS por cada 1000 usuarios", key="tasa_upres_comp")
+            ver_tasa_comp_upres = st.toggle("PQRS por cada 1000 usuarios atendidos", key="tasa_upres_comp")
 
         df_u_comp_a = df_a['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
         df_u_comp_a.columns = ['UNIDAD DE ASIGNACIÓN', 'Cantidad']
@@ -1306,7 +1317,7 @@ elif authentication_status:
     st.sidebar.markdown("---")
     st.sidebar.markdown("<h3 style='font-size: 1.1rem;'><i class='fa-solid fa-filter' style='color:#1b5e20;'></i> Filtros Globales de Control</h3>", unsafe_allow_html=True)
 
-    lista_rases = sorted([x for x in df_raw['RASES'].dropna().unique() if str(x).strip() != ''])
+    lista_rases = sorted([x for x in df_raw['RASES'].dropna().unique() if str(x).strip() != '' and 'NIVEL CENTRAL' not in str(x).upper()])
     sel_rases = st.sidebar.multiselect("RASES", options=lista_rases, key="sel_rases")
 
     lista_unidades = sorted([x for x in df_raw['UNIDAD DE ASIGNACIÓN'].dropna().unique() if str(x).strip() != ''])
