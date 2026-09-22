@@ -282,7 +282,7 @@ def acortar_texto_abreviado(texto):
     }
     
     words = s.split()
-    words_clean = [abrev.get(w, w) for w in words if abrev.get(w, w) != '']
+    words_clean = [abrev.get(w, w) for w in words]
     return " ".join(words_clean)
 
 # -----------------------------------------------------------------------------
@@ -1234,8 +1234,17 @@ elif authentication_status:
     pass_encoded = urllib.parse.quote_plus(DB_PASS)
     engine = create_engine(f"postgresql://{DB_USER}:{pass_encoded}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
 
-    @st.cache_data(ttl="1h", show_spinner="Cargando datos consolidados...")
-    def cargar_datos_consolidados():
+    # Funciones de Verificación e Invalidation de Caché Dinámica
+    def obtener_ultimo_conteo_bd(engine):
+        try:
+            query = 'SELECT COUNT(*) AS total FROM "V_SIPQR2S_CONSOLIDADO";'
+            df_cnt = pd.read_sql(query, con=engine)
+            return int(df_cnt['total'].iloc[0])
+        except Exception:
+            return 0
+
+    @st.cache_data(show_spinner="Cargando datos consolidados...")
+    def cargar_datos_consolidados(total_registros_bd):
         query = '''
             SELECT 
                 "fecha_dt",
@@ -1287,7 +1296,8 @@ elif authentication_status:
             return pd.DataFrame()
 
     try:
-        df_raw = cargar_datos_consolidados()
+        conteo_actual_bd = obtener_ultimo_conteo_bd(engine)
+        df_raw = cargar_datos_consolidados(conteo_actual_bd)
         df_users_mensual = cargar_usuarios_mensuales()
         df_maestro_upres_rases = cargar_maestro_upres_rases()
 
