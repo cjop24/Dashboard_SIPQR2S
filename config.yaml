@@ -16,6 +16,12 @@ credentials:
       email: "paula.giraldo@correo.policia.gov.co"
       name: "Responsable SIPQR2S"
       password: "$2b$12$2lkuqvs3yHAGHhD3iAhPV.gqi/RDvv/Y2FPH.UQOkVYSMwXyXulZ6" # Hash bcrypt para At3usSipqr2s3
+    luis_burgos:
+      email: "luis.burgos@correo.policia.gov.co"
+      name: "Subdirector Sanidad"
+      password: "$2b$12$Jb6pq8fJvkVMco/P3KYBj.Sn6uaTQ0IRzbL86FVJNqa027P1TSsES" # Hash bcrypt para Faro7!Pez9Ma
+
+
 
 cookie:
   expiry_days: 120
