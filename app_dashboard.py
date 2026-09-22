@@ -650,16 +650,40 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
 def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_mensual, df_maestro_upres_rases):
     st.caption("Consola Ejecutiva de Atención al Usuario - Periodo Único")
 
-    if "fecha_ind_inicio" not in st.session_state:
+    # --- Saneamiento defensivo de tipos de fecha ---
+    if isinstance(min_f, pd.Timestamp):
+        min_f = min_f.date()
+    if isinstance(max_f, pd.Timestamp):
+        max_f = max_f.date()
+
+    if not min_f or not max_f or min_f > max_f:
+        min_f = pd.Timestamp.now().date() - pd.Timedelta(days=30)
+        max_f = pd.Timestamp.now().date()
+
+    # --- Control seguro de st.session_state (prevenir StreamlitValueAboveMaxError) ---
+    if "fecha_ind_inicio" not in st.session_state or st.session_state["fecha_ind_inicio"] < min_f or st.session_state["fecha_ind_inicio"] > max_f:
         st.session_state["fecha_ind_inicio"] = min_f
-    if "fecha_ind_fin" not in st.session_state:
+
+    if "fecha_ind_fin" not in st.session_state or st.session_state["fecha_ind_fin"] > max_f or st.session_state["fecha_ind_fin"] < min_f:
         st.session_state["fecha_ind_fin"] = max_f
 
     col_fi1, col_fi2 = st.columns(2)
     with col_fi1:
-        fecha_ind_inicio = st.date_input("Fecha Inicio", min_value=min_f, max_value=max_f, key="fecha_ind_inicio")
+        fecha_ind_inicio = st.date_input(
+            "Fecha Inicio", 
+            value=st.session_state["fecha_ind_inicio"], 
+            min_value=min_f, 
+            max_value=max_f, 
+            key="fecha_ind_inicio"
+        )
     with col_fi2:
-        fecha_ind_fin = st.date_input("Fecha Fin", min_value=min_f, max_value=max_f, key="fecha_ind_fin")
+        fecha_ind_fin = st.date_input(
+            "Fecha Fin", 
+            value=st.session_state["fecha_ind_fin"], 
+            min_value=min_f, 
+            max_value=max_f, 
+            key="fecha_ind_fin"
+        )
 
     df_base = df_base_global.copy()
     if fecha_ind_inicio and fecha_ind_fin:
