@@ -123,7 +123,8 @@ CONFIG_PLOTLY_MAPA = {
 }
 
 MAPEO_UPRES_CODIGO_DANE = {
-    'BOGOTA': '11', 'BOGOTÁ': '11', 'BOGOTÁ D.C.': '11', 'BOGOTA D.C.': '11', 'SANTAFE': '11', 'MEBOG': '11',
+    'BOGOTA': '11', 'BOGOTÁ': '11', 'BOGOTÁ D.C.': '11', 'BOGOTA D.C.': '11', 
+    'BOGOTÁ, D.C.': '11', 'BOGOTA, D.C.': '11', 'SANTAFE': '11', 'MEBOG': '11',
     'ANTIOQUIA': '05', 'URABA': '05', 'URABÁ': '05', 'DEAMA': '05', 'DEURA': '05',
     'ATLANTICO': '08', 'ATLÁNTICO': '08', 'DEATA': '08',
     'BOLIVAR': '13', 'BOLÍVAR': '13', 'DEMAM': '13',
@@ -232,6 +233,10 @@ def acortar_texto_abreviado(texto):
         return "N/A"
     s = str(texto).upper().strip()
     
+    # Regla explicita de homologación estandar para Bogotá D.C.
+    if "BOGOTA" in s or "BOGOTÁ" in s:
+        return "BOGOTÁ D.C."
+
     frases_especificas = {
         'RECONOCIMIENTOS DEL SERVICIO DE POLICÍA': 'FELICITACIÓN',
         'RECONOCIMIENTOS DEL SERVICIO DE POLICIA': 'FELICITACIÓN',
@@ -274,34 +279,22 @@ def acortar_texto_abreviado(texto):
         'PRESTACION': 'PREST.',
         'PRESTACIÓN': 'PREST.',
         'USUARIO': 'USUAR.',
-        'USUARIOS': 'USUAR.',
-        'RECONOCIMIENTOS': 'FELICITACIÓN',
-        'RECONOCIMIENTO': 'FELICITACIÓN',
-        'INFORMACION': 'INFORM.',
-        'INFORMACIÓN': 'INFORM.',
-        'SEGURIDAD': 'SEG.',
-        'SGDEA': '',
-        'SISTEMA': ''
+        'USUARIOS': 'USUAR.'
     }
     
     words = s.split()
     words_clean = [abrev.get(w, w) for w in words if abrev.get(w, w) != '']
     res = " ".join(words_clean)
     
-    return res.replace("LÍNEA DIRECTOR GENERAL", "LÍNEA DIRECTOR").replace("LINEA DIRECTOR GENERAL", "LÍNEA DIRECTOR") if res else "N/A"
+    return res
 
 # -----------------------------------------------------------------------------
 # CÁLCULO DINÁMICO DE USUARIOS POR PERÍODO / MES
 # -----------------------------------------------------------------------------
 def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_rases):
-    """
-    Calcula los usuarios acumulados para UPRES y RASES amarrados exactamente
-    a los meses y años presentes en df_periodo.
-    """
     if df_periodo.empty or df_users_mensual.empty:
         return {}, {}
 
-    # Extraer combinaciones únicas de (ANIO, MES) en las PQRS filtradas
     anios_meses = df_periodo['fecha_dt'].dt.to_period('M').unique()
     
     df_u_filtrado = df_users_mensual[
@@ -311,10 +304,8 @@ def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_ra
     if df_u_filtrado.empty:
         return {}, {}
 
-    # Total de usuarios por UPRES para los meses seleccionados
     dict_upres_users = df_u_filtrado.groupby('UNIDAD')['USUARIOS'].sum().to_dict()
 
-    # Mapear UPRES a RASES para obtener usuarios por RASES
     df_u_con_rases = pd.merge(
         df_u_filtrado,
         df_maestro_upres_rases[['UNIDAD', 'RASES']].drop_duplicates(),
@@ -999,7 +990,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
         df_a = df_base_global[(df_base_global['fecha_dt'].dt.date >= fecha_a_inicio) & (df_base_global['fecha_dt'].dt.date <= fecha_a_fin)].copy()
         df_b = df_base_global[(df_base_global['fecha_dt'].dt.date >= fecha_b_inicio) & (df_base_global['fecha_dt'].dt.date <= fecha_b_fin)].copy()
 
-        # Calcular usuarios amarrados dinámicamente a los meses de cada período
         dict_rases_users_a, dict_upres_users_a = obtener_usuarios_dinamicos(df_a, df_users_mensual, df_maestro_upres_rases)
         dict_rases_users_b, dict_upres_users_b = obtener_usuarios_dinamicos(df_b, df_users_mensual, df_maestro_upres_rases)
 
