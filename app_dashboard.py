@@ -233,7 +233,7 @@ def acortar_texto_abreviado(texto):
         return "N/A"
     s = str(texto).upper().strip()
     
-    # Regla explicita de homologación estandar para Bogotá D.C.
+    # Normalización para Bogotá D.C.
     if "BOGOTA" in s or "BOGOTÁ" in s:
         return "BOGOTÁ D.C."
 
@@ -1090,7 +1090,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
         st.plotly_chart(aplicar_touch_safe(fig_comp_rases), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # -----------------------------------------------------------------------------
-        # COMPARATIVO POR UPRES (TASA VS CANTIDAD - ORDENADO DE MAYOR A MENOR)
+        # COMPARATIVO POR UPRES (TASA VS CANTIDAD - ORDENADO SEGÚN PERIODO B)
         # -----------------------------------------------------------------------------
         col_tit_cu, col_btn_cu = st.columns([3, 1])
         with col_tit_cu:
@@ -1129,8 +1129,9 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
             df_comp_upres_simple['Texto_Barra'] = df_comp_upres_simple['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
             hovertemplate_cu = "<b>%{x} (%{fullData.name})</b><br>Cantidad: %{y:,} PQRS<br>Usuarios: %{customdata[1]:,}<extra></extra>"
 
-        totales_comp_upres = df_comp_upres_simple.groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Valor_Graficar'].sum().reset_index(name='Total_Metrica')
-        top_10_comp_upres = totales_comp_upres.sort_values('Total_Metrica', ascending=False).head(10)['UNIDAD DE ASIGNACIÓN'].tolist()
+        # ORDENAR DE MAYOR A MENOR SEGÚN EL VALOR DEL PERIODO B
+        df_p_b_metrics = df_comp_upres_simple[df_comp_upres_simple['Periodo'] == lbl_b_short]
+        top_10_comp_upres = df_p_b_metrics.sort_values('Valor_Graficar', ascending=False).head(10)['UNIDAD DE ASIGNACIÓN'].tolist()
         
         df_comp_upres_simple = df_comp_upres_simple[df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].isin(top_10_comp_upres)].copy()
         orden_upres_comp = [acortar_texto_abreviado(u) for u in top_10_comp_upres]
@@ -1143,6 +1144,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
             color='Periodo', 
             barmode='group',
             color_discrete_map=mapa_color_comp,
+            category_orders={'UPRES_fmt': orden_upres_comp},
             custom_data=['Cantidad', 'Usuarios']
         )
         fig_comp_upres_simple.update_traces(
@@ -1151,7 +1153,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
         )
         fig_comp_upres_simple.update_layout(
             font=dict(family="Poppins, sans-serif"), 
-            xaxis=dict(categoryorder='array', categoryarray=orden_upres_comp),
             xaxis_title="", 
             yaxis_title="", 
             height=360, 
