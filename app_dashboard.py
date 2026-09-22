@@ -291,6 +291,41 @@ def acortar_texto_abreviado(texto):
     return res.replace("LÍNEA DIRECTOR GENERAL", "LÍNEA DIRECTOR").replace("LINEA DIRECTOR GENERAL", "LÍNEA DIRECTOR") if res else "N/A"
 
 # -----------------------------------------------------------------------------
+# CÁLCULO DINÁMICO DE USUARIOS POR PERÍODO / MES
+# -----------------------------------------------------------------------------
+def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_rases):
+    """
+    Calcula los usuarios acumulados para UPRES y RASES amarrados exactamente
+    a los meses y años presentes en df_periodo.
+    """
+    if df_periodo.empty or df_users_mensual.empty:
+        return {}, {}
+
+    # Extraer combinaciones únicas de (ANIO, MES) en las PQRS filtradas
+    anios_meses = df_periodo['fecha_dt'].dt.to_period('M').unique()
+    
+    df_u_filtrado = df_users_mensual[
+        df_users_mensual.apply(lambda r: pd.Period(f"{int(r['ANIO'])}-{int(r['MES']):02d}", 'M') in anios_meses, axis=1)
+    ]
+
+    if df_u_filtrado.empty:
+        return {}, {}
+
+    # Total de usuarios por UPRES para los meses seleccionados
+    dict_upres_users = df_u_filtrado.groupby('UNIDAD')['USUARIOS'].sum().to_dict()
+
+    # Mapear UPRES a RASES para obtener usuarios por RASES
+    df_u_con_rases = pd.merge(
+        df_u_filtrado,
+        df_maestro_upres_rases[['UNIDAD', 'RASES']].drop_duplicates(),
+        on='UNIDAD',
+        how='left'
+    )
+    dict_rases_users = df_u_con_rases.groupby('RASES')['USUARIOS'].sum().to_dict()
+
+    return dict_rases_users, dict_upres_users
+
+# -----------------------------------------------------------------------------
 # 3. GENERACIÓN DE GRÁFICOS COMPLEJOS
 # -----------------------------------------------------------------------------
 def generar_grafico_mariposa(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
@@ -624,7 +659,7 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
 # -----------------------------------------------------------------------------
 # 4. MÓDULOS DE RENDERIZADO DE PESTAÑAS
 # -----------------------------------------------------------------------------
-def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, dict_rases_users, dict_upres_users):
+def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_mensual, df_maestro_upres_rases):
     st.caption("Consola Ejecutiva de Atención al Usuario - Periodo Único")
 
     if "fecha_ind_inicio" not in st.session_state:
@@ -644,6 +679,9 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, dict_rases_
             df_base = df_base[(df_base['fecha_dt'].dt.date >= fecha_ind_inicio) & (df_base['fecha_dt'].dt.date <= fecha_ind_fin)]
         else:
             st.warning("⚠️ La Fecha Inicio no puede ser posterior a la Fecha Fin.")
+
+    # Obtener usuarios amarrados dinámicamente al mes seleccionado
+    dict_rases_users, dict_upres_users = obtener_usuarios_dinamicos(df_base, df_users_mensual, df_maestro_upres_rases)
 
     top_upres_s = df_base['UNIDAD DE ASIGNACIÓN'].dropna().value_counts()
     top_upres_nom = top_upres_s.index[0] if not top_upres_s.empty else "N/A"
@@ -833,6 +871,8 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, dict_rases_
         df_g1['Texto_Barra'] = df_g1['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
         hovertemplate_r = "<b>%{x}</b><br>Cantidad: %{y:,} PQRS<br>Usuarios: %{customdata[1]:,}<extra></extra>"
 
+    df_g1 = df_g1.sort_values(by='Valor_Graficar', ascending=False)
+
     fig1 = px.bar(
         df_g1, 
         x='RASES_fmt', 
@@ -846,7 +886,14 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, dict_rases_
         textposition='outside',
         hovertemplate=hovertemplate_r
     )
-    fig1.update_layout(font=dict(family="Poppins, sans-serif"), xaxis_title="", yaxis_title="", height=330, margin=dict(l=5, r=5, t=20, b=10))
+    fig1.update_layout(
+        font=dict(family="Poppins, sans-serif"), 
+        xaxis=dict(categoryorder='array', categoryarray=df_g1['RASES_fmt'].tolist()),
+        xaxis_title="", 
+        yaxis_title="", 
+        height=330, 
+        margin=dict(l=5, r=5, t=20, b=10)
+    )
     st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     # -----------------------------------------------------------------------------
@@ -867,7 +914,6 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, dict_rases_
     df_u1_raw.columns = ['UPRES', 'Cantidad']
     df_u1 = df_u1_raw[(df_u1_raw['Cantidad'] > 0) & (df_u1_raw['UPRES'].astype(str).str.strip() != '')].copy()
     df_u1['UPRES_fmt'] = df_u1['UPRES'].apply(acortar_texto_abreviado)
-    df_u1 = df_u1.head(10)
     df_u1['Usuarios'] = df_u1['UPRES'].map(dict_upres_users).fillna(0)
 
     if ver_tasa_upres:
@@ -883,6 +929,8 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, dict_rases_
         df_u1['Texto_Barra'] = df_u1['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
         hovertemplate_u = "<b>%{x}</b><br>Cantidad: %{y:,} PQRS<br>Usuarios: %{customdata[1]:,}<extra></extra>"
 
+    df_u1 = df_u1.sort_values(by='Valor_Graficar', ascending=False).head(10)
+
     fig_upres_simple = px.bar(
         df_u1, 
         x='UPRES_fmt', 
@@ -896,13 +944,20 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, dict_rases_
         textposition='outside',
         hovertemplate=hovertemplate_u
     )
-    fig_upres_simple.update_layout(font=dict(family="Poppins, sans-serif"), xaxis_title="", yaxis_title="", height=360, margin=dict(l=5, r=5, t=20, b=10))
+    fig_upres_simple.update_layout(
+        font=dict(family="Poppins, sans-serif"), 
+        xaxis=dict(categoryorder='array', categoryarray=df_u1['UPRES_fmt'].tolist()),
+        xaxis_title="", 
+        yaxis_title="", 
+        height=360, 
+        margin=dict(l=5, r=5, t=20, b=10)
+    )
     st.plotly_chart(aplicar_touch_safe(fig_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
     generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES - Categoría Salud (Top 5)")
     generar_grafico_upres_apilado(df_base, col_mot_esp, "Distribución por UPRES - Motivo Específico (Top 5)")
 
-def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, dict_rases_users, dict_upres_users):
+def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_users_mensual, df_maestro_upres_rases):
     st.caption("Comparación Analítica Cruzada entre dos Ventanas de Tiempo")
 
     if "fecha_a_inicio" not in st.session_state:
@@ -943,6 +998,10 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, dict
 
         df_a = df_base_global[(df_base_global['fecha_dt'].dt.date >= fecha_a_inicio) & (df_base_global['fecha_dt'].dt.date <= fecha_a_fin)].copy()
         df_b = df_base_global[(df_base_global['fecha_dt'].dt.date >= fecha_b_inicio) & (df_base_global['fecha_dt'].dt.date <= fecha_b_fin)].copy()
+
+        # Calcular usuarios amarrados dinámicamente a los meses de cada período
+        dict_rases_users_a, dict_upres_users_a = obtener_usuarios_dinamicos(df_a, df_users_mensual, df_maestro_upres_rases)
+        dict_rases_users_b, dict_upres_users_b = obtener_usuarios_dinamicos(df_b, df_users_mensual, df_maestro_upres_rases)
 
         tot_a, tot_b = len(df_a), len(df_b)
         diff_abs = tot_b - tot_a
@@ -991,15 +1050,16 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, dict
         df_r_a = df_a['RASES'].dropna().value_counts().reset_index()
         df_r_a.columns = ['RASES', 'Cantidad']
         df_r_a['Periodo'] = lbl_a_short
+        df_r_a['Usuarios'] = df_r_a['RASES'].map(dict_rases_users_a).fillna(0)
 
         df_r_b = df_b['RASES'].dropna().value_counts().reset_index()
         df_r_b.columns = ['RASES', 'Cantidad']
         df_r_b['Periodo'] = lbl_b_short
+        df_r_b['Usuarios'] = df_r_b['RASES'].map(dict_rases_users_b).fillna(0)
 
         df_comp_rases = pd.concat([df_r_a, df_r_b])
         df_comp_rases = df_comp_rases[(df_comp_rases['Cantidad'] > 0) & (df_comp_rases['RASES'].astype(str).str.strip() != '')].copy()
         df_comp_rases['RASES_fmt'] = df_comp_rases['RASES'].apply(acortar_texto_abreviado)
-        df_comp_rases['Usuarios'] = df_comp_rases['RASES'].map(dict_rases_users).fillna(0)
 
         if ver_tasa_comp_rases:
             df_comp_rases['Valor_Graficar'] = df_comp_rases.apply(
@@ -1011,6 +1071,8 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, dict
             df_comp_rases['Valor_Graficar'] = df_comp_rases['Cantidad']
             df_comp_rases['Texto_Barra'] = df_comp_rases['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
             hovertemplate_cr = "<b>%{x} (%{fullData.name})</b><br>Cantidad: %{y:,} PQRS<br>Usuarios: %{customdata[1]:,}<extra></extra>"
+
+        orden_rases_comp = df_comp_rases.groupby('RASES_fmt')['Valor_Graficar'].sum().sort_values(ascending=False).index.tolist()
 
         fig_comp_rases = px.bar(
             df_comp_rases, 
@@ -1028,6 +1090,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, dict
         )
         fig_comp_rases.update_layout(
             font=dict(family="Poppins, sans-serif"), 
+            xaxis=dict(categoryorder='array', categoryarray=orden_rases_comp),
             xaxis_title="", 
             yaxis_title="", 
             height=340, 
@@ -1037,7 +1100,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, dict
         st.plotly_chart(aplicar_touch_safe(fig_comp_rases), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
         # -----------------------------------------------------------------------------
-        # COMPARATIVO POR UPRES (TASA VS CANTIDAD)
+        # COMPARATIVO POR UPRES (TASA VS CANTIDAD - ORDENADO DE MAYOR A MENOR)
         # -----------------------------------------------------------------------------
         col_tit_cu, col_btn_cu = st.columns([3, 1])
         with col_tit_cu:
@@ -1053,20 +1116,17 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, dict
         df_u_comp_a = df_a['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
         df_u_comp_a.columns = ['UNIDAD DE ASIGNACIÓN', 'Cantidad']
         df_u_comp_a['Periodo'] = lbl_a_short
+        df_u_comp_a['Usuarios'] = df_u_comp_a['UNIDAD DE ASIGNACIÓN'].map(dict_upres_users_a).fillna(0)
 
         df_u_comp_b = df_b['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
         df_u_comp_b.columns = ['UNIDAD DE ASIGNACIÓN', 'Cantidad']
         df_u_comp_b['Periodo'] = lbl_b_short
+        df_u_comp_b['Usuarios'] = df_u_comp_b['UNIDAD DE ASIGNACIÓN'].map(dict_upres_users_b).fillna(0)
 
         df_comp_upres_simple = pd.concat([df_u_comp_a, df_u_comp_b])
         df_comp_upres_simple = df_comp_upres_simple[(df_comp_upres_simple['Cantidad'] > 0) & (df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].astype(str).str.strip() != '')].copy()
         
-        totales_comp_upres = df_comp_upres_simple.groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Cantidad'].sum().reset_index(name='Total')
-        top_10_comp_upres = totales_comp_upres.sort_values('Total', ascending=False).head(10)['UNIDAD DE ASIGNACIÓN'].tolist()
-        df_comp_upres_simple = df_comp_upres_simple[df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].isin(top_10_comp_upres)].copy()
-        
         df_comp_upres_simple['UPRES_fmt'] = df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
-        df_comp_upres_simple['Usuarios'] = df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].map(dict_upres_users).fillna(0)
 
         if ver_tasa_comp_upres:
             df_comp_upres_simple['Valor_Graficar'] = df_comp_upres_simple.apply(
@@ -1078,6 +1138,12 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, dict
             df_comp_upres_simple['Valor_Graficar'] = df_comp_upres_simple['Cantidad']
             df_comp_upres_simple['Texto_Barra'] = df_comp_upres_simple['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
             hovertemplate_cu = "<b>%{x} (%{fullData.name})</b><br>Cantidad: %{y:,} PQRS<br>Usuarios: %{customdata[1]:,}<extra></extra>"
+
+        totales_comp_upres = df_comp_upres_simple.groupby('UNIDAD DE ASIGNACIÓN', observed=True)['Valor_Graficar'].sum().reset_index(name='Total_Metrica')
+        top_10_comp_upres = totales_comp_upres.sort_values('Total_Metrica', ascending=False).head(10)['UNIDAD DE ASIGNACIÓN'].tolist()
+        
+        df_comp_upres_simple = df_comp_upres_simple[df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].isin(top_10_comp_upres)].copy()
+        orden_upres_comp = [acortar_texto_abreviado(u) for u in top_10_comp_upres]
 
         fig_comp_upres_simple = px.bar(
             df_comp_upres_simple, 
@@ -1095,6 +1161,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, dict
         )
         fig_comp_upres_simple.update_layout(
             font=dict(family="Poppins, sans-serif"), 
+            xaxis=dict(categoryorder='array', categoryarray=orden_upres_comp),
             xaxis_title="", 
             yaxis_title="", 
             height=360, 
@@ -1200,21 +1267,28 @@ elif authentication_status:
         return df
 
     @st.cache_data(ttl="1h")
-    def cargar_maestro_usuarios():
+    def cargar_usuarios_mensuales():
         try:
-            query = 'SELECT "RASES", "UNIDAD" AS "UPRES", "USUARIOS" FROM "UPRES_RASES";'
+            query = 'SELECT "UNIDAD", "ANIO", "MES", "USUARIOS" FROM "USUARIOS_ATENDIDOS_MENSUAL";'
             df_u = pd.read_sql(query, con=engine)
             df_u['USUARIOS'] = pd.to_numeric(df_u['USUARIOS'], errors='coerce').fillna(0)
-            
-            dict_upres_users = df_u.groupby('UPRES')['USUARIOS'].sum().to_dict()
-            dict_rases_users = df_u.groupby('RASES')['USUARIOS'].sum().to_dict()
-            return dict_rases_users, dict_upres_users
+            return df_u
         except Exception:
-            return {}, {}
+            return pd.DataFrame()
+
+    @st.cache_data(ttl="1h")
+    def cargar_maestro_upres_rases():
+        try:
+            query = 'SELECT DISTINCT "UNIDAD", "RASES" FROM "UPRES_RASES";'
+            return pd.read_sql(query, con=engine)
+        except Exception:
+            return pd.DataFrame()
 
     try:
         df_raw = cargar_datos_consolidados()
-        dict_rases_users, dict_upres_users = cargar_maestro_usuarios()
+        df_users_mensual = cargar_usuarios_mensuales()
+        df_maestro_upres_rases = cargar_maestro_upres_rases()
+
         min_global_date = df_raw['fecha_dt'].min().date() if not df_raw.empty else None
         max_global_date = df_raw['fecha_dt'].max().date() if not df_raw.empty else None
     except Exception as e:
@@ -1323,6 +1397,6 @@ elif authentication_status:
     st.markdown("---")
 
     if tab_seleccionada == "📊 Análisis Individual":
-        render_tab_individual(df_base_global, col_mot_esp, min_global_date, max_global_date, dict_rases_users, dict_upres_users)
+        render_tab_individual(df_base_global, col_mot_esp, min_global_date, max_global_date, df_users_mensual, df_maestro_upres_rases)
     elif tab_seleccionada == "🔄 Comparativo":
-        render_tab_comparativo(df_base_global, col_mot_esp, min_global_date, max_global_date, dict_rases_users, dict_upres_users)
+        render_tab_comparativo(df_base_global, col_mot_esp, min_global_date, max_global_date, df_users_mensual, df_maestro_upres_rases)
