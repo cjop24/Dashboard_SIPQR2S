@@ -660,7 +660,7 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
         min_f = pd.Timestamp.now().date() - pd.Timedelta(days=30)
         max_f = pd.Timestamp.now().date()
 
-    # --- Control seguro de st.session_state (prevenir StreamlitValueAboveMaxError) ---
+    # --- Control seguro de st.session_state ---
     if "fecha_ind_inicio" not in st.session_state or st.session_state["fecha_ind_inicio"] < min_f or st.session_state["fecha_ind_inicio"] > max_f:
         st.session_state["fecha_ind_inicio"] = min_f
 
@@ -692,7 +692,6 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
         else:
             st.warning("⚠️ La Fecha Inicio no puede ser posterior a la Fecha Fin.")
 
-    # Obtener usuarios amarrados dinámicamente al mes seleccionado
     dict_rases_users, dict_upres_users = obtener_usuarios_dinamicos(df_base, df_users_mensual, df_maestro_upres_rases)
 
     top_upres_s = df_base['UNIDAD DE ASIGNACIÓN'].dropna().value_counts()
@@ -850,9 +849,6 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
 
     st.markdown("---")
 
-    # -----------------------------------------------------------------------------
-    # PQRS POR RASES (CON ALTERNANCIA DE TASA POR 1.000 USUARIOS ATENDIDOS - SIN NIVEL CENTRAL)
-    # -----------------------------------------------------------------------------
     col_tit_r, col_btn_r = st.columns([3, 1])
     with col_tit_r:
         st.markdown("""
@@ -867,7 +863,6 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
     df_g1_raw = df_base['RASES'].dropna().value_counts().reset_index()
     df_g1_raw.columns = ['RASES', 'Cantidad']
 
-    # Filtrado estricto: Eliminar vacíos, nulos y "NIVEL CENTRAL"
     df_g1 = df_g1_raw[
         (df_g1_raw['Cantidad'] > 0) & 
         (df_g1_raw['RASES'].astype(str).str.strip() != '') &
@@ -915,9 +910,6 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
     )
     st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    # -----------------------------------------------------------------------------
-    # PQRS POR UPRES (CON ALTERNANCIA DE TASA POR 1.000 USUARIOS ATENDIDOS)
-    # -----------------------------------------------------------------------------
     col_tit_u, col_btn_u = st.columns([3, 1])
     with col_tit_u:
         st.markdown("""
@@ -1051,9 +1043,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
 
         st.markdown("---")
 
-        # -----------------------------------------------------------------------------
-        # COMPARATIVO POR RASES (TASA VS CANTIDAD - SIN NIVEL CENTRAL)
-        # -----------------------------------------------------------------------------
         col_tit_cr, col_btn_cr = st.columns([3, 1])
         with col_tit_cr:
             st.markdown("""
@@ -1077,7 +1066,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
 
         df_comp_rases = pd.concat([df_r_a, df_r_b])
 
-        # Filtrado estricto: Eliminar vacíos, nulos y "NIVEL CENTRAL"
         df_comp_rases = df_comp_rases[
             (df_comp_rases['Cantidad'] > 0) & 
             (df_comp_rases['RASES'].astype(str).str.strip() != '') &
@@ -1124,9 +1112,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
         )
         st.plotly_chart(aplicar_touch_safe(fig_comp_rases), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # -----------------------------------------------------------------------------
-        # COMPARATIVO POR UPRES (TASA VS CANTIDAD - ORDENADO SEGÚN PERIODO B)
-        # -----------------------------------------------------------------------------
         col_tit_cu, col_btn_cu = st.columns([3, 1])
         with col_tit_cu:
             st.markdown("""
@@ -1164,7 +1149,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
             df_comp_upres_simple['Texto_Barra'] = df_comp_upres_simple['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
             hovertemplate_cu = "<b>%{x} (%{fullData.name})</b><br>Cantidad: %{y:,} PQRS<br>Usuarios: %{customdata[1]:,}<extra></extra>"
 
-        # ORDENAR DE MAYOR A MENOR SEGÚN EL VALOR DEL PERIODO B
         df_p_b_metrics = df_comp_upres_simple[df_comp_upres_simple['Periodo'] == lbl_b_short]
         top_10_comp_upres = df_p_b_metrics.sort_values('Valor_Graficar', ascending=False).head(10)['UNIDAD DE ASIGNACIÓN'].tolist()
         
@@ -1258,7 +1242,6 @@ elif authentication_status:
     pass_encoded = urllib.parse.quote_plus(DB_PASS)
     engine = create_engine(f"postgresql://{DB_USER}:{pass_encoded}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
 
-    # Funciones de Verificación e Invalidation de Caché Dinámica
     def obtener_ultimo_conteo_bd(engine):
         try:
             query = 'SELECT COUNT(*) AS total FROM "V_SIPQR2S_CONSOLIDADO";'
