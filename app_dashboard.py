@@ -1379,6 +1379,14 @@ elif authentication_status:
             on_click=restablecer_filtros_callback
         )
 
+    # -----------------------------------------------------------------------------
+    # BOTÓN DE REFRESCO MANUAL DE CACHÉ PARA EL SERVIDOR WEB (STREAMLIT CLOUD)
+    # -----------------------------------------------------------------------------
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🔄 Refrescar Datos de BD", use_container_width=True, help="Fuerza la recarga limpia de datos desde PostgreSQL/Supabase"):
+        st.cache_data.clear()
+        st.rerun()
+
     df_base_global = df_raw.copy()
     if sel_rases:
         df_base_global = df_base_global[df_base_global['RASES'].isin(sel_rases)]
