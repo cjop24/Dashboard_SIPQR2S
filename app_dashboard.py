@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 import streamlit as st
 import streamlit_authenticator as stauth
 from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 import yaml
 from yaml.loader import SafeLoader
 
@@ -1239,8 +1240,20 @@ elif authentication_status:
         st.error("❌ Faltan las credenciales de conexión en la configuración del servidor.")
         st.stop()
 
-    pass_encoded = urllib.parse.quote_plus(DB_PASS)
-    engine = create_engine(f"postgresql://{DB_USER}:{pass_encoded}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
+    if isinstance(DB_PASS, bytes):
+        DB_PASS = DB_PASS.decode('utf-8', errors='ignore')
+
+    # Uso de URL.create para escapar credenciales y garantizar compatibilidad con psycopg2 / Python 3.14
+    connection_url = URL.create(
+        drivername="postgresql+psycopg2",
+        username=DB_USER,
+        password=DB_PASS,
+        host=DB_HOST,
+        port=int(DB_PORT),
+        database=DB_NAME
+    )
+
+    engine = create_engine(connection_url, pool_pre_ping=True, pool_recycle=300)
 
     def obtener_ultimo_conteo_bd(engine):
         try:
