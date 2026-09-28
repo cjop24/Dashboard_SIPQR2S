@@ -1374,21 +1374,22 @@ elif authentication_status:
     lista_unidades = sorted([x for x in df_raw['UNIDAD DE ASIGNACIÓN'].dropna().unique() if str(x).strip() != ''])
     sel_unidades = st.sidebar.multiselect("UPRES", options=lista_unidades, key="sel_unidades")
 
+# Carga segura de Categoría Salud
     if not df_raw.empty and 'ESPECIALIDAD_CATEGORIA' in df_raw.columns:
-        cat_ordenadas = [c for c in df_raw['ESPECIALIDAD_CATEGORIA'].value_counts(observed=True).index if str(c).strip() != '']
+        cat_ordenadas = [c for c in df_raw['ESPECIALIDAD_CATEGORIA'].value_counts().index if str(c).strip() != '']
     else:
         cat_ordenadas = []
 
     sel_cat = st.sidebar.multiselect("Categoría Salud", options=cat_ordenadas, placeholder="Seleccione categoría...", key="sel_cat")
 
+    # Carga segura de Motivo Específico
     col_mot_esp = 'MOTIVO ESPECÍFICO' if 'MOTIVO ESPECÍFICO' in df_raw.columns else 'MOTIVO GENERAL'
     if not df_raw.empty and col_mot_esp in df_raw.columns:
-        motivos_ordenados = [m for m in df_raw[col_mot_esp].value_counts(observed=True).index if str(m).strip() != '']
+        motivos_ordenados = [m for m in df_raw[col_mot_esp].value_counts().index if str(m).strip() != '']
     else:
         motivos_ordenados = []
 
     sel_motivos = st.sidebar.multiselect("Motivo Específico", options=motivos_ordenados, placeholder="Seleccione motivo...", key="sel_motivos")
-
     lista_tipos = sorted([x for x in df_raw['Tipo de Solicitud'].dropna().unique() if str(x).strip() != ''])
     sel_tipos = st.sidebar.multiselect("Tipo de Solicitud", options=lista_tipos, key="sel_tipos")
 
