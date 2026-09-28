@@ -1,3 +1,4 @@
+import calendar
 import json
 import os
 import re
@@ -287,22 +288,45 @@ def acortar_texto_abreviado(texto):
     return " ".join(words_clean)
 
 # -----------------------------------------------------------------------------
-# CÁLCULO DINÁMICO DE USUARIOS POR PERÍODO / MES
+# CÁLCULO DINÁMICO DE USUARIOS POR PERÍODO CON PRORRATEO DIARIO PROPORCIONAL
 # -----------------------------------------------------------------------------
 def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_rases):
     if df_periodo.empty or df_users_mensual.empty:
         return {}, {}
 
+    fecha_inicio = df_periodo['fecha_dt'].min().date()
+    fecha_fin = df_periodo['fecha_dt'].max().date()
+
     anios_meses = df_periodo['fecha_dt'].dt.to_period('M').unique()
     
     df_u_filtrado = df_users_mensual[
         df_users_mensual.apply(lambda r: pd.Period(f"{int(r['ANIO'])}-{int(r['MES']):02d}", 'M') in anios_meses, axis=1)
-    ]
+    ].copy()
 
     if df_u_filtrado.empty:
         return {}, {}
 
-    dict_upres_users = df_u_filtrado.groupby('UNIDAD')['USUARIOS'].sum().to_dict()
+    # Aplicar factor proporcional de días por mes
+    def calcular_factor_dias(row):
+        anio = int(row['ANIO'])
+        mes = int(row['MES'])
+        dias_en_mes = calendar.monthrange(anio, mes)[1]
+        
+        primer_dia_mes = pd.Timestamp(year=anio, month=mes, day=1).date()
+        ultimo_dia_mes = pd.Timestamp(year=anio, month=mes, day=dias_en_mes).date()
+        
+        inicio_efectivo = max(fecha_inicio, primer_dia_mes)
+        fin_efectivo = min(fecha_fin, ultimo_dia_mes)
+        
+        if inicio_efectivo <= fin_efectivo:
+            dias_evaluados = (fin_efectivo - inicio_efectivo).days + 1
+            return dias_evaluados / dias_en_mes
+        return 0.0
+
+    df_u_filtrado['Factor_Prorrateo'] = df_u_filtrado.apply(calcular_factor_dias, axis=1)
+    df_u_filtrado['Usuarios_Prorrateados'] = df_u_filtrado['USUARIOS'] * df_u_filtrado['Factor_Prorrateo']
+
+    dict_upres_users = df_u_filtrado.groupby('UNIDAD')['Usuarios_Prorrateados'].sum().to_dict()
 
     df_u_con_rases = pd.merge(
         df_u_filtrado,
@@ -310,7 +334,7 @@ def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_ra
         on='UNIDAD',
         how='left'
     )
-    dict_rases_users = df_u_con_rases.groupby('RASES')['USUARIOS'].sum().to_dict()
+    dict_rases_users = df_u_con_rases.groupby('RASES')['Usuarios_Prorrateados'].sum().to_dict()
 
     return dict_rases_users, dict_upres_users
 
@@ -891,12 +915,12 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
         )
         y_label_r = "Tasa por 1.000 Usu."
         df_g1['Texto_Barra'] = df_g1['Valor_Graficar'].apply(lambda v: f"{v:.2f}")
-        hovertemplate_r = "<b>%{x}</b><br>Tasa: %{y:.2f} por 1.000 usuarios<br>Cantidad PQRS: %{customdata[0]:,}<br>Usuarios: %{customdata[1]:,}<extra></extra>"
+        hovertemplate_r = "<b>%{x}</b><br>Tasa: %{y:.2f} por 1.000 usuarios<br>Cantidad PQRS: %{customdata[0]:,}<br>Usuarios Prorrateados: %{customdata[1]:,.0f}<extra></extra>"
     else:
         df_g1['Valor_Graficar'] = df_g1['Cantidad']
         y_label_r = "Cantidad PQRS"
         df_g1['Texto_Barra'] = df_g1['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
-        hovertemplate_r = "<b>%{x}</b><br>Cantidad: %{y:,} PQRS<br>Usuarios: %{customdata[1]:,}<extra></extra>"
+        hovertemplate_r = "<b>%{x}</b><br>Cantidad: %{y:,} PQRS<br>Usuarios Prorrateados: %{customdata[1]:,.0f}<extra></extra>"
 
     df_g1 = df_g1.sort_values(by='Valor_Graficar', ascending=False)
 
@@ -946,12 +970,12 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
         )
         y_label_u = "Tasa por 1.000 Usu."
         df_u1['Texto_Barra'] = df_u1['Valor_Graficar'].apply(lambda v: f"{v:.2f}")
-        hovertemplate_u = "<b>%{x}</b><br>Tasa: %{y:.2f} por 1.000 usuarios<br>Cantidad PQRS: %{customdata[0]:,}<br>Usuarios: %{customdata[1]:,}<extra></extra>"
+        hovertemplate_u = "<b>%{x}</b><br>Tasa: %{y:.2f} por 1.000 usuarios<br>Cantidad PQRS: %{customdata[0]:,}<br>Usuarios Prorrateados: %{customdata[1]:,.0f}<extra></extra>"
     else:
         df_u1['Valor_Graficar'] = df_u1['Cantidad']
         y_label_u = "Cantidad PQRS"
         df_u1['Texto_Barra'] = df_u1['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
-        hovertemplate_u = "<b>%{x}</b><br>Cantidad: %{y:,} PQRS<br>Usuarios: %{customdata[1]:,}<extra></extra>"
+        hovertemplate_u = "<b>%{x}</b><br>Cantidad: %{y:,} PQRS<br>Usuarios Prorrateados: %{customdata[1]:,.0f}<extra></extra>"
 
     df_u1 = df_u1.sort_values(by='Valor_Graficar', ascending=False).head(10)
 
@@ -1092,11 +1116,11 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
                 lambda r: (r['Cantidad'] / r['Usuarios'] * 1000) if r['Usuarios'] > 0 else 0, axis=1
             )
             df_comp_rases['Texto_Barra'] = df_comp_rases['Valor_Graficar'].apply(lambda v: f"{v:.2f}")
-            hovertemplate_cr = "<b>%{x} (%{fullData.name})</b><br>Tasa: %{y:.2f} por 1.000 usuarios<br>Cantidad PQRS: %{customdata[0]:,}<br>Usuarios: %{customdata[1]:,}<extra></extra>"
+            hovertemplate_cr = "<b>%{x} (%{fullData.name})</b><br>Tasa: %{y:.2f} por 1.000 usuarios<br>Cantidad PQRS: %{customdata[0]:,}<br>Usuarios Prorrateados: %{customdata[1]:,.0f}<extra></extra>"
         else:
             df_comp_rases['Valor_Graficar'] = df_comp_rases['Cantidad']
             df_comp_rases['Texto_Barra'] = df_comp_rases['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
-            hovertemplate_cr = "<b>%{x} (%{fullData.name})</b><br>Cantidad: %{y:,} PQRS<br>Usuarios: %{customdata[1]:,}<extra></extra>"
+            hovertemplate_cr = "<b>%{x} (%{fullData.name})</b><br>Cantidad: %{y:,} PQRS<br>Usuarios Prorrateados: %{customdata[1]:,.0f}<extra></extra>"
 
         orden_rases_comp = df_comp_rases.groupby('RASES_fmt')['Valor_Graficar'].sum().sort_values(ascending=False).index.tolist()
 
@@ -1156,11 +1180,11 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
                 lambda r: (r['Cantidad'] / r['Usuarios'] * 1000) if r['Usuarios'] > 0 else 0, axis=1
             )
             df_comp_upres_simple['Texto_Barra'] = df_comp_upres_simple['Valor_Graficar'].apply(lambda v: f"{v:.2f}")
-            hovertemplate_cu = "<b>%{x} (%{fullData.name})</b><br>Tasa: %{y:.2f} por 1.000 usuarios<br>Cantidad PQRS: %{customdata[0]:,}<br>Usuarios: %{customdata[1]:,}<extra></extra>"
+            hovertemplate_cu = "<b>%{x} (%{fullData.name})</b><br>Tasa: %{y:.2f} por 1.000 usuarios<br>Cantidad PQRS: %{customdata[0]:,}<br>Usuarios Prorrateados: %{customdata[1]:,.0f}<extra></extra>"
         else:
             df_comp_upres_simple['Valor_Graficar'] = df_comp_upres_simple['Cantidad']
             df_comp_upres_simple['Texto_Barra'] = df_comp_upres_simple['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
-            hovertemplate_cu = "<b>%{x} (%{fullData.name})</b><br>Cantidad: %{y:,} PQRS<br>Usuarios: %{customdata[1]:,}<extra></extra>"
+            hovertemplate_cu = "<b>%{x} (%{fullData.name})</b><br>Cantidad: %{y:,} PQRS<br>Usuarios Prorrateados: %{customdata[1]:,.0f}<extra></extra>"
 
         df_p_b_metrics = df_comp_upres_simple[df_comp_upres_simple['Periodo'] == lbl_b_short]
         top_10_comp_upres = df_p_b_metrics.sort_values('Valor_Graficar', ascending=False).head(10)['UNIDAD DE ASIGNACIÓN'].tolist()
@@ -1374,7 +1398,6 @@ elif authentication_status:
     lista_unidades = sorted([x for x in df_raw['UNIDAD DE ASIGNACIÓN'].dropna().unique() if str(x).strip() != ''])
     sel_unidades = st.sidebar.multiselect("UPRES", options=lista_unidades, key="sel_unidades")
 
-# Carga segura de Categoría Salud
     if not df_raw.empty and 'ESPECIALIDAD_CATEGORIA' in df_raw.columns:
         cat_ordenadas = [c for c in df_raw['ESPECIALIDAD_CATEGORIA'].value_counts().index if str(c).strip() != '']
     else:
@@ -1382,7 +1405,6 @@ elif authentication_status:
 
     sel_cat = st.sidebar.multiselect("Categoría Salud", options=cat_ordenadas, placeholder="Seleccione categoría...", key="sel_cat")
 
-    # Carga segura de Motivo Específico
     col_mot_esp = 'MOTIVO ESPECÍFICO' if 'MOTIVO ESPECÍFICO' in df_raw.columns else 'MOTIVO GENERAL'
     if not df_raw.empty and col_mot_esp in df_raw.columns:
         motivos_ordenados = [m for m in df_raw[col_mot_esp].value_counts().index if str(m).strip() != '']
@@ -1390,6 +1412,7 @@ elif authentication_status:
         motivos_ordenados = []
 
     sel_motivos = st.sidebar.multiselect("Motivo Específico", options=motivos_ordenados, placeholder="Seleccione motivo...", key="sel_motivos")
+
     lista_tipos = sorted([x for x in df_raw['Tipo de Solicitud'].dropna().unique() if str(x).strip() != ''])
     sel_tipos = st.sidebar.multiselect("Tipo de Solicitud", options=lista_tipos, key="sel_tipos")
 
