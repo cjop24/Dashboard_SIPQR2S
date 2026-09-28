@@ -10,7 +10,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 import streamlit_authenticator as stauth
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import URL
 import yaml
 from yaml.loader import SafeLoader
 
@@ -708,9 +709,21 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
 
     k1, k2 = st.columns(2)
     k1.metric("Total recepcionado", f"{len(df_base):,}")
-    k1_cat = df_base['ESPECIALIDAD_CATEGORIA'].dropna().value_counts()
-    cat_top_name = k1_cat.index[0] if not k1_cat.empty else "N/A"
-    k2.metric("Especialidad más impactada", acortar_texto_abreviado(cat_top_name), delta=f"{k1_cat.iloc[0] if not k1_cat.empty else 0:,} tickets", delta_color="off")
+    
+    if not df_base.empty and 'ESPECIALIDAD_CATEGORIA' in df_base.columns:
+        k1_cat = df_base['ESPECIALIDAD_CATEGORIA'].dropna().value_counts()
+        cat_top_name = k1_cat.index[0] if not k1_cat.empty else "N/A"
+        cat_top_val = k1_cat.iloc[0] if not k1_cat.empty else 0
+    else:
+        cat_top_name = "N/A"
+        cat_top_val = 0
+
+    k2.metric(
+        "Especialidad más impactada", 
+        acortar_texto_abreviado(cat_top_name), 
+        delta=f"{cat_top_val:,} tickets", 
+        delta_color="off"
+    )
 
     k3, k4, k5 = st.columns(3)
     k3.metric("RASES con más PQRS", acortar_texto_abreviado(top_rases_nom), delta=f"{top_rases_val:,} tickets", delta_color="off")
@@ -1239,20 +1252,38 @@ elif authentication_status:
         st.error("❌ Faltan las credenciales de conexión en la configuración del servidor.")
         st.stop()
 
-    pass_encoded = urllib.parse.quote_plus(DB_PASS)
-    engine = create_engine(f"postgresql://{DB_USER}:{pass_encoded}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
+    if isinstance(DB_PASS, bytes):
+        DB_PASS = DB_PASS.decode('utf-8', errors='ignore')
+
+    # Construcción segura de la URL con especificación de cliente UTF-8
+    connection_url = URL.create(
+        drivername="postgresql+psycopg2",
+        username=DB_USER,
+        password=DB_PASS,
+        host=DB_HOST,
+        port=int(DB_PORT),
+        database=DB_NAME
+    )
+
+    engine = create_engine(
+        connection_url,
+        connect_args={'client_encoding': 'utf8'},
+        pool_pre_ping=True,
+        pool_recycle=300
+    )
 
     def obtener_ultimo_conteo_bd(engine):
         try:
-            query = 'SELECT COUNT(*) AS total FROM "V_SIPQR2S_CONSOLIDADO";'
-            df_cnt = pd.read_sql(query, con=engine)
+            query = text('SELECT COUNT(*) AS total FROM "V_SIPQR2S_CONSOLIDADO";')
+            with engine.connect() as conn:
+                df_cnt = pd.read_sql(query, con=conn)
             return int(df_cnt['total'].iloc[0])
         except Exception:
             return 0
 
     @st.cache_data(show_spinner="Cargando datos consolidados...")
     def cargar_datos_consolidados(total_registros_bd):
-        query = '''
+        query = text('''
             SELECT 
                 "fecha_dt",
                 "RASES",
@@ -1263,8 +1294,9 @@ elif authentication_status:
                 "Tipo de Solicitud",
                 "Medio de Recepción"
             FROM "V_SIPQR2S_CONSOLIDADO";
-        '''
-        df = pd.read_sql(query, con=engine)
+        ''')
+        with engine.connect() as conn:
+            df = pd.read_sql(query, con=conn)
         
         df['fecha_dt'] = pd.to_datetime(df['fecha_dt'])
         df['fecha_corta'] = df['fecha_dt'].dt.strftime('%Y-%m-%d')
@@ -1287,8 +1319,9 @@ elif authentication_status:
     @st.cache_data(ttl="1h")
     def cargar_usuarios_mensuales():
         try:
-            query = 'SELECT "UNIDAD", "ANIO", "MES", "USUARIOS" FROM "USUARIOS_ATENDIDOS_MENSUAL";'
-            df_u = pd.read_sql(query, con=engine)
+            query = text('SELECT "UNIDAD", "ANIO", "MES", "USUARIOS" FROM "USUARIOS_ATENDIDOS_MENSUAL";')
+            with engine.connect() as conn:
+                df_u = pd.read_sql(query, con=conn)
             df_u['USUARIOS'] = pd.to_numeric(df_u['USUARIOS'], errors='coerce').fillna(0)
             return df_u
         except Exception:
@@ -1297,8 +1330,9 @@ elif authentication_status:
     @st.cache_data(ttl="1h")
     def cargar_maestro_upres_rases():
         try:
-            query = 'SELECT DISTINCT "UNIDAD", "RASES" FROM "UPRES_RASES";'
-            return pd.read_sql(query, con=engine)
+            query = text('SELECT DISTINCT "UNIDAD", "RASES" FROM "UPRES_RASES";')
+            with engine.connect() as conn:
+                return pd.read_sql(query, con=conn)
         except Exception:
             return pd.DataFrame()
 
@@ -1340,11 +1374,19 @@ elif authentication_status:
     lista_unidades = sorted([x for x in df_raw['UNIDAD DE ASIGNACIÓN'].dropna().unique() if str(x).strip() != ''])
     sel_unidades = st.sidebar.multiselect("UPRES", options=lista_unidades, key="sel_unidades")
 
-    cat_ordenadas = [c for c in df_raw['ESPECIALIDAD_CATEGORIA'].dropna().value_counts().index if str(c).strip() != '']
+    if not df_raw.empty and 'ESPECIALIDAD_CATEGORIA' in df_raw.columns:
+        cat_ordenadas = [c for c in df_raw['ESPECIALIDAD_CATEGORIA'].value_counts(observed=True).index if str(c).strip() != '']
+    else:
+        cat_ordenadas = []
+
     sel_cat = st.sidebar.multiselect("Categoría Salud", options=cat_ordenadas, placeholder="Seleccione categoría...", key="sel_cat")
 
     col_mot_esp = 'MOTIVO ESPECÍFICO' if 'MOTIVO ESPECÍFICO' in df_raw.columns else 'MOTIVO GENERAL'
-    motivos_ordenados = [m for m in df_raw[col_mot_esp].dropna().value_counts().index if str(m).strip() != '']
+    if not df_raw.empty and col_mot_esp in df_raw.columns:
+        motivos_ordenados = [m for m in df_raw[col_mot_esp].value_counts(observed=True).index if str(m).strip() != '']
+    else:
+        motivos_ordenados = []
+
     sel_motivos = st.sidebar.multiselect("Motivo Específico", options=motivos_ordenados, placeholder="Seleccione motivo...", key="sel_motivos")
 
     lista_tipos = sorted([x for x in df_raw['Tipo de Solicitud'].dropna().unique() if str(x).strip() != ''])
