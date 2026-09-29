@@ -1259,6 +1259,9 @@ if authentication_status is False:
 elif authentication_status is None:
     st.warning("Por favor ingrese sus credenciales para acceder")
 elif authentication_status:
+    # -----------------------------------------------------------------------------
+    # OBTENCIÓN SEGURA DE CREDENCIALES VIA ST.SECRETS
+    # -----------------------------------------------------------------------------
     try:
         DB_USER = st.secrets["postgres"]["user"]
         DB_PASS = st.secrets["postgres"]["password"]
@@ -1266,6 +1269,7 @@ elif authentication_status:
         DB_PORT = st.secrets["postgres"]["port"]
         DB_NAME = st.secrets["postgres"]["dbname"]
     except Exception:
+        # Fallback de respaldo a variables de entorno locales (.env)
         DB_USER = os.getenv("DB_USER")
         DB_PASS = os.getenv("DB_PASS")
         DB_HOST = os.getenv("DB_HOST")
@@ -1273,11 +1277,14 @@ elif authentication_status:
         DB_NAME = os.getenv("DB_NAME", "postgres")
 
     if not DB_USER or not DB_PASS or not DB_HOST:
-        st.error("❌ Faltan las credenciales de conexión en la configuración del servidor.")
+        st.error("❌ Faltan las credenciales de conexión en la configuración del servidor (`st.secrets`).")
         st.stop()
 
     if isinstance(DB_PASS, bytes):
         DB_PASS = DB_PASS.decode('utf-8', errors='ignore')
+
+    # Codificación segura de caracteres especiales en contraseñas para URIs
+    encoded_pass = urllib.parse.quote_plus(str(DB_PASS))
 
     # Construcción segura de la URL con especificación de cliente UTF-8
     connection_url = URL.create(
