@@ -306,7 +306,6 @@ def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_ra
     if df_u_filtrado.empty:
         return {}, {}
 
-    # Aplicar factor proporcional de días por mes
     def calcular_factor_dias(row):
         anio = int(row['ANIO'])
         mes = int(row['MES'])
@@ -675,7 +674,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
 def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_mensual, df_maestro_upres_rases):
     st.caption("Consola Ejecutiva de Atención al Usuario - Periodo Único")
 
-    # --- Saneamiento defensivo de tipos de fecha ---
     if isinstance(min_f, pd.Timestamp):
         min_f = min_f.date()
     if isinstance(max_f, pd.Timestamp):
@@ -685,7 +683,6 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
         min_f = pd.Timestamp.now().date() - pd.Timedelta(days=30)
         max_f = pd.Timestamp.now().date()
 
-    # --- Control seguro de st.session_state ---
     if "fecha_ind_inicio" not in st.session_state or st.session_state["fecha_ind_inicio"] < min_f or st.session_state["fecha_ind_inicio"] > max_f:
         st.session_state["fecha_ind_inicio"] = min_f
 
@@ -756,7 +753,6 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
 
     st.markdown("---")
 
-    # MAPA DE CALOR POR DEPARTAMENTOS POR CÓDIGO DANE
     st.markdown("""
         <h3 style='display: flex; align-items: center; gap: 8px;'>
             <i class="fa-solid fa-map-location-dot" style="color: #2e7d32;"></i>
@@ -1259,52 +1255,52 @@ if authentication_status is False:
 elif authentication_status is None:
     st.warning("Por favor ingrese sus credenciales para acceder")
 elif authentication_status:
-    # -----------------------------------------------------------------------------
-    # OBTENCIÓN SEGURA DE CREDENCIALES VIA ST.SECRETS
-    # -----------------------------------------------------------------------------
-    try:
-        DB_USER = st.secrets["postgres"]["user"]
-        DB_PASS = st.secrets["postgres"]["password"]
-        DB_HOST = st.secrets["postgres"]["host"]
-        DB_PORT = st.secrets["postgres"]["port"]
-        DB_NAME = st.secrets["postgres"]["dbname"]
-    except Exception:
-        # Fallback de respaldo a variables de entorno locales (.env)
-        DB_USER = os.getenv("DB_USER")
-        DB_PASS = os.getenv("DB_PASS")
-        DB_HOST = os.getenv("DB_HOST")
-        DB_PORT = os.getenv("DB_PORT", "6543")
-        DB_NAME = os.getenv("DB_NAME", "postgres")
 
-    if not DB_USER or not DB_PASS or not DB_HOST:
-        st.error("❌ Faltan las credenciales de conexión en la configuración del servidor (`st.secrets`).")
-        st.stop()
-
-    if isinstance(DB_PASS, bytes):
-        DB_PASS = DB_PASS.decode('utf-8', errors='ignore')
-
-    # Codificación segura de caracteres especiales en contraseñas para URIs
-    encoded_pass = urllib.parse.quote_plus(str(DB_PASS))
-
-    # Construcción segura de la URL con especificación de cliente UTF-8
-    connection_url = URL.create(
-        drivername="postgresql+psycopg2",
-        username=DB_USER,
-        password=DB_PASS,
-        host=DB_HOST,
-        port=int(DB_PORT),
-        database=DB_NAME
-    )
-
-    engine = create_engine(
-        connection_url,
-        connect_args={'client_encoding': 'utf8'},
-        pool_pre_ping=True,
-        pool_recycle=300
-    )
-
-    def obtener_ultimo_conteo_bd(engine):
+    # 1. Caché del Engine (Piscina de conexiones persistente)
+    @st.cache_resource
+    def get_db_engine():
         try:
+            db = st.secrets["postgres"]
+            connection_url = URL.create(
+                drivername="postgresql+psycopg2",
+                username=db["user"],
+                password=db["password"],
+                host=db["host"],
+                port=int(db["port"]),
+                database=db["dbname"]
+            )
+        except Exception:
+            # Fallback a variables de entorno locales (.env)
+            db_user = os.getenv("DB_USER")
+            db_pass = os.getenv("DB_PASS")
+            db_host = os.getenv("DB_HOST")
+            db_port = int(os.getenv("DB_PORT", "6543"))
+            db_name = os.getenv("DB_NAME", "postgres")
+
+            if not db_user or not db_pass or not db_host:
+                st.error("❌ Faltan las credenciales de conexión a la base de datos.")
+                st.stop()
+
+            connection_url = URL.create(
+                drivername="postgresql+psycopg2",
+                username=db_user,
+                password=db_pass,
+                host=db_host,
+                port=db_port,
+                database=db_name
+            )
+
+        return create_engine(
+            connection_url,
+            connect_args={'client_encoding': 'utf8'},
+            pool_pre_ping=True,
+            pool_recycle=300
+        )
+
+    # Verificación de cambios en la base de datos
+    def obtener_ultimo_conteo_bd():
+        try:
+            engine = get_db_engine()
             query = text('SELECT COUNT(*) AS total FROM "V_SIPQR2S_CONSOLIDADO";')
             with engine.connect() as conn:
                 df_cnt = pd.read_sql(query, con=conn)
@@ -1312,8 +1308,10 @@ elif authentication_status:
         except Exception:
             return 0
 
-    @st.cache_data(show_spinner="Cargando datos consolidados...")
+    # 2. Caché de Datos Consolidados (TTL 10 min o invalida al cambiar el conteo)
+    @st.cache_data(ttl=600, show_spinner="Cargando datos consolidados...")
     def cargar_datos_consolidados(total_registros_bd):
+        engine = get_db_engine()
         query = text('''
             SELECT 
                 "fecha_dt",
@@ -1350,6 +1348,7 @@ elif authentication_status:
     @st.cache_data(ttl="1h")
     def cargar_usuarios_mensuales():
         try:
+            engine = get_db_engine()
             query = text('SELECT "UNIDAD", "ANIO", "MES", "USUARIOS" FROM "USUARIOS_ATENDIDOS_MENSUAL";')
             with engine.connect() as conn:
                 df_u = pd.read_sql(query, con=conn)
@@ -1361,6 +1360,7 @@ elif authentication_status:
     @st.cache_data(ttl="1h")
     def cargar_maestro_upres_rases():
         try:
+            engine = get_db_engine()
             query = text('SELECT DISTINCT "UNIDAD", "RASES" FROM "UPRES_RASES";')
             with engine.connect() as conn:
                 return pd.read_sql(query, con=conn)
@@ -1368,7 +1368,7 @@ elif authentication_status:
             return pd.DataFrame()
 
     try:
-        conteo_actual_bd = obtener_ultimo_conteo_bd(engine)
+        conteo_actual_bd = obtener_ultimo_conteo_bd()
         df_raw = cargar_datos_consolidados(conteo_actual_bd)
         df_users_mensual = cargar_usuarios_mensuales()
         df_maestro_upres_rases = cargar_maestro_upres_rases()
@@ -1452,9 +1452,7 @@ elif authentication_status:
             on_click=restablecer_filtros_callback
         )
 
-    # -----------------------------------------------------------------------------
-    # BOTÓN DE REFRESCO MANUAL DE CACHÉ PARA EL SERVIDOR WEB (STREAMLIT CLOUD)
-    # -----------------------------------------------------------------------------
+    # Botón de refresco manual de caché
     st.sidebar.markdown("---")
     if st.sidebar.button("🔄 Refrescar Datos de BD", use_container_width=True, help="Fuerza la recarga limpia de datos desde PostgreSQL/Supabase"):
         st.cache_data.clear()
