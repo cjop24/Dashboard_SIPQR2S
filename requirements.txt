@@ -1,8 +1,8 @@
-streamlit
-pandas
+streamlit>=1.30.0
+pandas>=2.0.0
 plotly
-sqlalchemy
-psycopg2-binary
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
 streamlit-authenticator==0.2.3
 pyyaml
-python-dotenv
+python-dotenv>=1.0.0
