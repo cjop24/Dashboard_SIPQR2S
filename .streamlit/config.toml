@@ -1,0 +1,8 @@
+[server]
+maxUploadSize = 200 # Tamaño máximo de archivo a subir en MB
+enableCORS = false
+enableXsrfProtection = true
+
+[client]
+showErrorDetails = false # En producción oculta rastros detallados de código al usuario final
+toolbarMode = "minimal"
