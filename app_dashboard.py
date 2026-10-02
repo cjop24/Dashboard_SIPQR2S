@@ -2,6 +2,7 @@ import calendar
 import json
 import os
 import re
+import unicodedata
 import urllib.parse
 import urllib.request
 from dotenv import load_dotenv
@@ -171,6 +172,11 @@ NOMBRES_DEPARTAMENTOS_MOSTRAR = {
     '85': 'Casanare', '86': 'Putumayo', '88': 'San Andrés y Providencia',
     '91': 'Amazonas', '94': 'Guainía', '95': 'Guaviare', '97': 'Vaupés', '99': 'Vichada'
 }
+
+def _norm_unidad(x):
+    s = str(x).upper().strip()
+    s = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+    return re.sub(r'\s+', ' ', s)
 
 @st.cache_data(ttl="24h")
 def cargar_geojson_colombia():
@@ -1346,26 +1352,33 @@ elif authentication_status:
         return df
 
     @st.cache_data(ttl="1h")
-    def cargar_usuarios_mensuales():
-        try:
-            engine = get_db_engine()
-            query = text('SELECT "UNIDAD", "ANIO", "MES", "USUARIOS" FROM "USUARIOS_ATENDIDOS_MENSUAL";')
-            with engine.connect() as conn:
-                df_u = pd.read_sql(query, con=conn)
-            df_u['USUARIOS'] = pd.to_numeric(df_u['USUARIOS'], errors='coerce').fillna(0)
-            return df_u
-        except Exception:
-            return pd.DataFrame()
+    def cargar_maestro_upres_rases():
+        engine = get_db_engine()
+        query = text('SELECT DISTINCT "UNIDAD", "RASES" FROM "UPRES_RASES";')
+        with engine.connect() as conn:
+            return pd.read_sql(query, con=conn)
 
     @st.cache_data(ttl="1h")
-    def cargar_maestro_upres_rases():
-        try:
-            engine = get_db_engine()
-            query = text('SELECT DISTINCT "UNIDAD", "RASES" FROM "UPRES_RASES";')
-            with engine.connect() as conn:
-                return pd.read_sql(query, con=conn)
-        except Exception:
-            return pd.DataFrame()
+    def cargar_usuarios_mensuales():
+        engine = get_db_engine()
+        with engine.connect() as conn:
+            df_u = pd.read_sql(
+                text('SELECT "UNIDAD", "MES_ANIO", "USUARIOS" FROM "USUARIOS_ATENDIDOS_MENSUAL";'),
+                con=conn
+            )
+            df_maestro = pd.read_sql(text('SELECT DISTINCT "UNIDAD" FROM "UPRES_RASES";'), con=conn)
+        
+        # MES_ANIO ("2025-03") -> ANIO y MES, que es lo que espera obtener_usuarios_dinamicos
+        fechas = pd.to_datetime(df_u['MES_ANIO'].astype(str).str.strip(), errors='coerce')
+        df_u['ANIO'] = fechas.dt.year
+        df_u['MES'] = fechas.dt.month
+        df_u['USUARIOS'] = pd.to_numeric(df_u['USUARIOS'], errors='coerce').fillna(0)
+        df_u = df_u.dropna(subset=['ANIO', 'MES']).copy()
+        
+        # Unificar el nombre de UNIDAD con el que usan los tickets (UPRES_RASES)
+        canon = {_norm_unidad(u): u for u in df_maestro['UNIDAD']}
+        df_u['UNIDAD'] = df_u['UNIDAD'].map(lambda u: canon.get(_norm_unidad(u), u))
+        return df_u
 
     try:
         conteo_actual_bd = obtener_ultimo_conteo_bd()
