@@ -1399,7 +1399,11 @@ elif authentication_status:
         try:
             df_users_mensual = cargar_usuarios_mensuales()
         except Exception as e_u:
-            st.warning(f"⚠️ No se pudieron cargar los usuarios atendidos (la tasa por 1.000 usuarios no se calculará): {e_u}")
+            _eng = get_db_engine()
+            st.warning(
+                f"⚠️ No se pudieron cargar los usuarios atendidos (la tasa por 1.000 usuarios no se calculará). "
+                f"Base conectada: host={_eng.url.host} | db={_eng.url.database} | puerto={_eng.url.port}. Detalle: {e_u}"
+            )
             df_users_mensual = pd.DataFrame()
         try:
             df_maestro_upres_rases = cargar_maestro_upres_rases()
@@ -1493,6 +1497,8 @@ elif authentication_status:
         st.rerun()
 
     with st.sidebar.expander("🔧 Diagnóstico de usuarios"):
+        _e = get_db_engine()
+        st.write(f"Conectado a: {_e.url.host} | db: {_e.url.database} | puerto: {_e.url.port}")
         if df_users_mensual.empty:
             st.error("Tabla de usuarios vacía o no cargada.")
         else:
