@@ -12,11 +12,11 @@ load_dotenv()
 DB_USER = os.getenv("DB_USER")
 DB_PASS = os.getenv("DB_PASS")
 DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT", "6543")
-DB_NAME = os.getenv("DB_NAME", "postgres")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_NAME = os.getenv("DB_NAME", "neondb")
 
 def cargar_usuarios_mensuales():
-    print("🚀 Cargando datos mensuales de usuarios atendidos...")
+    print("🚀 Cargando datos mensuales de usuarios atendidos a Neon.tech...")
     
     archivo_excel = "USUARIOS_ATENDIDOS_MENSUAL.xlsx"
     
@@ -38,13 +38,6 @@ def cargar_usuarios_mensuales():
 
     # Normalizar encabezados eliminando espacios y convirtiendo a mayúsculas
     df_raw.columns = [str(c).strip().upper() for c in df_raw.columns]
-    
-    # Validar presencia de las columnas requeridas
-    cols_requeridas = ["UNIDAD", "ANIO", "MES", "USUARIOS"]
-    for col in cols_requeridas:
-        if col not in df_raw.columns:
-            print(f"❌ Error: La columna '{col}' no se encuentra en el Excel.")
-            return
 
     registros = []
     
@@ -52,22 +45,32 @@ def cargar_usuarios_mensuales():
         unidad = str(fila['UNIDAD']).strip().upper()
         
         # Ignorar filas vacías o de totales
-        if unidad in ['TOTAL GENERAL', 'NAN', '', 'NONE']:
+        if unidad in ['TOTAL GENERAL', 'NAN', '', 'NONE', 'NULL']:
+            continue
+
+        # Soporte para ambas estructuras de Excel: MES_ANIO único o ANIO + MES
+        if "MES_ANIO" in df_raw.columns:
+            mes_anio = str(fila['MES_ANIO']).strip()
+        elif "ANIO" in df_raw.columns and "MES" in df_raw.columns:
+            val_anio = int(pd.to_numeric(fila['ANIO'], errors='coerce'))
+            val_mes = int(pd.to_numeric(fila['MES'], errors='coerce'))
+            mes_anio = f"{val_anio}-{val_mes:02d}"
+        else:
             continue
             
-        val_anio = pd.to_numeric(fila['ANIO'], errors='coerce')
-        val_mes = pd.to_numeric(fila['MES'], errors='coerce')
-        val_usuarios = pd.to_numeric(fila['USUARIOS'], errors='coerce')
+        val_usuarios = pd.to_numeric(
+            str(fila['USUARIOS']).replace(',', '').replace('.', ''), 
+            errors='coerce'
+        )
         
-        if pd.notna(val_anio) and pd.notna(val_mes) and pd.notna(val_usuarios):
+        if pd.notna(val_usuarios):
             registros.append((
                 unidad,
-                int(val_anio),
-                int(val_mes),
-                float(val_usuarios)
+                mes_anio,
+                int(val_usuarios)
             ))
 
-    print(f"  📥 Insertando/actualizando {len(registros)} registros mensuales en Supabase...")
+    print(f"  📥 Insertando/actualizando {len(registros)} registros mensuales en Neon...")
     
     if not registros:
         print("⚠️ No se generaron registros válidos para insertar.")
@@ -81,14 +84,13 @@ def cargar_usuarios_mensuales():
             host=DB_HOST, 
             port=DB_PORT
         )
-        conn.set_client_encoding('WIN1252')
         cursor = conn.cursor()
         
-        # Insertar o actualizar si ya existe la combinación (UNIDAD, ANIO, MES)
+        # Inserción con conflicto en la restricción UNIQUE ("UNIDAD", "MES_ANIO")
         query = """
-            INSERT INTO "USUARIOS_ATENDIDOS_MENSUAL" ("UNIDAD", "ANIO", "MES", "USUARIOS")
+            INSERT INTO "USUARIOS_ATENDIDOS_MENSUAL" ("UNIDAD", "MES_ANIO", "USUARIOS")
             VALUES %s
-            ON CONFLICT ("UNIDAD", "ANIO", "MES") 
+            ON CONFLICT ("UNIDAD", "MES_ANIO") 
             DO UPDATE SET "USUARIOS" = EXCLUDED."USUARIOS";
         """
         execute_values(cursor, query, registros)
@@ -96,7 +98,7 @@ def cargar_usuarios_mensuales():
         
         cursor.close()
         conn.close()
-        print("✅ ¡Carga de usuarios mensuales completada con éxito en Supabase!")
+        print("✅ ¡Carga de usuarios mensuales completada con éxito en Neon.tech!")
         
     except Exception as e:
         print(f"⚠️ Error al insertar registros en PostgreSQL: {e}")
