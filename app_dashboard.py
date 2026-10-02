@@ -173,11 +173,6 @@ NOMBRES_DEPARTAMENTOS_MOSTRAR = {
     '91': 'Amazonas', '94': 'Guainía', '95': 'Guaviare', '97': 'Vaupés', '99': 'Vichada'
 }
 
-def _norm_unidad(x):
-    s = str(x).upper().strip()
-    s = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
-    return re.sub(r'\s+', ' ', s)
-
 @st.cache_data(ttl="24h")
 def cargar_geojson_colombia():
     ruta_local = "Colombia.geo_2.json"
@@ -296,6 +291,18 @@ def acortar_texto_abreviado(texto):
 # -----------------------------------------------------------------------------
 # CÁLCULO DINÁMICO DE USUARIOS POR PERÍODO CON PRORRATEO DIARIO PROPORCIONAL
 # -----------------------------------------------------------------------------
+def _norm_unidad(x):
+    """Normaliza nombres (mayúsculas, sin tildes, espacios unificados) para cruzar tablas."""
+    if x is None or (isinstance(x, float) and np.isnan(x)):
+        return ""
+    s = str(x).upper().strip()
+    s = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+    return re.sub(r'\s+', ' ', s)
+
+def mapear_usuarios(serie, diccionario):
+    """Busca los usuarios de cada UPRES/RASES usando la clave normalizada. Sin coincidencia -> 0."""
+    return serie.astype(str).map(lambda k: diccionario.get(_norm_unidad(k), 0)).astype(float)
+
 def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_rases):
     if df_periodo.empty or df_users_mensual.empty:
         return {}, {}
@@ -304,7 +311,7 @@ def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_ra
     fecha_fin = df_periodo['fecha_dt'].max().date()
 
     anios_meses = df_periodo['fecha_dt'].dt.to_period('M').unique()
-    
+
     df_u_filtrado = df_users_mensual[
         df_users_mensual.apply(lambda r: pd.Period(f"{int(r['ANIO'])}-{int(r['MES']):02d}", 'M') in anios_meses, axis=1)
     ].copy()
@@ -316,13 +323,13 @@ def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_ra
         anio = int(row['ANIO'])
         mes = int(row['MES'])
         dias_en_mes = calendar.monthrange(anio, mes)[1]
-        
+
         primer_dia_mes = pd.Timestamp(year=anio, month=mes, day=1).date()
         ultimo_dia_mes = pd.Timestamp(year=anio, month=mes, day=dias_en_mes).date()
-        
+
         inicio_efectivo = max(fecha_inicio, primer_dia_mes)
         fin_efectivo = min(fecha_fin, ultimo_dia_mes)
-        
+
         if inicio_efectivo <= fin_efectivo:
             dias_evaluados = (fin_efectivo - inicio_efectivo).days + 1
             return dias_evaluados / dias_en_mes
@@ -330,16 +337,20 @@ def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_ra
 
     df_u_filtrado['Factor_Prorrateo'] = df_u_filtrado.apply(calcular_factor_dias, axis=1)
     df_u_filtrado['Usuarios_Prorrateados'] = df_u_filtrado['USUARIOS'] * df_u_filtrado['Factor_Prorrateo']
+    df_u_filtrado['UNIDAD_KEY'] = df_u_filtrado['UNIDAD'].map(_norm_unidad)
 
-    dict_upres_users = df_u_filtrado.groupby('UNIDAD')['Usuarios_Prorrateados'].sum().to_dict()
+    # Claves normalizadas (sin tildes / mayúsculas) -> el cruce con los tickets ya no depende de la escritura exacta
+    dict_upres_users = df_u_filtrado.groupby('UNIDAD_KEY')['Usuarios_Prorrateados'].sum().to_dict()
 
-    df_u_con_rases = pd.merge(
-        df_u_filtrado,
-        df_maestro_upres_rases[['UNIDAD', 'RASES']].drop_duplicates(),
-        on='UNIDAD',
-        how='left'
-    )
-    dict_rases_users = df_u_con_rases.groupby('RASES')['Usuarios_Prorrateados'].sum().to_dict()
+    dict_rases_users = {}
+    if not df_maestro_upres_rases.empty:
+        maestro = df_maestro_upres_rases[['UNIDAD', 'RASES']].dropna().copy()
+        maestro['UNIDAD_KEY'] = maestro['UNIDAD'].map(_norm_unidad)
+        maestro = maestro.drop_duplicates(subset=['UNIDAD_KEY'])[['UNIDAD_KEY', 'RASES']]
+
+        df_u_con_rases = pd.merge(df_u_filtrado, maestro, on='UNIDAD_KEY', how='inner')
+        df_u_con_rases['RASES_KEY'] = df_u_con_rases['RASES'].map(_norm_unidad)
+        dict_rases_users = df_u_con_rases.groupby('RASES_KEY')['Usuarios_Prorrateados'].sum().to_dict()
 
     return dict_rases_users, dict_upres_users
 
@@ -909,7 +920,7 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
     ].copy()
 
     df_g1['RASES_fmt'] = df_g1['RASES'].apply(acortar_texto_abreviado)
-    df_g1['Usuarios'] = df_g1['RASES'].map(dict_rases_users).fillna(0)
+    df_g1['Usuarios'] = mapear_usuarios(df_g1['RASES'], dict_rases_users)
 
     if ver_tasa_rases:
         df_g1['Valor_Graficar'] = df_g1.apply(
@@ -964,7 +975,7 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
     df_u1_raw.columns = ['UPRES', 'Cantidad']
     df_u1 = df_u1_raw[(df_u1_raw['Cantidad'] > 0) & (df_u1_raw['UPRES'].astype(str).str.strip() != '')].copy()
     df_u1['UPRES_fmt'] = df_u1['UPRES'].apply(acortar_texto_abreviado)
-    df_u1['Usuarios'] = df_u1['UPRES'].map(dict_upres_users).fillna(0)
+    df_u1['Usuarios'] = mapear_usuarios(df_u1['UPRES'], dict_upres_users)
 
     if ver_tasa_upres:
         df_u1['Valor_Graficar'] = df_u1.apply(
@@ -1096,12 +1107,12 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
         df_r_a = df_a['RASES'].dropna().value_counts().reset_index()
         df_r_a.columns = ['RASES', 'Cantidad']
         df_r_a['Periodo'] = lbl_a_short
-        df_r_a['Usuarios'] = df_r_a['RASES'].map(dict_rases_users_a).fillna(0)
+        df_r_a['Usuarios'] = mapear_usuarios(df_r_a['RASES'], dict_rases_users_a)
 
         df_r_b = df_b['RASES'].dropna().value_counts().reset_index()
         df_r_b.columns = ['RASES', 'Cantidad']
         df_r_b['Periodo'] = lbl_b_short
-        df_r_b['Usuarios'] = df_r_b['RASES'].map(dict_rases_users_b).fillna(0)
+        df_r_b['Usuarios'] = mapear_usuarios(df_r_b['RASES'], dict_rases_users_b)
 
         df_comp_rases = pd.concat([df_r_a, df_r_b])
 
@@ -1165,12 +1176,12 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
         df_u_comp_a = df_a['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
         df_u_comp_a.columns = ['UNIDAD DE ASIGNACIÓN', 'Cantidad']
         df_u_comp_a['Periodo'] = lbl_a_short
-        df_u_comp_a['Usuarios'] = df_u_comp_a['UNIDAD DE ASIGNACIÓN'].map(dict_upres_users_a).fillna(0)
+        df_u_comp_a['Usuarios'] = mapear_usuarios(df_u_comp_a['UNIDAD DE ASIGNACIÓN'], dict_upres_users_a)
 
         df_u_comp_b = df_b['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
         df_u_comp_b.columns = ['UNIDAD DE ASIGNACIÓN', 'Cantidad']
         df_u_comp_b['Periodo'] = lbl_b_short
-        df_u_comp_b['Usuarios'] = df_u_comp_b['UNIDAD DE ASIGNACIÓN'].map(dict_upres_users_b).fillna(0)
+        df_u_comp_b['Usuarios'] = mapear_usuarios(df_u_comp_b['UNIDAD DE ASIGNACIÓN'], dict_upres_users_b)
 
         df_comp_upres_simple = pd.concat([df_u_comp_a, df_u_comp_b])
         df_comp_upres_simple = df_comp_upres_simple[(df_comp_upres_simple['Cantidad'] > 0) & (df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].astype(str).str.strip() != '')].copy()
@@ -1352,39 +1363,42 @@ elif authentication_status:
         return df
 
     @st.cache_data(ttl="1h")
+    def cargar_usuarios_mensuales():
+        # La tabla guarda MES_ANIO ("2026-01"); aquí se derivan ANIO y MES.
+        engine = get_db_engine()
+        query = text('SELECT "UNIDAD", "MES_ANIO", "USUARIOS" FROM "USUARIOS_ATENDIDOS_MENSUAL";')
+        with engine.connect() as conn:
+            df_u = pd.read_sql(query, con=conn)
+
+        fechas = pd.to_datetime(df_u['MES_ANIO'].astype(str).str.strip(), format="%Y-%m", errors='coerce')
+        df_u['ANIO'] = fechas.dt.year
+        df_u['MES'] = fechas.dt.month
+        df_u['USUARIOS'] = pd.to_numeric(df_u['USUARIOS'], errors='coerce').fillna(0)
+        df_u = df_u.dropna(subset=['ANIO', 'MES']).copy()
+        df_u['ANIO'] = df_u['ANIO'].astype(int)
+        df_u['MES'] = df_u['MES'].astype(int)
+        return df_u[['UNIDAD', 'ANIO', 'MES', 'USUARIOS']]
+
+    @st.cache_data(ttl="1h")
     def cargar_maestro_upres_rases():
         engine = get_db_engine()
         query = text('SELECT DISTINCT "UNIDAD", "RASES" FROM "UPRES_RASES";')
         with engine.connect() as conn:
             return pd.read_sql(query, con=conn)
 
-    @st.cache_data(ttl="1h")
-    def cargar_usuarios_mensuales():
-        engine = get_db_engine()
-        with engine.connect() as conn:
-            df_u = pd.read_sql(
-                text('SELECT "UNIDAD", "MES_ANIO", "USUARIOS" FROM "USUARIOS_ATENDIDOS_MENSUAL";'),
-                con=conn
-            )
-            df_maestro = pd.read_sql(text('SELECT DISTINCT "UNIDAD" FROM "UPRES_RASES";'), con=conn)
-        
-        # MES_ANIO ("2025-03") -> ANIO y MES, que es lo que espera obtener_usuarios_dinamicos
-        fechas = pd.to_datetime(df_u['MES_ANIO'].astype(str).str.strip(), errors='coerce')
-        df_u['ANIO'] = fechas.dt.year
-        df_u['MES'] = fechas.dt.month
-        df_u['USUARIOS'] = pd.to_numeric(df_u['USUARIOS'], errors='coerce').fillna(0)
-        df_u = df_u.dropna(subset=['ANIO', 'MES']).copy()
-        
-        # Unificar el nombre de UNIDAD con el que usan los tickets (UPRES_RASES)
-        canon = {_norm_unidad(u): u for u in df_maestro['UNIDAD']}
-        df_u['UNIDAD'] = df_u['UNIDAD'].map(lambda u: canon.get(_norm_unidad(u), u))
-        return df_u
-
     try:
         conteo_actual_bd = obtener_ultimo_conteo_bd()
         df_raw = cargar_datos_consolidados(conteo_actual_bd)
-        df_users_mensual = cargar_usuarios_mensuales()
-        df_maestro_upres_rases = cargar_maestro_upres_rases()
+        try:
+            df_users_mensual = cargar_usuarios_mensuales()
+        except Exception as e_u:
+            st.warning(f"⚠️ No se pudieron cargar los usuarios atendidos (la tasa por 1.000 usuarios no se calculará): {e_u}")
+            df_users_mensual = pd.DataFrame()
+        try:
+            df_maestro_upres_rases = cargar_maestro_upres_rases()
+        except Exception as e_m:
+            st.warning(f"⚠️ No se pudo cargar la tabla UPRES_RASES: {e_m}")
+            df_maestro_upres_rases = pd.DataFrame()
 
         min_global_date = df_raw['fecha_dt'].min().date() if not df_raw.empty else None
         max_global_date = df_raw['fecha_dt'].max().date() if not df_raw.empty else None
@@ -1470,6 +1484,19 @@ elif authentication_status:
     if st.sidebar.button("🔄 Refrescar Datos de BD", use_container_width=True, help="Fuerza la recarga limpia de datos desde PostgreSQL/Supabase"):
         st.cache_data.clear()
         st.rerun()
+
+    with st.sidebar.expander("🔧 Diagnóstico de usuarios"):
+        if df_users_mensual.empty:
+            st.error("Tabla de usuarios vacía o no cargada.")
+        else:
+            meses = sorted(f"{a}-{m:02d}" for a, m in df_users_mensual[['ANIO', 'MES']].drop_duplicates().itertuples(index=False))
+            st.write("Meses con usuarios:", meses)
+            u_users = {_norm_unidad(u) for u in df_users_mensual['UNIDAD'].unique()}
+            u_tick = {_norm_unidad(u) for u in df_raw['UNIDAD DE ASIGNACIÓN'].dropna().astype(str).unique()}
+            sin_usuarios = sorted(u_tick - u_users)
+            st.write(f"Unidades de tickets con usuarios: {len(u_tick & u_users)} de {len(u_tick)}")
+            if sin_usuarios:
+                st.write("Unidades de tickets SIN usuarios:", sin_usuarios)
 
     df_base_global = df_raw.copy()
     if sel_rases:
