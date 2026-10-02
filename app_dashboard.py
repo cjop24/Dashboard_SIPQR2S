@@ -1419,11 +1419,7 @@ elif authentication_status:
         try:
             df_users_mensual = cargar_usuarios_mensuales()
         except Exception as e_u:
-            _eng = get_db_engine()
-            st.warning(
-                f"⚠️ No se pudieron cargar los usuarios atendidos (la tasa por 1.000 usuarios no se calculará). "
-                f"Base conectada: host={_eng.url.host} | db={_eng.url.database} | puerto={_eng.url.port}. Detalle: {e_u}"
-            )
+            st.warning(f"⚠️ No se pudieron cargar los usuarios atendidos (la tasa por 1.000 usuarios no se calculará): {e_u}")
             df_users_mensual = pd.DataFrame()
         try:
             df_maestro_upres_rases = cargar_maestro_upres_rases()
@@ -1515,23 +1511,6 @@ elif authentication_status:
     if st.sidebar.button("🔄 Refrescar Datos de BD", use_container_width=True, help="Fuerza la recarga limpia de datos desde PostgreSQL/Supabase"):
         st.cache_data.clear()
         st.rerun()
-
-    with st.sidebar.expander("🔧 Diagnóstico de usuarios"):
-        _e = get_db_engine()
-        st.write(f"Conectado a: {_e.url.host} | db: {_e.url.database} | puerto: {_e.url.port}")
-        if df_users_mensual.empty:
-            st.error("Tabla de usuarios vacía o no cargada.")
-        else:
-            meses = sorted(f"{a}-{m:02d}" for a, m in df_users_mensual[['ANIO', 'MES']].drop_duplicates().itertuples(index=False))
-            st.write("Meses con usuarios:", meses)
-            u_users = {_norm_unidad(u) for u in df_users_mensual['UNIDAD'].unique()}
-            u_tick = {_norm_unidad(u) for u in df_raw['UNIDAD DE ASIGNACIÓN'].dropna().astype(str).unique()}
-            sin_usuarios = sorted(u_tick - u_users)
-            st.write(f"Unidades de tickets con usuarios: {len(u_tick & u_users)} de {len(u_tick)}")
-            if sin_usuarios:
-                st.write("Unidades de tickets SIN usuarios:", sin_usuarios)
-            st.write(f"Rango de tickets: {df_raw['fecha_dt'].min().date()} → {df_raw['fecha_dt'].max().date()}")
-            st.write("Meses de tickets SIN usuarios:", meses_sin_usuarios(df_raw, df_users_mensual))
 
     df_base_global = df_raw.copy()
     if sel_rases:
