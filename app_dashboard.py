@@ -303,6 +303,16 @@ def mapear_usuarios(serie, diccionario):
     """Busca los usuarios de cada UPRES/RASES usando la clave normalizada. Sin coincidencia -> 0."""
     return serie.astype(str).map(lambda k: diccionario.get(_norm_unidad(k), 0)).astype(float)
 
+def meses_sin_usuarios(df_periodo, df_users_mensual):
+    """Meses (YYYY-MM) del periodo que tienen tickets pero no tienen usuarios cargados."""
+    if df_periodo.empty:
+        return []
+    m_tick = set(df_periodo['fecha_dt'].dt.strftime('%Y-%m').unique())
+    if df_users_mensual.empty:
+        return sorted(m_tick)
+    m_users = {f"{int(a)}-{int(m):02d}" for a, m in df_users_mensual[['ANIO', 'MES']].drop_duplicates().itertuples(index=False)}
+    return sorted(m_tick - m_users)
+
 def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_rases):
     if df_periodo.empty or df_users_mensual.empty:
         return {}, {}
@@ -732,6 +742,10 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
             st.warning("⚠️ La Fecha Inicio no puede ser posterior a la Fecha Fin.")
 
     dict_rases_users, dict_upres_users = obtener_usuarios_dinamicos(df_base, df_users_mensual, df_maestro_upres_rases)
+    _faltan = meses_sin_usuarios(df_base, df_users_mensual)
+    if _faltan:
+        st.caption(f"⚠️ Sin usuarios cargados para estos meses del periodo seleccionado: {', '.join(_faltan)}. "
+                   f"Los usuarios prorrateados y la tasa por 1.000 usuarios solo consideran los meses con datos.")
 
     top_upres_s = df_base['UNIDAD DE ASIGNACIÓN'].dropna().value_counts()
     top_upres_nom = top_upres_s.index[0] if not top_upres_s.empty else "N/A"
@@ -1061,7 +1075,13 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
         df_b = df_base_global[(df_base_global['fecha_dt'].dt.date >= fecha_b_inicio) & (df_base_global['fecha_dt'].dt.date <= fecha_b_fin)].copy()
 
         dict_rases_users_a, dict_upres_users_a = obtener_usuarios_dinamicos(df_a, df_users_mensual, df_maestro_upres_rases)
+        _fa = meses_sin_usuarios(df_a, df_users_mensual)
+        if _fa:
+            st.caption(f"⚠️ Periodo A sin usuarios cargados para: {', '.join(_fa)}.")
         dict_rases_users_b, dict_upres_users_b = obtener_usuarios_dinamicos(df_b, df_users_mensual, df_maestro_upres_rases)
+        _fb = meses_sin_usuarios(df_b, df_users_mensual)
+        if _fb:
+            st.caption(f"⚠️ Periodo B sin usuarios cargados para: {', '.join(_fb)}.")
 
         tot_a, tot_b = len(df_a), len(df_b)
         diff_abs = tot_b - tot_a
@@ -1510,6 +1530,8 @@ elif authentication_status:
             st.write(f"Unidades de tickets con usuarios: {len(u_tick & u_users)} de {len(u_tick)}")
             if sin_usuarios:
                 st.write("Unidades de tickets SIN usuarios:", sin_usuarios)
+            st.write(f"Rango de tickets: {df_raw['fecha_dt'].min().date()} → {df_raw['fecha_dt'].max().date()}")
+            st.write("Meses de tickets SIN usuarios:", meses_sin_usuarios(df_raw, df_users_mensual))
 
     df_base_global = df_raw.copy()
     if sel_rases:
