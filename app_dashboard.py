@@ -1364,15 +1364,22 @@ elif authentication_status:
 
     @st.cache_data(ttl="1h")
     def cargar_usuarios_mensuales():
-        # La tabla guarda MES_ANIO ("2026-01"); aquí se derivan ANIO y MES.
+        # Esquema esperado: UNIDAD, ANIO, MES, USUARIOS.
+        # También tolera la tabla antigua con MES_ANIO ("2026-01").
         engine = get_db_engine()
-        query = text('SELECT "UNIDAD", "MES_ANIO", "USUARIOS" FROM "USUARIOS_ATENDIDOS_MENSUAL";')
         with engine.connect() as conn:
-            df_u = pd.read_sql(query, con=conn)
+            df_u = pd.read_sql(text('SELECT * FROM "USUARIOS_ATENDIDOS_MENSUAL";'), con=conn)
 
-        fechas = pd.to_datetime(df_u['MES_ANIO'].astype(str).str.strip(), format="%Y-%m", errors='coerce')
-        df_u['ANIO'] = fechas.dt.year
-        df_u['MES'] = fechas.dt.month
+        if 'ANIO' in df_u.columns and 'MES' in df_u.columns:
+            df_u['ANIO'] = pd.to_numeric(df_u['ANIO'], errors='coerce')
+            df_u['MES'] = pd.to_numeric(df_u['MES'], errors='coerce')
+        elif 'MES_ANIO' in df_u.columns:
+            fechas = pd.to_datetime(df_u['MES_ANIO'].astype(str).str.strip(), format="%Y-%m", errors='coerce')
+            df_u['ANIO'] = fechas.dt.year
+            df_u['MES'] = fechas.dt.month
+        else:
+            raise ValueError("USUARIOS_ATENDIDOS_MENSUAL debe tener ANIO y MES (o MES_ANIO).")
+
         df_u['USUARIOS'] = pd.to_numeric(df_u['USUARIOS'], errors='coerce').fillna(0)
         df_u = df_u.dropna(subset=['ANIO', 'MES']).copy()
         df_u['ANIO'] = df_u['ANIO'].astype(int)
