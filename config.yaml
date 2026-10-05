@@ -24,7 +24,10 @@ credentials:
       email: "xxxxxxx@correo.policia.gov.co"
       name: "RASES_1"
       password: "$2b$12$U/OJIsiz6Q1XllriRFlIZ.K8TqQQzIbUdsVQ/jmwEvvQYTumxEU.y" # Hash bcrypt para 'rases1'
-
+    rases_2:
+      email: "xxxxxxx@correo.policia.gov.co"
+      name: "RASES_2"
+      password: "$2b$12$noFaebeM3dwXZSjfhJ3Fyuo5oIJBl.8tSX8MJitrypCWsf5i1VSFy" # Hash bcrypt para 'rases2'
 
 
 
