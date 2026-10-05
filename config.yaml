@@ -23,12 +23,31 @@ credentials:
     rases_1:
       email: "xxxxxxx@correo.policia.gov.co"
       name: "RASES_1"
-      password: "$2b$12$U/OJIsiz6Q1XllriRFlIZ.K8TqQQzIbUdsVQ/jmwEvvQYTumxEU.y" # Hash bcrypt para 'rases1'
+      password: "$2b$12$OTU23pi0AKZMDtB2O8skS.jGp41yT6fkupC3TWN71/OEKMyyr92Wa" # Hash bcrypt para '5n3ONS6oH0D8'
     rases_2:
       email: "xxxxxxx@correo.policia.gov.co"
       name: "RASES_2"
       password: "$2b$12$noFaebeM3dwXZSjfhJ3Fyuo5oIJBl.8tSX8MJitrypCWsf5i1VSFy" # Hash bcrypt para 'rases2'
-
+    rases_3:
+      email: "xxxxxxx@correo.policia.gov.co"
+      name: "RASES_2"
+      password: "$2b$12$PSmcMzVyNhVd9cZyTX7i6.7yqYELDxkCQ4kWF2oYluu6pnbigy9Ly" # Hash bcrypt para 'rases3'
+    rases_4:
+      email: "xxxxxxx@correo.policia.gov.co"
+      name: "RASES_4"
+      password: "" # Hash bcrypt para 'rases4'
+    rases_5:
+      email: "xxxxxxx@correo.policia.gov.co"
+      name: "RASES_5"
+      password: "" # Hash bcrypt para 'rases5'
+    rases_6:
+      email: "xxxxxxx@correo.policia.gov.co"
+      name: "RASES_6"
+      password: "" # Hash bcrypt para 'rases6'
+    rases_7:
+      email: "xxxxxxx@correo.policia.gov.co"
+      name: "RASES_7"
+      password: "" # Hash bcrypt para 'rases7'
 
 
 cookie:
