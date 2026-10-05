@@ -297,44 +297,46 @@ def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_ra
     fecha_inicio = df_periodo['fecha_dt'].min().date()
     fecha_fin = df_periodo['fecha_dt'].max().date()
 
-    anios_meses = df_periodo['fecha_dt'].dt.to_period('M').unique()
+    anios_meses = set(df_periodo['fecha_dt'].dt.to_period('M').unique())
     
     df_u_filtrado = df_users_mensual.copy()
     
-    # Procesar dinámicamente la columna MES_ANIO (formato YYYY-MM) proveniente de la base de datos
-    if 'MES_ANIO' in df_u_filtrado.columns:
-        df_u_filtrado['tmp_period'] = pd.to_datetime(df_u_filtrado['MES_ANIO'] + '-01', errors='coerce').dt.to_period('M')
-        df_u_filtrado = df_u_filtrado[df_u_filtrado['tmp_period'].isin(anios_meses)].copy()
-        
-        def extraer_anio(row):
-            try:
-                return int(row['MES_ANIO'].split('-')[0])
-            except Exception:
-                return 0
-        def extraer_mes(row):
-            try:
-                return int(row['MES_ANIO'].split('-')[1])
-            except Exception:
-                return 0
-                
-        df_u_filtrado['ANIO'] = df_u_filtrado.apply(extraer_anio, axis=1)
-        df_u_filtrado['MES'] = df_u_filtrado.apply(extraer_mes, axis=1)
-    else:
-        # Fallback por si la estructura mantiene ANIO y MES separados
-        df_u_filtrado = df_u_filtrado[
-            df_u_filtrado.apply(lambda r: pd.Period(f"{int(r['ANIO'])}-{int(r['MES']):02d}", 'M') in anios_meses, axis=1)
-        ].copy()
+    df_u_filtrado['ANIO'] = pd.to_numeric(df_u_filtrado['ANIO'], errors='coerce').fillna(0).astype(int)
+    df_u_filtrado['MES'] = pd.to_numeric(df_u_filtrado['MES'], errors='coerce').fillna(0).astype(int)
+    df_u_filtrado['USUARIOS'] = pd.to_numeric(df_u_filtrado['USUARIOS'], errors='coerce').fillna(0)
+
+    # Filtrar únicamente los meses que existen en el período activo
+    def mes_esta_en_periodo(row):
+        if row['ANIO'] == 0 or row['MES'] == 0:
+            return False
+        try:
+            p = pd.Period(f"{row['ANIO']}-{row['MES']:02d}", 'M')
+            return p in anios_meses
+        except Exception:
+            return False
+
+    df_u_filtrado = df_u_filtrado[df_u_filtrado.apply(mes_esta_en_periodo, axis=1)].copy()
 
     if df_u_filtrado.empty:
         return {}, {}
 
+    # Normalización estricta del nombre de la UNIDAD
+    df_u_filtrado['UNIDAD'] = (
+        df_u_filtrado['UNIDAD']
+        .astype(str)
+        .str.strip()
+        .str.replace(r'\.', '', regex=True)
+        .str.replace(r'\s+', ' ', regex=True)
+        .str.upper()
+    )
+
+    # Consolidar subunidades duplicadas por el mismo mes y unidad
+    df_u_filtrado = df_u_filtrado.groupby(['UNIDAD', 'ANIO', 'MES'], as_index=False)['USUARIOS'].sum()
+
+    # Cálculo del factor de días prorrateados
     def calcular_factor_dias(row):
-        try:
-            anio = int(row['ANIO'])
-            mes = int(row['MES'])
-        except Exception:
-            return 0.0
-            
+        anio = row['ANIO']
+        mes = row['MES']
         dias_en_mes = calendar.monthrange(anio, mes)[1]
         
         primer_dia_mes = pd.Timestamp(year=anio, month=mes, day=1).date()
@@ -353,13 +355,25 @@ def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_ra
 
     dict_upres_users = df_u_filtrado.groupby('UNIDAD')['Usuarios_Prorrateados'].sum().to_dict()
 
-    df_u_con_rases = pd.merge(
-        df_u_filtrado,
-        df_maestro_upres_rases[['UNIDAD', 'RASES']].drop_duplicates(),
-        on='UNIDAD',
-        how='left'
-    )
-    dict_rases_users = df_u_con_rases.groupby('RASES')['Usuarios_Prorrateados'].sum().to_dict()
+    df_maestro_clean = df_maestro_upres_rases.copy()
+    if not df_maestro_clean.empty and 'UNIDAD' in df_maestro_clean.columns:
+        df_maestro_clean['UNIDAD'] = (
+            df_maestro_clean['UNIDAD']
+            .astype(str)
+            .str.strip()
+            .str.replace(r'\.', '', regex=True)
+            .str.replace(r'\s+', ' ', regex=True)
+            .str.upper()
+        )
+        df_u_con_rases = pd.merge(
+            df_u_filtrado,
+            df_maestro_clean[['UNIDAD', 'RASES']].drop_duplicates(),
+            on='UNIDAD',
+            how='left'
+        )
+        dict_rases_users = df_u_con_rases.groupby('RASES')['Usuarios_Prorrateados'].sum().to_dict()
+    else:
+        dict_rases_users = {}
 
     return dict_rases_users, dict_upres_users
 
@@ -1284,7 +1298,7 @@ elif authentication_status is None:
     st.warning("Por favor ingrese sus credenciales para acceder")
 elif authentication_status:
 
-    # 1. Caché del Engine (Piscina de conexiones persistente)
+    # 1. Caché del Engine
     @st.cache_resource
     def get_db_engine():
         try:
@@ -1298,7 +1312,6 @@ elif authentication_status:
                 database=db["dbname"]
             )
         except Exception:
-            # Fallback a variables de entorno locales (.env)
             db_user = os.getenv("DB_USER")
             db_pass = os.getenv("DB_PASS")
             db_host = os.getenv("DB_HOST")
@@ -1325,7 +1338,6 @@ elif authentication_status:
             pool_recycle=300
         )
 
-    # Verificación de cambios en la base de datos
     def obtener_ultimo_conteo_bd():
         try:
             engine = get_db_engine()
@@ -1373,17 +1385,22 @@ elif authentication_status:
                 
         return df
 
+    # 3. Carga Ajustada de Usuarios Mensuales Atendidos desde PostgreSQL (Neon)
     @st.cache_data(ttl="1h")
     def cargar_usuarios_mensuales():
         try:
             engine = get_db_engine()
-            # Se consulta MES_ANIO directamente de la tabla unificada en la base de datos
-            query = text('SELECT "UNIDAD", "MES_ANIO", "USUARIOS" FROM "USUARIOS_ATENDIDOS_MENSUAL";')
+            query = text('SELECT "UNIDAD", "ANIO", "MES", "USUARIOS" FROM "USUARIOS_ATENDIDOS_MENSUAL";')
             with engine.connect() as conn:
                 df_u = pd.read_sql(query, con=conn)
+            
             df_u['USUARIOS'] = pd.to_numeric(df_u['USUARIOS'], errors='coerce').fillna(0)
+            df_u['ANIO'] = pd.to_numeric(df_u['ANIO'], errors='coerce').fillna(0).astype(int)
+            df_u['MES'] = pd.to_numeric(df_u['MES'], errors='coerce').fillna(0).astype(int)
+            df_u['UNIDAD'] = df_u['UNIDAD'].astype(str).str.strip().str.replace(r'\s+', ' ', regex=True).str.upper()
             return df_u
-        except Exception:
+        except Exception as e:
+            st.error(f"Error al cargar usuarios mensuales: {e}")
             return pd.DataFrame()
 
     @st.cache_data(ttl="1h")
