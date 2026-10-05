@@ -52,6 +52,10 @@ credentials:
       email: "xxxxxxx@correo.policia.gov.co"
       name: "RASES_8"
       password: "$2b$12$wAV6uIHVTY0EqTZsLoIrFu45Qygsd4oTZVsVuUFAmjXyPYqx4/kMy" # Hash bcrypt para '3wP5LS3A87J9'
+    hocen:
+      email: "xxxxxxx@correo.policia.gov.co"
+      name: "HOCEN"
+      password: "$2b$12$s8XXSL.clhjG9RDEkySqKOGxRJr1Vp3qsgCXyb4N14tfFMAS/Vr36" # Hash bcrypt para 'A193RFmPJx16'
 
 
 cookie:
