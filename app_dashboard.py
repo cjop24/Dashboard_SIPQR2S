@@ -291,15 +291,25 @@ def acortar_texto_abreviado(texto):
 # -----------------------------------------------------------------------------
 # CÁLCULO DINÁMICO DE USUARIOS POR PERÍODO CON PRORRATEO DIARIO PROPORCIONAL
 # -----------------------------------------------------------------------------
+# Equivalencias de nombres que difieren en palabras (no solo en tildes o puntuación).
+# Formato: (patrón sobre el nombre ya normalizado, clave común). Agrega aquí nuevos casos si hace falta.
+ALIAS_UNIDADES = [
+    (r'\bGUAJIRA\b', 'LA GUAJIRA'),        # GUAJIRA / LA GUAJIRA
+    (r'\bSAN ANDRES\b', 'SAN ANDRES'),     # SAN ANDRES / SAN ANDRES PROVIDENCIA Y SANTA CATALINA / ARCHIPIELAGO DE SAN ANDRES...
+]
+
 def _norm_unidad(x):
-    """Clave de cruce: mayúsculas, sin tildes, sin puntuación y con espacios unificados.
+    """Clave de cruce: mayúsculas, sin tildes, sin puntuación, espacios unificados y alias.
     'BOGOTÁ D.C.', 'BOGOTA. D.C.' y 'BOGOTÁ, D.C.' -> 'BOGOTA D C'."""
     if x is None or (isinstance(x, float) and np.isnan(x)):
         return ""
     s = unicodedata.normalize('NFD', str(x).upper().strip())
     s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
-    s = re.sub(r'[^A-Z0-9]+', ' ', s)
-    return s.strip()
+    s = re.sub(r'[^A-Z0-9]+', ' ', s).strip()
+    for patron, clave in ALIAS_UNIDADES:
+        if re.search(patron, s):
+            return clave
+    return s
 
 def mapear_usuarios(serie, diccionario):
     """Busca los usuarios de cada UPRES/RASES usando la clave normalizada. Sin coincidencia -> 0."""
