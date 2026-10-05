@@ -320,17 +320,16 @@ def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_ra
     if df_u_filtrado.empty:
         return {}, {}
 
-    # Normalización estricta del nombre de la UNIDAD
+    # Normalización respetando puntos de abreviatura (p. ej., BOGOTÁ D.C.)
     df_u_filtrado['UNIDAD'] = (
         df_u_filtrado['UNIDAD']
         .astype(str)
         .str.strip()
-        .str.replace(r'\.', '', regex=True)
         .str.replace(r'\s+', ' ', regex=True)
         .str.upper()
     )
 
-    # Consolidar subunidades duplicadas por el mismo mes y unidad
+    # Consolidar registros por mes y unidad
     df_u_filtrado = df_u_filtrado.groupby(['UNIDAD', 'ANIO', 'MES'], as_index=False)['USUARIOS'].sum()
 
     # Cálculo del factor de días prorrateados
@@ -361,7 +360,6 @@ def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_ra
             df_maestro_clean['UNIDAD']
             .astype(str)
             .str.strip()
-            .str.replace(r'\.', '', regex=True)
             .str.replace(r'\s+', ' ', regex=True)
             .str.upper()
         )
