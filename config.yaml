@@ -20,10 +20,10 @@ credentials:
       email: "luis.burgos@correo.policia.gov.co"
       name: "Subdirector Sanidad"
       password: "$2b$12$Jb6pq8fJvkVMco/P3KYBj.Sn6uaTQ0IRzbL86FVJNqa027P1TSsES" # Hash bcrypt para Faro7!Pez9Ma
-    RASES_1:
+    rases_1:
       email: "xxxxxxx@correo.policia.gov.co"
       name: "RASES_1"
-      password: "$2b$12$B3gqFmmtzH.qKd3BDLwNV.LjedPNtQ6ls5pv8Ua.fx1HywllbZVIi" # Hash bcrypt para TxYh99309XqF
+      password: "$2b$12$U/OJIsiz6Q1XllriRFlIZ.K8TqQQzIbUdsVQ/jmwEvvQYTumxEU.y" # Hash bcrypt para 'rases1'
 
 
 
