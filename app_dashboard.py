@@ -742,17 +742,34 @@ def _generar_grafico_upres_por_red(df_base):
     top_10_upres = df_filtrado['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index.tolist()
     df_top = df_filtrado[df_filtrado['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
 
-    # Agrupar por UPRES y Red
-    df_agg = df_top.groupby(['UNIDAD DE ASIGNACIÓN', 'Red_Normalizada'], observed=True).size().reset_index(name='Cantidad')
-    df_agg['UPRES_fmt'] = df_agg['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+    # ⭐ CORRECCIÓN: Convertir columnas a string nativo (no Arrow) antes de agrupar
+    df_top['UNIDAD_DE_ASIGNACION_STR'] = df_top['UNIDAD DE ASIGNACIÓN'].astype(str)
+    df_top['RED_NORM_STR'] = df_top['Red_Normalizada'].astype(str)
 
-    # Asegurar que todas las combinaciones UPRES x Red existan
-    full_index = pd.MultiIndex.from_product([top_10_upres, ORDEN_RED_VISIBLE], names=['UNIDAD DE ASIGNACIÓN', 'Red_Normalizada'])
-    df_agg_full = df_agg.set_index(['UNIDAD DE ASIGNACIÓN', 'Red_Normalizada']).reindex(full_index, fill_value=0).reset_index()
-    df_agg_full['UPRES_fmt'] = df_agg_full['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+    # Agrupar por UPRES y Red
+    df_agg = df_top.groupby(['UNIDAD_DE_ASIGNACION_STR', 'RED_NORM_STR'], observed=True).size().reset_index(name='Cantidad')
+    df_agg.columns = ['UNIDAD_DE_ASIGNACION_STR', 'RED_NORM_STR', 'Cantidad']
+
+    # ⭐ CORRECCIÓN: Hacer el reindex SOLO sobre la columna Cantidad (numérica)
+    # Construir el DataFrame completo con todas las combinaciones UPRES x Red
+    full_combinations = pd.DataFrame(
+        [(upres, red) for upres in top_10_upres for red in ORDEN_RED_VISIBLE],
+        columns=['UNIDAD_DE_ASIGNACION_STR', 'RED_NORM_STR']
+    )
+
+    # Merge left para garantizar todas las combinaciones, fillna para los que no tienen datos
+    df_agg_full = full_combinations.merge(
+        df_agg,
+        on=['UNIDAD_DE_ASIGNACION_STR', 'RED_NORM_STR'],
+        how='left'
+    )
+    df_agg_full['Cantidad'] = df_agg_full['Cantidad'].fillna(0).astype(int)
+
+    # Agregar columna formateada para visualización
+    df_agg_full['UPRES_fmt'] = df_agg_full['UNIDAD_DE_ASIGNACION_STR'].apply(acortar_texto_abreviado)
 
     # Ordenar UPRES por total descendente
-    totales_upres = df_agg_full.groupby('UNIDAD DE ASIGNACIÓN')['Cantidad'].sum().sort_values(ascending=False)
+    totales_upres = df_agg_full.groupby('UNIDAD_DE_ASIGNACION_STR')['Cantidad'].sum().sort_values(ascending=False)
     upres_ordenadas = totales_upres.index.tolist()
     upres_fmt_ordenadas = [acortar_texto_abreviado(u) for u in upres_ordenadas]
 
@@ -766,11 +783,11 @@ def _generar_grafico_upres_por_red(df_base):
         x='UPRES_fmt',
         y='Cantidad',
         text='Cantidad',
-        color='Red_Normalizada',
+        color='RED_NORM_STR',
         barmode='group',
         color_discrete_map=color_map_upres_red,
-        labels={'Cantidad': 'PQRS Recepcionadas', 'UPRES_fmt': '', 'Red_Normalizada': ''},
-        category_orders={'UPRES_fmt': upres_fmt_ordenadas, 'Red_Normalizada': ORDEN_RED_VISIBLE}
+        labels={'Cantidad': 'PQRS Recepcionadas', 'UPRES_fmt': '', 'RED_NORM_STR': ''},
+        category_orders={'UPRES_fmt': upres_fmt_ordenadas, 'RED_NORM_STR': ORDEN_RED_VISIBLE}
     )
     fig.update_traces(
         textposition='outside',
