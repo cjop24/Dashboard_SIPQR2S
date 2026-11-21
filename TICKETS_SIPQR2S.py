@@ -32,6 +32,7 @@ if isinstance(DB_PASS, bytes):
 pass_encoded = urllib.parse.quote_plus(DB_PASS)
 engine = create_engine(f"postgresql://{DB_USER}:{pass_encoded}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
 
+
 def obtener_conexion_psycopg2():
     return psycopg2.connect(
         dbname=DB_NAME,
@@ -42,16 +43,17 @@ def obtener_conexion_psycopg2():
         client_encoding='UTF8'
     )
 
+
 def seleccionar_archivo_excel():
     root = tk.Tk()
     root.withdraw()
     root.attributes('-topmost', True)
-    
     archivo_seleccionado = filedialog.askopenfilename(
         title="Selecciona el archivo Excel de Tickets SIPQRS",
         filetypes=[("Archivos de Excel", "*.xlsx *.xls"), ("Todos los archivos", "*.*")]
     )
     return archivo_seleccionado
+
 
 def sanitizar_dataframe(df):
     df_clean = df.copy()
@@ -70,21 +72,20 @@ def sanitizar_dataframe(df):
         df_clean[col] = series_str.str.strip().replace({'nan': '', 'None': '', 'NaN': ''})
 
     columnas_a_vaciar = [
-        "Nombres", 
-        "Apellidos", 
-        "Número de Identificación", 
-        "Correo Electrónico", 
+        "Nombres",
+        "Apellidos",
+        "Número de Identificación",
+        "Correo Electrónico",
         "Teléfono Celular",
         "Teléfono Fijo",
         "Dirección Notificación",
         "Dirección Hechos"
     ]
-    
     for col in columnas_a_vaciar:
         if col in df_clean.columns:
             df_clean[col] = None
-            
     return df_clean
+
 
 def normalizar_texto_cruce(texto):
     if pd.isna(texto) or texto is None:
@@ -94,48 +95,43 @@ def normalizar_texto_cruce(texto):
     s = re.sub(r'[^A-Z0-9\s]', '', s)
     return re.sub(r'\s+', ' ', s).strip()
 
+
 def aplicar_formulas_excel_estrictas(cadena):
     if pd.isna(cadena) or not str(cadena).strip():
         return ["", "", "", "", "", ""]
-    
     partes = [p.strip() for p in str(cadena).split("~")]
-
     codigo = partes[0] if len(partes) > 0 and partes[0] != "" else str(cadena).strip()
     macro = partes[1].upper() if len(partes) > 1 and partes[1] != "" else codigo.upper()
     general = partes[2] if len(partes) > 2 and partes[2] != "" else macro
     especifico = partes[3] if len(partes) > 3 and partes[3] != "" else general
-
     if len(partes) > 4 and partes[4] != "":
         val_tipo = partes[4]
         tipo = especifico if val_tipo.upper() in ["NA", "N/A", "NONE", "NAN"] else val_tipo
     else:
         tipo = especifico
-
     if len(partes) > 5 and partes[5] != "":
         val_subtipo = partes[5].rstrip(")").strip()
         subtipo = tipo if val_subtipo.upper() in ["NA", "N/A", "NONE", "NAN"] else val_subtipo
     else:
         subtipo = tipo
-
     return [codigo, macro, general, especifico, tipo, subtipo]
+
 
 def cargar_tickets_y_complementos():
     print("🚀 Iniciando el proceso de ingesta para TICKETS_SIPQR2S...")
-    
     archivo_excel = seleccionar_archivo_excel()
     if not archivo_excel:
         print("❌ Operación cancelada. No se seleccionó ningún archivo.")
         return
-
     print(f"📁 Archivo seleccionado: {os.path.basename(archivo_excel)}")
-    
+
     try:
         df_raw = pd.read_excel(
-    archivo_excel, 
-    dtype=str, 
-    engine="openpyxl", 
-    engine_kwargs={"read_only": True, "data_only": True}
-)
+            archivo_excel,
+            dtype=str,
+            engine="openpyxl",
+            engine_kwargs={"read_only": True, "data_only": True}
+        )
         print(f"  ✓ Archivo leído. Registros en el archivo de origen: {len(df_raw)}")
     except Exception as e:
         print(f"❌ Error al leer el archivo de Excel: {e}")
@@ -152,19 +148,17 @@ def cargar_tickets_y_complementos():
         existentes = set(row[0] for row in cursor_check.fetchall())
         cursor_check.close()
         conn_check.close()
-        
         df_nuevos = df_raw[~df_raw["Consecutivo Ticket"].isin(existentes)].copy()
         print(f"  ℹ️ Registros ya existentes en BD: {len(existentes)}")
         print(f"  🆕 Nuevos registros listos para ingresar: {len(df_nuevos)}")
-        
         if df_nuevos.empty:
             print("✅ La base de datos ya está al día. No hay nuevos registros por insertar.")
             return
-
     except Exception as e:
         print(f"⚠️ No se pudo consultar preexistencia, se procederá con todos los registros: {e}")
         df_nuevos = df_raw.copy()
 
+    # ⭐ MODIFICADO: Se agregó "Red" a la lista de columnas
     cols_tickets_exactas = [
         "Consecutivo Ticket", "Ticket", "Nombres", "Apellidos", "Tipo de Documento",
         "Número de Identificación", "Correo Electrónico", "Pais Notificación",
@@ -174,29 +168,29 @@ def cargar_tickets_y_complementos():
         "Clasificación Completa", "Fecha de Recepción", "Fecha de Creación",
         "Aspecto de Interes", "Unidad de Procedencia", "Medio de Recepción",
         "Sigla Fisica", "Sigla Comprometida", "Unidad", "Lugar Asignación",
-        "Lugar", "Estado", "Descripción Hechos"
+        "Lugar", "Estado", "Descripción Hechos", "Red"
     ]
 
     df_tickets = df_nuevos[[c for c in cols_tickets_exactas if c in df_nuevos.columns]].copy()
+
+    # Si la columna "Red" no existe en el Excel, crearla vacía para evitar errores
+    if "Red" not in df_tickets.columns:
+        df_tickets["Red"] = ""
 
     print("  📥 Insertando registros nuevos en 'TICKETS_SIPQR2S'...")
     _insertar_nativo("TICKETS_SIPQR2S", df_tickets)
 
     print("  🔄 Replicando desgloses de Excel exactamente por virgulilla (~)...")
-    
     df_comp = pd.DataFrame(index=df_nuevos.index)
     df_comp["Consecutivo Ticket"] = df_nuevos["Consecutivo Ticket"].astype(str).str.strip()
-
     desglose = df_nuevos["Clasificación Completa"].apply(aplicar_formulas_excel_estrictas)
     df_desglose = pd.DataFrame(desglose.tolist(), index=df_nuevos.index)
-
     df_comp["CODIGO CLASIFICACIÓN"] = df_desglose[0]
     df_comp["MACROMOTIVO"] = df_desglose[1]
     df_comp["MOTIVO GENERAL"] = df_desglose[2]
     df_comp["MOTIVO ESPECÍFICO"] = df_desglose[3]
     df_comp["TIPO DE MOTIVO ESPECÍFICO"] = df_desglose[4]
     df_comp["SUBTIPO DE MOTIVO ESPECÍFICO"] = df_desglose[5]
-
     df_comp["FECHA CREACIÓN"] = pd.to_datetime(
         df_nuevos["Fecha de Creación"].astype(str).str.split().str[0],
         format="%d/%m/%Y",
@@ -206,7 +200,6 @@ def cargar_tickets_y_complementos():
     df_upres = pd.read_sql('SELECT * FROM "UPRES_RASES"', con=engine)
     df_comp["LUGAR_KEY"] = df_nuevos["Lugar"].apply(normalizar_texto_cruce)
     df_upres["LUGAR_KEY"] = df_upres["LUGAR"].apply(normalizar_texto_cruce)
-
     df_comp = pd.merge(
         df_comp,
         df_upres[["LUGAR_KEY", "RASES", "UNIDAD"]].drop_duplicates(subset=["LUGAR_KEY"]),
@@ -219,9 +212,7 @@ def cargar_tickets_y_complementos():
     df_cat = pd.read_sql('SELECT * FROM "CATEGORÍAS_SALUD"', con=engine)
     df_cat["KEY_MAESTRA"] = df_cat["SUBMOTIVO DE TIPO ESPECÍFICO"].apply(normalizar_texto_cruce)
     df_cat_clean = df_cat.drop_duplicates(subset=["KEY_MAESTRA"])[["KEY_MAESTRA", "CATEGORÍA_SALUD"]]
-
     df_comp["KEY_SUBTIPO"] = df_comp["SUBTIPO DE MOTIVO ESPECÍFICO"].apply(normalizar_texto_cruce)
-
     df_comp = pd.merge(
         df_comp,
         df_cat_clean,
@@ -230,34 +221,37 @@ def cargar_tickets_y_complementos():
         how="left"
     )
 
+    # ⭐ NUEVO: Agregar columna "Red" al DataFrame de complementos
+    if "Red" in df_nuevos.columns:
+        df_comp["Red"] = df_nuevos["Red"].fillna("").astype(str).str.strip()
+    else:
+        df_comp["Red"] = ""
+
     cols_comp_exactas = [
         "Consecutivo Ticket", "CODIGO CLASIFICACIÓN", "MACROMOTIVO", "MOTIVO GENERAL",
         "MOTIVO ESPECÍFICO", "TIPO DE MOTIVO ESPECÍFICO", "SUBTIPO DE MOTIVO ESPECÍFICO",
-        "RASES", "FECHA CREACIÓN", "UNIDAD DE ASIGNACIÓN", "CATEGORÍA_SALUD"
+        "RASES", "FECHA CREACIÓN", "UNIDAD DE ASIGNACIÓN", "CATEGORÍA_SALUD", "Red"
     ]
-    
     df_comp_final = sanitizar_dataframe(df_comp[cols_comp_exactas])
-
     print("  📥 Insertando registros en 'COMPLEMENTOS_TICKETS_SIPQR2S'...")
     _insertar_nativo("COMPLEMENTOS_TICKETS_SIPQR2S", df_comp_final)
 
     print("✅ ¡Inyección completada exitosamente con 100% de coherencia!")
 
+
 def _insertar_nativo(nombre_tabla, df):
     if df.empty:
         return
-    
     conn = obtener_conexion_psycopg2()
     cursor = conn.cursor()
-
     columnas_format = ', '.join([f'"{col}"' for col in df.columns])
     tuples = [tuple(x) for x in df.fillna("").to_numpy()]
     query = f'INSERT INTO "{nombre_tabla}" ({columnas_format}) VALUES %s'
-
     execute_values(cursor, query, tuples)
     conn.commit()
     cursor.close()
     conn.close()
+
 
 if __name__ == "__main__":
     cargar_tickets_y_complementos()

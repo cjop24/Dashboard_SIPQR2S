@@ -21,7 +21,6 @@ from yaml.loader import SafeLoader
 # 1. CONFIGURACIÓN INICIAL DE STREAMLIT Y ESTILOS
 # -----------------------------------------------------------------------------
 load_dotenv()
-
 st.set_page_config(
     page_title="Dashboard SIPQR2S",
     page_icon="🛡️",
@@ -29,94 +28,102 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# ⭐ NUEVO: Variable para identificar el proveedor de BD
+DB_PROVIDER = os.getenv("DB_PROVIDER", "NEON").upper()
+
 # Inyección CSS: Font Awesome y Google Fonts (Poppins)
 st.markdown("""
-    <!-- Font Awesome CDN -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
-
-    html, body, p, h1, h2, h3, h4, h5, h6, label, input, button, select {
-        font-family: 'Poppins', sans-serif !important;
-    }
-
-    .stApp, .main, div[data-testid="stSidebarContent"] {
-        font-family: 'Poppins', sans-serif !important;
-    }
-
-    /* Restaurar fuente nativa para iconos de Streamlit */
-    [data-testid="stHeader"] *,
-    [data-testid="stSidebarCollapseButton"] *,
-    [data-testid="stSidebarNav"] *,
-    .material-symbols-sharp,
-    .material-symbols-outlined,
-    .material-icons {
-        font-family: 'Material Symbols Rounded', 'Material Symbols Sharp', 'Material Icons' !important;
-    }
-
-    .main { padding: 0.5rem; }
-    
-    div[data-testid="stMetric"] {
-        background-color: #ffffff;
-        border-radius: 12px;
-        padding: 12px 14px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        border: 1px solid #e5e7eb;
-        margin-bottom: 6px;
-    }
-    div[data-testid="stMetricValue"] {
-        font-size: 1.3rem !important;
-        font-weight: 700;
-        color: #1b5e20;
-    }
-    div[data-testid="stMetricLabel"] {
-        font-size: 0.78rem !important;
-        color: #4b5563;
-        font-weight: 600;
-    }
-
-    h1 { font-size: 1.6rem !important; font-weight: 800; color: #0f172a; }
-    h3 { font-size: 1.05rem !important; font-weight: 700; color: #1e293b; margin-top: 0.8rem; }
-
-    div[data-baseweb="select"] ul {
-        max-width: 90vw !important;
-    }
-    div[data-baseweb="select"] li {
-        white-space: normal !important;
-        word-break: break-word !important;
-        line-height: 1.3 !important;
-        padding-top: 8px !important;
-        padding-bottom: 8px !important;
-    }
-    div[data-baseweb="tag"] {
-        max-width: 100% !important;
-    }
-    div[data-baseweb="tag"] span {
-        white-space: normal !important;
-        word-break: break-word !important;
-    }
-    
-    div[data-testid="stRadio"] > label {
-        display: none;
-    }
-    </style>
+<!-- Font Awesome CDN -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+ @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+ html, body, p, h1, h2, h3, h4, h5, h6, label, input, button, select {
+     font-family: 'Poppins', sans-serif !important;
+ }
+ .stApp, .main, div[data-testid="stSidebarContent"] {
+     font-family: 'Poppins', sans-serif !important;
+ }
+ [data-testid="stHeader"] *,
+ [data-testid="stSidebarCollapseButton"] *,
+ [data-testid="stSidebarNav"] *,
+ .material-symbols-sharp,
+ .material-symbols-outlined,
+ .material-icons {
+     font-family: 'Material Symbols Rounded', 'Material Symbols Sharp', 'Material Icons' !important;
+ }
+ .main { padding: 0.5rem; }
+ div[data-testid="stMetric"] {
+     background-color: #ffffff;
+     border-radius: 12px;
+     padding: 12px 14px;
+     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+     border: 1px solid #e5e7eb;
+     margin-bottom: 6px;
+ }
+ div[data-testid="stMetricValue"] {
+     font-size: 1.3rem !important;
+     font-weight: 700;
+     color: #1b5e20;
+ }
+ div[data-testid="stMetricLabel"] {
+     font-size: 0.78rem !important;
+     color: #4b5563;
+     font-weight: 600;
+ }
+ h1 { font-size: 1.6rem !important; font-weight: 800; color: #0f172a; }
+ h3 { font-size: 1.05rem !important; font-weight: 700; color: #1e293b; margin-top: 0.8rem; }
+ div[data-baseweb="select"] ul {
+     max-width: 90vw !important;
+ }
+ div[data-baseweb="select"] li {
+     white-space: normal !important;
+     word-break: break-word !important;
+     line-height: 1.3 !important;
+     padding-top: 8px !important;
+     padding-bottom: 8px !important;
+ }
+ div[data-baseweb="tag"] {
+     max-width: 100% !important;
+ }
+ div[data-baseweb="tag"] span {
+     white-space: normal !important;
+     word-break: break-word !important;
+ }
+ div[data-testid="stRadio"] > label {
+     display: none;
+ }
+ .db-provider-footer {
+     background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%);
+     color: white;
+     padding: 12px 20px;
+     border-radius: 10px;
+     text-align: center;
+     font-weight: 600;
+     font-size: 0.9rem;
+     margin-top: 30px;
+     box-shadow: 0 4px 12px rgba(27, 94, 32, 0.3);
+ }
+ .db-provider-footer i {
+     margin-right: 8px;
+ }
+</style>
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # 2. CONSTANTES, MAPEOS Y FUNCIONES AUXILIARES
 # -----------------------------------------------------------------------------
 ARCH_PREFERENCIAS = "preferencias_usuario.json"
-COLOR_PERIODO_A = '#2e7d32'  # Verde RASES
-COLOR_PERIODO_B = '#c62828'  # Rojo RASES
-
+COLOR_PERIODO_A = '#2e7d32'
+COLOR_PERIODO_B = '#c62828'
+COLOR_RED_PROPIA = '#1b5e20'
+COLOR_RED_EXTERNA = '#c62828'
+COLOR_RED_SIN_ASIGNAR = '#9e9e9e'
 CONFIG_PLOTLY_TOUCH = {
     'displayModeBar': False,
     'scrollZoom': False,
     'doubleClick': False,
     'showAxisDragHandles': False
 }
-
 CONFIG_PLOTLY_MAPA = {
     'displayModeBar': True,
     'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
@@ -126,7 +133,7 @@ CONFIG_PLOTLY_MAPA = {
 }
 
 MAPEO_UPRES_CODIGO_DANE = {
-    'BOGOTA': '11', 'BOGOTÁ': '11', 'BOGOTÁ D.C.': '11', 'BOGOTA D.C.': '11', 
+    'BOGOTA': '11', 'BOGOTÁ': '11', 'BOGOTÁ D.C.': '11', 'BOGOTA D.C.': '11',
     'BOGOTÁ, D.C.': '11', 'BOGOTA, D.C.': '11', 'SANTAFE': '11', 'MEBOG': '11',
     'ANTIOQUIA': '05', 'URABA': '05', 'URABÁ': '05', 'DEAMA': '05', 'DEURA': '05',
     'ATLANTICO': '08', 'ATLÁNTICO': '08', 'DEATA': '08',
@@ -150,7 +157,7 @@ MAPEO_UPRES_CODIGO_DANE = {
     'SANTANDER': '68', 'DESAN': '68',
     'SUCRE': '70', 'DESUC': '70',
     'TOLIMA': '73', 'DETOL': '73',
-    'VALLE': '76', 'VALLE DEL CAUCA': '76', 'VALLE CAUCA': '76', 'DEVAL': '76', 
+    'VALLE': '76', 'VALLE DEL CAUCA': '76', 'VALLE CAUCA': '76', 'DEVAL': '76',
     'ARAUCA': '81', 'DEARA': '81',
     'CASANARE': '85', 'DECAS': '85',
     'PUTUMAYO': '86', 'DEPUT': '86',
@@ -173,12 +180,12 @@ NOMBRES_DEPARTAMENTOS_MOSTRAR = {
     '91': 'Amazonas', '94': 'Guainía', '95': 'Guaviare', '97': 'Vaupés', '99': 'Vichada'
 }
 
+
 @st.cache_data(ttl="24h")
 def cargar_geojson_colombia():
     ruta_local = "Colombia.geo_2.json"
     if not os.path.exists(ruta_local):
         ruta_local = "colombia.geo.json"
-
     if os.path.exists(ruta_local):
         with open(ruta_local, "r", encoding="utf-8") as f:
             geojson = json.load(f)
@@ -187,27 +194,25 @@ def cargar_geojson_colombia():
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req) as response:
             geojson = json.loads(response.read().decode())
-    
     for feature in geojson.get('features', []):
         props = feature.get('properties', {})
         code_val = str(props.get('DPTO', props.get('DPTO_CODE', ''))).zfill(2)
         props['DPTO_CODE'] = code_val
         feature['properties'] = props
-        
     return geojson
+
 
 def obtener_codigo_dane(u):
     if pd.isna(u) or not u:
         return None
     u_str = str(u).upper().strip()
-    
     if u_str in MAPEO_UPRES_CODIGO_DANE:
         return MAPEO_UPRES_CODIGO_DANE[u_str]
-        
     for clave, codigo in MAPEO_UPRES_CODIGO_DANE.items():
         if clave in u_str:
             return codigo
     return None
+
 
 def cargar_preferencias():
     if os.path.exists(ARCH_PREFERENCIAS):
@@ -218,6 +223,7 @@ def cargar_preferencias():
             return {}
     return {}
 
+
 def guardar_preferencias(data):
     try:
         with open(ARCH_PREFERENCIAS, "w", encoding="utf-8") as f:
@@ -226,19 +232,19 @@ def guardar_preferencias(data):
     except Exception:
         return False
 
+
 def aplicar_touch_safe(fig):
     fig.update_xaxes(fixedrange=True)
     fig.update_yaxes(fixedrange=True)
     return fig
 
+
 def acortar_texto_abreviado(texto):
     if pd.isna(texto) or not texto:
         return "N/A"
     s = str(texto).upper().strip()
-    
     if "BOGOTA" in s or "BOGOTÁ" in s:
         return "BOGOTÁ D.C."
-
     frases_especificas = {
         'RECONOCIMIENTOS DEL SERVICIO DE POLICÍA': 'FELICITACIÓN',
         'RECONOCIMIENTOS DEL SERVICIO DE POLICIA': 'FELICITACIÓN',
@@ -251,56 +257,50 @@ def acortar_texto_abreviado(texto):
     }
     if s in frases_especificas:
         return frases_especificas[s]
-
     preposiciones_y_articulos = r'\b(DE|DEL|LA|EL|LOS|LAS|EN|POR|CON|SIN|PARA|SOBRE|ANTE|A|Y|O|U|AL|UN|UNO|UNAS|UNOS|SU|SUS)\b'
     s = re.sub(preposiciones_y_articulos, ' ', s)
     s = re.sub(r'\s+', ' ', s).strip()
-    
     abrev = {
-        'INSATISFACCION': 'INSATISF.',
-        'INSATISFACCIÓN': 'INSATISF.',
-        'RELACIONADA': 'RELAC.',
-        'ATENCION': 'ATENC.',
-        'ATENCIÓN': 'ATENC.',
-        'PERSONAL': 'PERS.',
-        'PROFESIONAL': 'PROF.',
-        'ADMINISTRATIVO': 'ADMIN.',
-        'ADMINISTRATIVA': 'ADMIN.',
-        'AUTORIZACION': 'AUTORIZ.',
-        'AUTORIZACIÓN': 'AUTORIZ.',
-        'MEDICAMENTOS': 'MEDICAM.',
-        'ESPECIALIDAD': 'ESPEC.',
-        'ESPECIALIDADES': 'ESPEC.',
-        'PROCEDIMIENTOS': 'PROCED.',
-        'INFRAESTRUCTURA': 'INFRAESTR.',
-        'OPORTUNIDAD': 'OPORT.',
-        'SERVICIO': 'SERV.',
-        'SERVICIOS': 'SERV.',
-        'SOLICITUD': 'SOLICIT.',
-        'SOLICITUDES': 'SOLICIT.',
-        'PRESTACION': 'PREST.',
-        'PRESTACIÓN': 'PREST.',
-        'USUARIO': 'USUAR.',
-        'USUARIOS': 'USUAR.'
+        'INSATISFACCION': 'INSATISF.', 'INSATISFACCIÓN': 'INSATISF.',
+        'RELACIONADA': 'RELAC.', 'ATENCION': 'ATENC.', 'ATENCIÓN': 'ATENC.',
+        'PERSONAL': 'PERS.', 'PROFESIONAL': 'PROF.',
+        'ADMINISTRATIVO': 'ADMIN.', 'ADMINISTRATIVA': 'ADMIN.',
+        'AUTORIZACION': 'AUTORIZ.', 'AUTORIZACIÓN': 'AUTORIZ.',
+        'MEDICAMENTOS': 'MEDICAM.', 'ESPECIALIDAD': 'ESPEC.', 'ESPECIALIDADES': 'ESPEC.',
+        'PROCEDIMIENTOS': 'PROCED.', 'INFRAESTRUCTURA': 'INFRAESTR.',
+        'OPORTUNIDAD': 'OPORT.', 'SERVICIO': 'SERV.', 'SERVICIOS': 'SERV.',
+        'SOLICITUD': 'SOLICIT.', 'SOLICITUDES': 'SOLICIT.',
+        'PRESTACION': 'PREST.', 'PRESTACIÓN': 'PREST.',
+        'USUARIO': 'USUAR.', 'USUARIOS': 'USUAR.'
     }
-    
     words = s.split()
     words_clean = [abrev.get(w, w) for w in words]
     return " ".join(words_clean)
 
+
+# ⭐ NUEVA FUNCIÓN: Normalizar valor de Red para visualización
+def normalizar_red(valor):
+    """Normaliza los valores de la columna Red para visualización consistente."""
+    if pd.isna(valor) or not valor or str(valor).strip() == '':
+        return "Sin asignar"
+    s = str(valor).strip().upper()
+    if "PROPIA" in s:
+        return "Red Propia"
+    elif "EXTERNA" in s:
+        return "Red Externa"
+    return "Sin asignar"
+
+
 # -----------------------------------------------------------------------------
 # CÁLCULO DINÁMICO DE USUARIOS POR PERÍODO CON PRORRATEO DIARIO PROPORCIONAL
 # -----------------------------------------------------------------------------
-# Equivalencias de nombres que difieren en palabras (no solo en tildes o puntuación).
-# Formato: (patrón sobre el nombre ya normalizado, clave común). Agrega aquí nuevos casos si hace falta.
 ALIAS_UNIDADES = [
-    (r'\bGUAJIRA\b', 'LA GUAJIRA'),        # GUAJIRA / LA GUAJIRA
-    (r'\bSAN ANDRES\b', 'SAN ANDRES'),     # SAN ANDRES / SAN ANDRES PROVIDENCIA Y SANTA CATALINA / ARCHIPIELAGO DE SAN ANDRES...
+    (r'\bGUAJIRA\b', 'LA GUAJIRA'),
+    (r'\bSAN ANDRES\b', 'SAN ANDRES'),
 ]
 
+
 def _norm_unidad(x):
-    """Clave de cruce: mayúsculas, sin tildes, sin puntuación, espacios unificados y alias.
-    'BOGOTÁ D.C.', 'BOGOTA. D.C.' y 'BOGOTÁ, D.C.' -> 'BOGOTA D C'."""
     if x is None or (isinstance(x, float) and np.isnan(x)):
         return ""
     s = unicodedata.normalize('NFD', str(x).upper().strip())
@@ -311,12 +311,12 @@ def _norm_unidad(x):
             return clave
     return s
 
+
 def mapear_usuarios(serie, diccionario):
-    """Busca los usuarios de cada UPRES/RASES usando la clave normalizada. Sin coincidencia -> 0."""
     return serie.astype(str).map(lambda k: diccionario.get(_norm_unidad(k), 0)).astype(float)
 
+
 def meses_sin_usuarios(df_periodo, df_users_mensual):
-    """Meses (YYYY-MM) del periodo con tickets pero sin usuarios cargados."""
     if df_periodo.empty:
         return []
     m_tick = set(df_periodo['fecha_dt'].dt.strftime('%Y-%m').unique())
@@ -325,18 +325,16 @@ def meses_sin_usuarios(df_periodo, df_users_mensual):
     m_users = {f"{int(a)}-{int(m):02d}" for a, m in df_users_mensual[['ANIO', 'MES']].drop_duplicates().itertuples(index=False)}
     return sorted(m_tick - m_users)
 
+
 def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_rases):
     if df_periodo.empty or df_users_mensual.empty:
         return {}, {}
-
     fecha_inicio = df_periodo['fecha_dt'].min().date()
     fecha_fin = df_periodo['fecha_dt'].max().date()
     anios_meses = df_periodo['fecha_dt'].dt.to_period('M').unique()
-
     df_u_filtrado = df_users_mensual[
         df_users_mensual.apply(lambda r: pd.Period(f"{int(r['ANIO'])}-{int(r['MES']):02d}", 'M') in anios_meses, axis=1)
     ].copy()
-
     if df_u_filtrado.empty:
         return {}, {}
 
@@ -355,9 +353,7 @@ def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_ra
     df_u_filtrado['Factor_Prorrateo'] = df_u_filtrado.apply(calcular_factor_dias, axis=1)
     df_u_filtrado['Usuarios_Prorrateados'] = df_u_filtrado['USUARIOS'] * df_u_filtrado['Factor_Prorrateo']
     df_u_filtrado['UNIDAD_KEY'] = df_u_filtrado['UNIDAD'].map(_norm_unidad)
-
     dict_upres_users = df_u_filtrado.groupby('UNIDAD_KEY')['Usuarios_Prorrateados'].sum().to_dict()
-
     dict_rases_users = {}
     if not df_maestro_upres_rases.empty:
         maestro = df_maestro_upres_rases[['UNIDAD', 'RASES']].dropna().copy()
@@ -366,38 +362,30 @@ def obtener_usuarios_dinamicos(df_periodo, df_users_mensual, df_maestro_upres_ra
         df_u_con_rases = pd.merge(df_u_filtrado, maestro, on='UNIDAD_KEY', how='inner')
         df_u_con_rases['RASES_KEY'] = df_u_con_rases['RASES'].map(_norm_unidad)
         dict_rases_users = df_u_con_rases.groupby('RASES_KEY')['Usuarios_Prorrateados'].sum().to_dict()
-
     return dict_rases_users, dict_upres_users
+
 
 # -----------------------------------------------------------------------------
 # 3. GENERACIÓN DE GRÁFICOS COMPLEJOS
 # -----------------------------------------------------------------------------
 def generar_grafico_mariposa(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
     st.markdown(f"### {titulo_grafico}")
-    
     df_a_cat = df_a[col_target].dropna().value_counts().reset_index()
     df_a_cat.columns = ['Categoria', 'Cant_A']
-    
     df_b_cat = df_b[col_target].dropna().value_counts().reset_index()
     df_b_cat.columns = ['Categoria', 'Cant_B']
-    
     df_comp = pd.merge(df_a_cat, df_b_cat, on='Categoria', how='outer').fillna(0)
     if df_comp.empty:
         st.info("No hay datos disponibles para la comparación.")
         return
-
     df_comp['Cat_fmt'] = df_comp['Categoria'].apply(acortar_texto_abreviado)
     df_comp['Total_Vol'] = df_comp['Cant_A'] + df_comp['Cant_B']
     df_comp = df_comp.sort_values('Total_Vol', ascending=True)
-
     tot_a = df_comp['Cant_A'].sum()
     tot_b = df_comp['Cant_B'].sum()
-
     df_comp['Pct_A'] = (df_comp['Cant_A'] / tot_a * 100) if tot_a > 0 else 0
     df_comp['Pct_B'] = (df_comp['Cant_B'] / tot_b * 100) if tot_b > 0 else 0
-
     fig = go.Figure()
-
     fig.add_trace(go.Bar(
         y=df_comp['Cat_fmt'],
         x=-df_comp['Pct_A'],
@@ -409,7 +397,6 @@ def generar_grafico_mariposa(df_a, df_b, col_target, titulo_grafico, lbl_a="Peri
         hovertemplate="<b>%{y} (" + lbl_a + ")</b><br>Porcentaje: %{text}<br>Cantidad: %{customdata:,}<extra></extra>",
         customdata=df_comp['Cant_A']
     ))
-
     fig.add_trace(go.Bar(
         y=df_comp['Cat_fmt'],
         x=df_comp['Pct_B'],
@@ -421,11 +408,9 @@ def generar_grafico_mariposa(df_a, df_b, col_target, titulo_grafico, lbl_a="Peri
         hovertemplate="<b>%{y} (" + lbl_b + ")</b><br>Porcentaje: %{text}<br>Cantidad: %{customdata:,}<extra></extra>",
         customdata=df_comp['Cant_B']
     ))
-
     max_pct = max(df_comp['Pct_A'].max(), df_comp['Pct_B'].max()) * 1.15
-    if max_pct == 0: 
+    if max_pct == 0:
         max_pct = 100
-
     fig.update_layout(
         font=dict(family="Poppins, sans-serif"),
         barmode='overlay',
@@ -442,52 +427,41 @@ def generar_grafico_mariposa(df_a, df_b, col_target, titulo_grafico, lbl_a="Peri
         ),
         yaxis=dict(showgrid=False)
     )
-
     st.plotly_chart(aplicar_touch_safe(fig), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
 
 def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
     st.markdown(f"### {titulo_grafico}")
-    
     df_filtrado = df_base.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
     df_filtrado = df_filtrado[
         (df_filtrado['UNIDAD DE ASIGNACIÓN'].astype(str).str.strip() != '') &
         (df_filtrado[col_target].astype(str).str.strip() != '')
     ]
-    
     if df_filtrado.empty:
         st.info("No hay datos disponibles para generar esta gráfica.")
         return
-
     top_10_upres = df_filtrado['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index.tolist()
     df_g2 = df_filtrado[df_filtrado['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
-
     conteo_local = df_g2.groupby(['UNIDAD DE ASIGNACIÓN', col_target], observed=True).size().reset_index(name='Cant_Local')
     conteo_local['Rank_Local'] = conteo_local.groupby('UNIDAD DE ASIGNACIÓN')['Cant_Local'].rank(method='first', ascending=False)
-    
     top_5_locales = conteo_local[conteo_local['Rank_Local'] <= 5].copy()
     top_5_locales['Rank_Local'] = top_5_locales['Rank_Local'].astype(int)
     top_5_locales['UPRES_fmt'] = top_5_locales['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
     top_5_locales['Grupo_fmt'] = top_5_locales[col_target].apply(acortar_texto_abreviado)
-
     upres_ordenadas_fmt = [acortar_texto_abreviado(u) for u in reversed(top_10_upres)]
     df_totales = top_5_locales.groupby('UPRES_fmt', observed=True)['Cant_Local'].sum().reset_index(name='Total')
-
     paleta_contraste = [
-        '#1b4332', '#1d3557', '#d4a373', '#e07a5f', '#2b2d42', 
+        '#1b4332', '#1d3557', '#d4a373', '#e07a5f', '#2b2d42',
         '#2d6a4f', '#003049', '#52b788', '#3d405b', '#40916c',
         '#bc4749', '#a5a58d', '#6b705c', '#386641', '#6a040f'
     ]
-    
     categorias_unicas = top_5_locales['Grupo_fmt'].unique().tolist()
     color_map = {cat: paleta_contraste[i % len(paleta_contraste)] for i, cat in enumerate(categorias_unicas)}
-
     fig_stack = go.Figure()
-
     for rank in range(1, 6):
         sub_rank = top_5_locales[top_5_locales['Rank_Local'] == rank]
         if sub_rank.empty:
             continue
-            
         for _, row in sub_rank.iterrows():
             item_nombre = row['Grupo_fmt']
             fig_stack.add_trace(go.Bar(
@@ -507,63 +481,53 @@ def generar_grafico_upres_apilado(df_base, col_target, titulo_grafico):
                     line=dict(color='#ffffff', width=1)
                 )
             ))
-
     fig_stack.add_trace(go.Scatter(
-        y=df_totales['UPRES_fmt'], 
-        x=df_totales['Total'], 
-        mode='text', 
-        text=df_totales['Total'].apply(lambda v: f" <b>{v:,}</b>"), 
-        textposition='middle right', 
-        showlegend=False, 
+        y=df_totales['UPRES_fmt'],
+        x=df_totales['Total'],
+        mode='text',
+        text=df_totales['Total'].apply(lambda v: f" <b>{v:,}</b>"),
+        textposition='middle right',
+        showlegend=False,
         hoverinfo='skip'
     ))
-
     fig_stack.update_layout(
         font=dict(family="Poppins, sans-serif"),
-        barmode='stack', 
+        barmode='stack',
         yaxis=dict(categoryorder='array', categoryarray=upres_ordenadas_fmt),
-        xaxis_title="", 
-        yaxis_title="", 
-        height=500, 
-        margin=dict(l=5, r=40, t=10, b=10), 
+        xaxis_title="",
+        yaxis_title="",
+        height=500,
+        margin=dict(l=5, r=40, t=10, b=10),
         legend=dict(orientation="h", y=-0.2, x=0, title=None, font=dict(size=10))
     )
-    
     st.plotly_chart(aplicar_touch_safe(fig_stack), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
 
 def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lbl_a="Periodo A", lbl_b="Periodo B"):
     st.markdown(f"### {titulo_grafico}")
-
     df_a_clean = df_a.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
     df_b_clean = df_b.dropna(subset=['UNIDAD DE ASIGNACIÓN', col_target]).copy()
-
     if df_a_clean.empty and df_b_clean.empty:
         st.info("No hay datos disponibles para la comparación.")
         return
-
     tot_b_absoluto = df_b_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
-    
     if not tot_b_absoluto.empty:
         upres_ordenadas_b = tot_b_absoluto.sort_values(ascending=False).head(5).index.tolist()
     else:
         tot_a_absoluto = df_a_clean['UNIDAD DE ASIGNACIÓN'].value_counts()
         upres_ordenadas_b = tot_a_absoluto.sort_values(ascending=False).head(5).index.tolist()
-
     df_a_sub = df_a_clean[df_a_clean['UNIDAD DE ASIGNACIÓN'].isin(upres_ordenadas_b)].copy()
     df_b_sub = df_b_clean[df_b_clean['UNIDAD DE ASIGNACIÓN'].isin(upres_ordenadas_b)].copy()
 
     def procesar_periodo_dinamico(df_in, lbl):
         if df_in.empty:
             return pd.DataFrame(), pd.DataFrame()
-
         registros_agrupados = []
         totales_absolutos = []
-
         for upres in upres_ordenadas_b:
             df_u = df_in[df_in['UNIDAD DE ASIGNACIÓN'] == upres]
             if df_u.empty:
                 continue
-
             total_real = len(df_u)
             totales_absolutos.append({
                 'UNIDAD DE ASIGNACIÓN': upres,
@@ -571,73 +535,56 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
                 'Periodo': lbl,
                 'Total_Abs': total_real
             })
-
             top_5_locales = df_u[col_target].value_counts().head(5).index.tolist()
-
             df_u_mod = df_u.copy()
             df_u_mod['Cat_Group'] = df_u_mod[col_target].apply(
                 lambda c: c if c in top_5_locales else 'Otros'
             )
-
             g_u = df_u_mod.groupby('Cat_Group', observed=True).size().reset_index(name='Cant')
             g_u['UNIDAD DE ASIGNACIÓN'] = upres
             g_u['UPRES_fmt'] = acortar_texto_abreviado(upres)
             g_u['Periodo'] = lbl
             g_u['Tot_UPRES'] = total_real
             g_u['Pct'] = (g_u['Cant'] / total_real) * 100
-            
             rank_map = {cat: i+1 for i, cat in enumerate(top_5_locales)}
             rank_map['Otros'] = 99
-            
             g_u['Rank_Local'] = g_u['Cat_Group'].map(rank_map)
             g_u['Cat_fmt'] = g_u['Cat_Group'].apply(lambda c: 'Otros' if c == 'Otros' else acortar_texto_abreviado(c))
-
             registros_agrupados.append(g_u)
-
         if not registros_agrupados:
             return pd.DataFrame(), pd.DataFrame()
-
         df_res = pd.concat(registros_agrupados, ignore_index=True)
         df_tot = pd.DataFrame(totales_absolutos)
         return df_res, df_tot
 
     df_p1, tot_p1 = procesar_periodo_dinamico(df_a_sub, lbl_a)
     df_p2, tot_p2 = procesar_periodo_dinamico(df_b_sub, lbl_b)
-
     df_total = pd.concat([df_p1, df_p2], ignore_index=True)
     df_totales_absolutos = pd.concat([tot_p1, tot_p2], ignore_index=True)
-
     if df_total.empty:
         st.info("No hay datos suficientes en los rangos seleccionados.")
         return
-
     categorias_unicas_todas = [c for c in df_total['Cat_fmt'].unique() if c != 'Otros']
     paleta_amplia = [
-        '#1b4332', '#1d3557', '#d4a373', '#e07a5f', '#2b2d42', 
+        '#1b4332', '#1d3557', '#d4a373', '#e07a5f', '#2b2d42',
         '#2d6a4f', '#003049', '#52b788', '#3d405b', '#40916c',
         '#bc4749', '#a5a58d', '#6b705c', '#386641', '#6a040f'
     ]
     color_map = {cat: paleta_amplia[i % len(paleta_amplia)] for i, cat in enumerate(categorias_unicas_todas)}
     color_map['Otros'] = '#8d99ae'
-
     top_5_upres_fmt = [acortar_texto_abreviado(u) for u in upres_ordenadas_b]
     upres_orden_ascendente = list(reversed(top_5_upres_fmt))
-
     df_total['UPRES_fmt'] = pd.Categorical(df_total['UPRES_fmt'], categories=upres_orden_ascendente, ordered=True)
     df_total = df_total.sort_values(['UPRES_fmt', 'Periodo', 'Rank_Local'])
-
     if not df_totales_absolutos.empty:
         df_totales_absolutos['UPRES_fmt'] = pd.Categorical(df_totales_absolutos['UPRES_fmt'], categories=upres_orden_ascendente, ordered=True)
         df_totales_absolutos = df_totales_absolutos.sort_values(['UPRES_fmt', 'Periodo'])
-
     fig = go.Figure()
-
     anchor_upres, anchor_periodo = [], []
     for u in upres_orden_ascendente:
         for periodo in (lbl_a, lbl_b):
             anchor_upres.append(u)
             anchor_periodo.append(periodo)
-
     fig.add_trace(go.Bar(
         y=[anchor_upres, anchor_periodo],
         x=[0] * len(anchor_upres),
@@ -647,17 +594,13 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         hoverinfo='skip',
         width=0.001
     ))
-
     rangos_locales_existentes = sorted(df_total['Rank_Local'].unique())
-
     for rank in rangos_locales_existentes:
         df_rank = df_total[df_total['Rank_Local'] == rank]
         if df_rank.empty:
             continue
-
         for cat_nombre in df_rank['Cat_fmt'].unique():
             df_sub_cat = df_rank[df_rank['Cat_fmt'] == cat_nombre]
-            
             fig.add_trace(go.Bar(
                 y=[df_sub_cat['UPRES_fmt'].astype(str), df_sub_cat['Periodo']],
                 x=df_sub_cat['Pct'],
@@ -672,7 +615,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
                 customdata=df_sub_cat[['Cat_fmt', 'Cant']],
                 hovertemplate="<b>%{y[0]} - %{y[1]}</b><br>Categoría: %{customdata[0]}<br>Proporción: %{x:.1f}%<br>Cantidad: %{customdata[1]:,} PQRS<extra></extra>"
             ))
-
     if not df_totales_absolutos.empty:
         fig.add_trace(go.Scatter(
             y=[df_totales_absolutos['UPRES_fmt'].astype(str), df_totales_absolutos['Periodo']],
@@ -683,7 +625,6 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
             showlegend=False,
             hoverinfo='skip'
         ))
-
     fig.update_layout(
         font=dict(family="Poppins, sans-serif"),
         barmode='stack',
@@ -699,76 +640,182 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
         margin=dict(l=10, r=40, t=10, b=10),
         legend=dict(orientation="h", y=-0.18, x=0, title=None, font=dict(size=10))
     )
-
     st.plotly_chart(aplicar_touch_safe(fig), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
+
+# ⭐ NUEVA FUNCIÓN: Gráfico de PQRS por Red (Individual)
+def generar_grafico_red_individual(df_base, titulo_grafico="PQRS por Red"):
+    st.markdown(f"""
+        <h3 style='display: flex; align-items: center; gap: 8px;'>
+            <i class="fa-solid fa-network-wired" style="color: #1b5e20;"></i>
+            {titulo_grafico}
+        </h3>
+    """, unsafe_allow_html=True)
+
+    if df_base.empty or 'Red' not in df_base.columns:
+        st.info("No hay datos de Red disponibles.")
+        return
+
+    df_red = df_base.copy()
+    df_red['Red_Normalizada'] = df_red['Red'].apply(normalizar_red)
+    df_red_count = df_red['Red_Normalizada'].value_counts().reset_index()
+    df_red_count.columns = ['Red', 'Cantidad']
+
+    orden_red = ['Red Propia', 'Red Externa', 'Sin asignar']
+    df_red_count['Orden'] = df_red_count['Red'].apply(lambda x: orden_red.index(x) if x in orden_red else 99)
+    df_red_count = df_red_count.sort_values('Orden')
+
+    color_map_red = {
+        'Red Propia': COLOR_RED_PROPIA,
+        'Red Externa': COLOR_RED_EXTERNA,
+        'Sin asignar': COLOR_RED_SIN_ASIGNAR
+    }
+
+    fig_red = px.bar(
+        df_red_count,
+        x='Red',
+        y='Cantidad',
+        text='Cantidad',
+        color='Red',
+        color_discrete_map=color_map_red,
+        labels={'Cantidad': 'PQRS Recepcionadas', 'Red': ''},
+        category_orders={'Red': orden_red}
+    )
+    fig_red.update_traces(
+        textposition='outside',
+        texttemplate='%{y:,.0f}',
+        hovertemplate="<b>%{x}</b><br>Cantidad: %{y:,} PQRS<extra></extra>"
+    )
+    fig_red.update_layout(
+        font=dict(family="Poppins, sans-serif"),
+        xaxis_title="",
+        yaxis_title="",
+        height=340,
+        margin=dict(l=5, r=5, t=20, b=10),
+        showlegend=False,
+        xaxis=dict(categoryorder='array', categoryarray=orden_red)
+    )
+    st.plotly_chart(aplicar_touch_safe(fig_red), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
+
+# ⭐ NUEVA FUNCIÓN: Gráfico de PQRS por Red (Comparativo)
+def generar_grafico_red_comparativo(df_a, df_b, titulo_grafico="Comparativo PQRS por Red", lbl_a="Periodo A", lbl_b="Periodo B"):
+    st.markdown(f"""
+        <h3 style='display: flex; align-items: center; gap: 8px;'>
+            <i class="fa-solid fa-network-wired" style="color: #1b5e20;"></i>
+            {titulo_grafico}
+        </h3>
+    """, unsafe_allow_html=True)
+
+    if (df_a.empty and df_b.empty) or ('Red' not in df_a.columns and 'Red' not in df_b.columns):
+        st.info("No hay datos de Red disponibles para la comparación.")
+        return
+
+    def procesar_red(df_in, lbl):
+        if df_in.empty or 'Red' not in df_in.columns:
+            return pd.DataFrame()
+        df_temp = df_in.copy()
+        df_temp['Red_Normalizada'] = df_temp['Red'].apply(normalizar_red)
+        df_temp['Periodo'] = lbl
+        return df_temp.groupby('Red_Normalizada', observed=True).size().reset_index(name='Cantidad')
+
+    df_red_a = procesar_red(df_a, lbl_a)
+    df_red_b = procesar_red(df_b, lbl_b)
+    df_red_comp = pd.concat([df_red_a, df_red_b], ignore_index=True)
+
+    if df_red_comp.empty:
+        st.info("No hay datos suficientes en los rangos seleccionados.")
+        return
+
+    orden_red = ['Red Propia', 'Red Externa', 'Sin asignar']
+    color_map_red_comp = {
+        lbl_a: COLOR_PERIODO_A,
+        lbl_b: COLOR_PERIODO_B
+    }
+
+    fig_red_comp = px.bar(
+        df_red_comp,
+        x='Red_Normalizada',
+        y='Cantidad',
+        text='Cantidad',
+        color='Periodo',
+        barmode='group',
+        color_discrete_map=color_map_red_comp,
+        labels={'Cantidad': 'PQRS Recepcionadas', 'Red_Normalizada': ''},
+        category_orders={'Red_Normalizada': orden_red}
+    )
+    fig_red_comp.update_traces(
+        textposition='outside',
+        texttemplate='%{y:,.0f}',
+        hovertemplate="<b>%{x} (%{fullData.name})</b><br>Cantidad: %{y:,} PQRS<extra></extra>"
+    )
+    fig_red_comp.update_layout(
+        font=dict(family="Poppins, sans-serif"),
+        xaxis_title="",
+        yaxis_title="",
+        height=340,
+        margin=dict(l=10, r=10, t=30, b=10),
+        legend=dict(orientation="h", y=1.15, x=0, title=None, font=dict(size=10)),
+        xaxis=dict(categoryorder='array', categoryarray=orden_red)
+    )
+    st.plotly_chart(aplicar_touch_safe(fig_red_comp), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
 
 # -----------------------------------------------------------------------------
 # 4. MÓDULOS DE RENDERIZADO DE PESTAÑAS
 # -----------------------------------------------------------------------------
 def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_mensual, df_maestro_upres_rases):
     st.caption("Consola Ejecutiva de Atención al Usuario - Periodo Único")
-
     if isinstance(min_f, pd.Timestamp):
         min_f = min_f.date()
     if isinstance(max_f, pd.Timestamp):
         max_f = max_f.date()
-
     if not min_f or not max_f or min_f > max_f:
         min_f = pd.Timestamp.now().date() - pd.Timedelta(days=30)
         max_f = pd.Timestamp.now().date()
-
     if "fecha_ind_inicio" not in st.session_state or st.session_state["fecha_ind_inicio"] < min_f or st.session_state["fecha_ind_inicio"] > max_f:
         st.session_state["fecha_ind_inicio"] = min_f
-
     if "fecha_ind_fin" not in st.session_state or st.session_state["fecha_ind_fin"] > max_f or st.session_state["fecha_ind_fin"] < min_f:
         st.session_state["fecha_ind_fin"] = max_f
-
     col_fi1, col_fi2 = st.columns(2)
     with col_fi1:
         fecha_ind_inicio = st.date_input(
-            "Fecha Inicio", 
-            value=st.session_state["fecha_ind_inicio"], 
-            min_value=min_f, 
-            max_value=max_f, 
+            "Fecha Inicio",
+            value=st.session_state["fecha_ind_inicio"],
+            min_value=min_f,
+            max_value=max_f,
             key="fecha_ind_inicio"
         )
     with col_fi2:
         fecha_ind_fin = st.date_input(
-            "Fecha Fin", 
-            value=st.session_state["fecha_ind_fin"], 
-            min_value=min_f, 
-            max_value=max_f, 
+            "Fecha Fin",
+            value=st.session_state["fecha_ind_fin"],
+            min_value=min_f,
+            max_value=max_f,
             key="fecha_ind_fin"
         )
-
     df_base = df_base_global.copy()
     if fecha_ind_inicio and fecha_ind_fin:
         if fecha_ind_inicio <= fecha_ind_fin:
             df_base = df_base[(df_base['fecha_dt'].dt.date >= fecha_ind_inicio) & (df_base['fecha_dt'].dt.date <= fecha_ind_fin)]
         else:
             st.warning("⚠️ La Fecha Inicio no puede ser posterior a la Fecha Fin.")
-
     dict_rases_users, dict_upres_users = obtener_usuarios_dinamicos(df_base, df_users_mensual, df_maestro_upres_rases)
     _faltan = meses_sin_usuarios(df_base, df_users_mensual)
     if _faltan:
         st.caption(f"⚠️ Sin usuarios cargados para estos meses del periodo seleccionado: {', '.join(_faltan)}. "
                    f"Los usuarios prorrateados y la tasa por 1.000 usuarios solo consideran los meses con datos.")
-
     top_upres_s = df_base['UNIDAD DE ASIGNACIÓN'].dropna().value_counts()
     top_upres_nom = top_upres_s.index[0] if not top_upres_s.empty else "N/A"
     top_upres_val = top_upres_s.iloc[0] if not top_upres_s.empty else 0
-
     top_rases_s = df_base[~df_base['RASES'].astype(str).str.upper().str.contains('NIVEL CENTRAL')]['RASES'].dropna().value_counts()
     top_rases_nom = top_rases_s.index[0] if not top_rases_s.empty else "N/A"
     top_rases_val = top_rases_s.iloc[0] if not top_rases_s.empty else 0
-
     top_dia_s = df_base['fecha_corta'].dropna().value_counts()
     top_dia_nom = top_dia_s.index[0] if not top_dia_s.empty else "N/A"
     top_dia_val = top_dia_s.iloc[0] if not top_dia_s.empty else 0
-
     k1, k2 = st.columns(2)
     k1.metric("Total recepcionado", f"{len(df_base):,}")
-    
     if not df_base.empty and 'ESPECIALIDAD_CATEGORIA' in df_base.columns:
         k1_cat = df_base['ESPECIALIDAD_CATEGORIA'].dropna().value_counts()
         cat_top_name = k1_cat.index[0] if not k1_cat.empty else "N/A"
@@ -776,43 +823,34 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
     else:
         cat_top_name = "N/A"
         cat_top_val = 0
-
     k2.metric(
-        "Especialidad más impactada", 
-        acortar_texto_abreviado(cat_top_name), 
-        delta=f"{cat_top_val:,} tickets", 
+        "Especialidad más impactada",
+        acortar_texto_abreviado(cat_top_name),
+        delta=f"{cat_top_val:,} tickets",
         delta_color="off"
     )
-
     k3, k4, k5 = st.columns(3)
     k3.metric("RASES con más PQRS", acortar_texto_abreviado(top_rases_nom), delta=f"{top_rases_val:,} tickets", delta_color="off")
     k4.metric("UPRES con más PQRS", acortar_texto_abreviado(top_upres_nom), delta=f"{top_upres_val:,} tickets", delta_color="off")
     k5.metric("Día con más PQRS", f"{top_dia_nom}", delta=f"{top_dia_val:,} tickets", delta_color="off")
-
     st.markdown("---")
-
     st.markdown("""
         <h3 style='display: flex; align-items: center; gap: 8px;'>
             <i class="fa-solid fa-map-location-dot" style="color: #2e7d32;"></i>
             MAPA DE CALOR: Distribución Geográfica PQRS por Departamento
         </h3>
     """, unsafe_allow_html=True)
-    
     try:
         colombia_geojson = cargar_geojson_colombia()
     except Exception:
         colombia_geojson = None
-
     if colombia_geojson:
         df_geo_base = df_base.dropna(subset=['UNIDAD DE ASIGNACIÓN']).copy()
         df_geo_base['CODIGO_DANE'] = df_geo_base['UNIDAD DE ASIGNACIÓN'].apply(obtener_codigo_dane)
-        
         df_geo = df_geo_base.dropna(subset=['CODIGO_DANE']).groupby('CODIGO_DANE', observed=True).size().reset_index(name='Cantidad')
         df_geo['CODIGO_DANE'] = df_geo['CODIGO_DANE'].astype(str).str.zfill(2)
         df_geo['Nombre_Dept'] = df_geo['CODIGO_DANE'].map(NOMBRES_DEPARTAMENTOS_MOSTRAR)
-
         has_choropleth_map = hasattr(px, "choropleth_map")
-        
         kwargs_mapa = {
             'data_frame': df_geo,
             'geojson': colombia_geojson,
@@ -827,17 +865,15 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
             'hover_data': {'CODIGO_DANE': False, 'Nombre_Dept': True, 'Cantidad': True},
             'labels': {'Cantidad': 'PQRS Recepcionadas', 'Nombre_Dept': 'Departamento'}
         }
-
         if has_choropleth_map:
             kwargs_mapa['map_style'] = "carto-positron"
             fig_mapa = px.choropleth_map(**kwargs_mapa)
         else:
             kwargs_mapa['mapbox_style'] = "carto-positron"
             fig_mapa = px.choropleth_mapbox(**kwargs_mapa)
-
         fig_mapa.update_layout(
-            font=dict(family="Poppins, sans-serif"), 
-            height=580, 
+            font=dict(family="Poppins, sans-serif"),
+            height=580,
             margin=dict(l=0, r=0, t=10, b=0),
             dragmode=False,
             coloraxis_colorbar=dict(
@@ -849,9 +885,7 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
         st.plotly_chart(fig_mapa, use_container_width=True, config=CONFIG_PLOTLY_MAPA)
     else:
         st.info("Visualización del mapa de calor no disponible temporalmente.")
-
     st.markdown("---")
-
     st.markdown("""
         <h3 style='display: flex; align-items: center; gap: 8px; margin-bottom: 0px;'>
             <i class="fa-solid fa-chart-pie" style="color: #2e7d32;"></i>
@@ -862,12 +896,11 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
     df_pie_sol.columns = ['Tipo de Solicitud', 'Cantidad']
     df_pie_sol = df_pie_sol[df_pie_sol['Cantidad'] > 0]
     df_pie_sol['Tipo_fmt'] = df_pie_sol['Tipo de Solicitud'].apply(acortar_texto_abreviado)
-    
     fig_pie1 = px.pie(
-        df_pie_sol, 
-        values='Cantidad', 
-        names='Tipo_fmt', 
-        hole=0.4, 
+        df_pie_sol,
+        values='Cantidad',
+        names='Tipo_fmt',
+        hole=0.4,
         color_discrete_sequence=px.colors.sequential.Greens_r
     )
     fig_pie1.update_traces(
@@ -877,15 +910,13 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
         insidetextorientation='radial'
     )
     fig_pie1.update_layout(
-        font=dict(family="Poppins, sans-serif"), 
-        height=400, 
+        font=dict(family="Poppins, sans-serif"),
+        height=400,
         showlegend=False,
         margin=dict(l=20, r=20, t=10, b=20)
     )
     st.plotly_chart(aplicar_touch_safe(fig_pie1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
-
     st.markdown("---")
-
     st.markdown("""
         <h3 style='display: flex; align-items: center; gap: 8px; margin-bottom: 0px;'>
             <i class="fa-solid fa-inbox" style="color: #2e7d32;"></i>
@@ -896,12 +927,11 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
     df_pie_med.columns = ['Medio de Recepción', 'Cantidad']
     df_pie_med = df_pie_med[df_pie_med['Cantidad'] > 0]
     df_pie_med['Medio_fmt'] = df_pie_med['Medio de Recepción'].apply(acortar_texto_abreviado)
-    
     fig_pie2 = px.pie(
-        df_pie_med, 
-        values='Cantidad', 
-        names='Medio_fmt', 
-        hole=0.4, 
+        df_pie_med,
+        values='Cantidad',
+        names='Medio_fmt',
+        hole=0.4,
         color_discrete_sequence=px.colors.sequential.YlGn_r
     )
     fig_pie2.update_traces(
@@ -911,15 +941,13 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
         insidetextorientation='radial'
     )
     fig_pie2.update_layout(
-        font=dict(family="Poppins, sans-serif"), 
-        height=400, 
+        font=dict(family="Poppins, sans-serif"),
+        height=400,
         showlegend=False,
         margin=dict(l=20, r=20, t=10, b=20)
     )
     st.plotly_chart(aplicar_touch_safe(fig_pie2), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
-
     st.markdown("---")
-
     col_tit_r, col_btn_r = st.columns([3, 1])
     with col_tit_r:
         st.markdown("""
@@ -930,19 +958,15 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
         """, unsafe_allow_html=True)
     with col_btn_r:
         ver_tasa_rases = st.toggle("PQRS por cada 1000 usuarios atendidos", key="tasa_rases_ind")
-
     df_g1_raw = df_base['RASES'].dropna().value_counts().reset_index()
     df_g1_raw.columns = ['RASES', 'Cantidad']
-
     df_g1 = df_g1_raw[
-        (df_g1_raw['Cantidad'] > 0) & 
+        (df_g1_raw['Cantidad'] > 0) &
         (df_g1_raw['RASES'].astype(str).str.strip() != '') &
         (~df_g1_raw['RASES'].astype(str).str.upper().str.contains('NIVEL CENTRAL'))
     ].copy()
-
     df_g1['RASES_fmt'] = df_g1['RASES'].apply(acortar_texto_abreviado)
     df_g1['Usuarios'] = mapear_usuarios(df_g1['RASES'], dict_rases_users)
-
     if ver_tasa_rases:
         df_g1['Valor_Graficar'] = df_g1.apply(
             lambda r: (r['Cantidad'] / r['Usuarios'] * 1000) if r['Usuarios'] > 0 else 0, axis=1
@@ -955,14 +979,12 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
         y_label_r = "Cantidad PQRS"
         df_g1['Texto_Barra'] = df_g1['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
         hovertemplate_r = "<b>%{x}</b><br>Cantidad: %{y:,} PQRS<br>Usuarios Prorrateados: %{customdata[1]:,.0f}<extra></extra>"
-
     df_g1 = df_g1.sort_values(by='Valor_Graficar', ascending=False)
-
     fig1 = px.bar(
-        df_g1, 
-        x='RASES_fmt', 
-        y='Valor_Graficar', 
-        text='Texto_Barra', 
+        df_g1,
+        x='RASES_fmt',
+        y='Valor_Graficar',
+        text='Texto_Barra',
         color_discrete_sequence=[COLOR_PERIODO_A],
         labels={'Valor_Graficar': y_label_r, 'RASES_fmt': ''},
         custom_data=['Cantidad', 'Usuarios']
@@ -972,15 +994,14 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
         hovertemplate=hovertemplate_r
     )
     fig1.update_layout(
-        font=dict(family="Poppins, sans-serif"), 
+        font=dict(family="Poppins, sans-serif"),
         xaxis=dict(categoryorder='array', categoryarray=df_g1['RASES_fmt'].tolist()),
-        xaxis_title="", 
-        yaxis_title="", 
-        height=330, 
+        xaxis_title="",
+        yaxis_title="",
+        height=330,
         margin=dict(l=5, r=5, t=20, b=10)
     )
     st.plotly_chart(aplicar_touch_safe(fig1), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
-
     col_tit_u, col_btn_u = st.columns([3, 1])
     with col_tit_u:
         st.markdown("""
@@ -991,13 +1012,11 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
         """, unsafe_allow_html=True)
     with col_btn_u:
         ver_tasa_upres = st.toggle("PQRS por cada 1000 usuarios atendidos", key="tasa_upres_ind")
-
     df_u1_raw = df_base['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
     df_u1_raw.columns = ['UPRES', 'Cantidad']
     df_u1 = df_u1_raw[(df_u1_raw['Cantidad'] > 0) & (df_u1_raw['UPRES'].astype(str).str.strip() != '')].copy()
     df_u1['UPRES_fmt'] = df_u1['UPRES'].apply(acortar_texto_abreviado)
     df_u1['Usuarios'] = mapear_usuarios(df_u1['UPRES'], dict_upres_users)
-
     if ver_tasa_upres:
         df_u1['Valor_Graficar'] = df_u1.apply(
             lambda r: (r['Cantidad'] / r['Usuarios'] * 1000) if r['Usuarios'] > 0 else 0, axis=1
@@ -1010,13 +1029,11 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
         y_label_u = "Cantidad PQRS"
         df_u1['Texto_Barra'] = df_u1['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
         hovertemplate_u = "<b>%{x}</b><br>Cantidad: %{y:,} PQRS<br>Usuarios Prorrateados: %{customdata[1]:,.0f}<extra></extra>"
-
     df_u1 = df_u1.sort_values(by='Valor_Graficar', ascending=False).head(10)
-
     fig_upres_simple = px.bar(
-        df_u1, 
-        x='UPRES_fmt', 
-        y='Valor_Graficar', 
+        df_u1,
+        x='UPRES_fmt',
+        y='Valor_Graficar',
         text='Texto_Barra',
         color_discrete_sequence=[COLOR_PERIODO_A],
         labels={'Valor_Graficar': y_label_u, 'UPRES_fmt': ''},
@@ -1027,31 +1044,33 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
         hovertemplate=hovertemplate_u
     )
     fig_upres_simple.update_layout(
-        font=dict(family="Poppins, sans-serif"), 
+        font=dict(family="Poppins, sans-serif"),
         xaxis=dict(categoryorder='array', categoryarray=df_u1['UPRES_fmt'].tolist()),
-        xaxis_title="", 
-        yaxis_title="", 
-        height=360, 
+        xaxis_title="",
+        yaxis_title="",
+        height=360,
         margin=dict(l=5, r=5, t=20, b=10)
     )
     st.plotly_chart(aplicar_touch_safe(fig_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
+    # ⭐ NUEVO: Gráfico de PQRS por Red (debajo de UPRES)
+    st.markdown("---")
+    generar_grafico_red_individual(df_base, "Distribución de PQRS por Red")
+
     generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES - Categoría Salud (Top 5)")
     generar_grafico_upres_apilado(df_base, col_mot_esp, "Distribución por UPRES - Motivo Específico (Top 5)")
 
+
 def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_users_mensual, df_maestro_upres_rases):
     st.caption("Comparación Analítica Cruzada entre dos Ventanas de Tiempo")
-
     if "fecha_a_inicio" not in st.session_state:
         st.session_state["fecha_a_inicio"] = min_hist
     if "fecha_a_fin" not in st.session_state:
         st.session_state["fecha_a_fin"] = min_hist + pd.Timedelta(days=30) if min_hist else max_hist
-
     if "fecha_b_inicio" not in st.session_state:
         st.session_state["fecha_b_inicio"] = max_hist - pd.Timedelta(days=30) if max_hist else min_hist
     if "fecha_b_fin" not in st.session_state:
         st.session_state["fecha_b_fin"] = max_hist
-
     col_p1, col_p2 = st.columns(2)
     with col_p1:
         st.markdown("### Periodo A (Base)")
@@ -1060,7 +1079,6 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
             fecha_a_inicio = st.date_input("Fecha Inicio A", min_value=min_hist, max_value=max_hist, key="fecha_a_inicio")
         with col_a2:
             fecha_a_fin = st.date_input("Fecha Fin A", min_value=min_hist, max_value=max_hist, key="fecha_a_fin")
-
     with col_p2:
         st.markdown("### Periodo B (Comparado)")
         col_b1, col_b2 = st.columns(2)
@@ -1068,19 +1086,15 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
             fecha_b_inicio = st.date_input("Fecha Inicio B", min_value=min_hist, max_value=max_hist, key="fecha_b_inicio")
         with col_b2:
             fecha_b_fin = st.date_input("Fecha Fin B", min_value=min_hist, max_value=max_hist, key="fecha_b_fin")
-
     if fecha_a_inicio and fecha_a_fin and fecha_b_inicio and fecha_b_fin:
         if fecha_a_inicio > fecha_a_fin or fecha_b_inicio > fecha_b_fin:
             st.warning("⚠️ En uno de los periodos, la Fecha Inicio es mayor a la Fecha Fin.")
             return
-
         lbl_a_short = "Periodo A"
         lbl_b_short = "Periodo B"
         vs_header = f"{fecha_a_inicio.strftime('%d/%m/%Y')} – {fecha_a_fin.strftime('%d/%m/%Y')} 🆚 {fecha_b_inicio.strftime('%d/%m/%Y')} – {fecha_b_fin.strftime('%d/%m/%Y')}"
-
         df_a = df_base_global[(df_base_global['fecha_dt'].dt.date >= fecha_a_inicio) & (df_base_global['fecha_dt'].dt.date <= fecha_a_fin)].copy()
         df_b = df_base_global[(df_base_global['fecha_dt'].dt.date >= fecha_b_inicio) & (df_base_global['fecha_dt'].dt.date <= fecha_b_fin)].copy()
-
         dict_rases_users_a, dict_upres_users_a = obtener_usuarios_dinamicos(df_a, df_users_mensual, df_maestro_upres_rases)
         _fa = meses_sin_usuarios(df_a, df_users_mensual)
         if _fa:
@@ -1089,37 +1103,28 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
         _fb = meses_sin_usuarios(df_b, df_users_mensual)
         if _fb:
             st.caption(f"⚠️ Periodo B sin usuarios cargados para: {', '.join(_fb)}.")
-
         tot_a, tot_b = len(df_a), len(df_b)
         diff_abs = tot_b - tot_a
         diff_pct = ((diff_abs / tot_a) * 100) if tot_a > 0 else 0.0
-
         st.markdown("---")
         st.markdown(f"### <i class='fa-solid fa-scale-balanced' style='color:#1b5e20;'></i> Indicadores Comparativos Generales ({vs_header})", unsafe_allow_html=True)
         kc1, kc2, kc3 = st.columns(3)
         kc1.metric(f"Total {lbl_a_short}", f"{tot_a:,}")
         kc2.metric(f"Total {lbl_b_short}", f"{tot_b:,}")
-        
         kc3.metric(
             "Variación Periodo B vs A",
             f"{diff_abs:+,}",
             delta=f"{diff_abs:+,} tickets ({diff_pct:+.1f}%)",
             delta_color="inverse"
         )
-
         st.markdown("---")
-
         mapa_color_comp = {lbl_a_short: COLOR_PERIODO_A, lbl_b_short: COLOR_PERIODO_B}
-
         col_cp1, col_cp2 = st.columns(2)
         with col_cp1:
             generar_grafico_mariposa(df_a, df_b, 'Tipo de Solicitud', "Comparativo Tipo de Solicitud", lbl_a=lbl_a_short, lbl_b=lbl_b_short)
-
         with col_cp2:
             generar_grafico_mariposa(df_a, df_b, 'Medio de Recepción', "Comparativo Medio de Recepción", lbl_a=lbl_a_short, lbl_b=lbl_b_short)
-
         st.markdown("---")
-
         col_tit_cr, col_btn_cr = st.columns([3, 1])
         with col_tit_cr:
             st.markdown("""
@@ -1130,27 +1135,21 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
             """, unsafe_allow_html=True)
         with col_btn_cr:
             ver_tasa_comp_rases = st.toggle("PQRS por cada 1000 usuarios atendidos", key="tasa_rases_comp")
-
         df_r_a = df_a['RASES'].dropna().value_counts().reset_index()
         df_r_a.columns = ['RASES', 'Cantidad']
         df_r_a['Periodo'] = lbl_a_short
         df_r_a['Usuarios'] = mapear_usuarios(df_r_a['RASES'], dict_rases_users_a)
-
         df_r_b = df_b['RASES'].dropna().value_counts().reset_index()
         df_r_b.columns = ['RASES', 'Cantidad']
         df_r_b['Periodo'] = lbl_b_short
         df_r_b['Usuarios'] = mapear_usuarios(df_r_b['RASES'], dict_rases_users_b)
-
         df_comp_rases = pd.concat([df_r_a, df_r_b])
-
         df_comp_rases = df_comp_rases[
-            (df_comp_rases['Cantidad'] > 0) & 
+            (df_comp_rases['Cantidad'] > 0) &
             (df_comp_rases['RASES'].astype(str).str.strip() != '') &
             (~df_comp_rases['RASES'].astype(str).str.upper().str.contains('NIVEL CENTRAL'))
         ].copy()
-
         df_comp_rases['RASES_fmt'] = df_comp_rases['RASES'].apply(acortar_texto_abreviado)
-
         if ver_tasa_comp_rases:
             df_comp_rases['Valor_Graficar'] = df_comp_rases.apply(
                 lambda r: (r['Cantidad'] / r['Usuarios'] * 1000) if r['Usuarios'] > 0 else 0, axis=1
@@ -1161,15 +1160,13 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
             df_comp_rases['Valor_Graficar'] = df_comp_rases['Cantidad']
             df_comp_rases['Texto_Barra'] = df_comp_rases['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
             hovertemplate_cr = "<b>%{x} (%{fullData.name})</b><br>Cantidad: %{y:,} PQRS<br>Usuarios Prorrateados: %{customdata[1]:,.0f}<extra></extra>"
-
         orden_rases_comp = df_comp_rases.groupby('RASES_fmt')['Valor_Graficar'].sum().sort_values(ascending=False).index.tolist()
-
         fig_comp_rases = px.bar(
-            df_comp_rases, 
-            x='RASES_fmt', 
-            y='Valor_Graficar', 
+            df_comp_rases,
+            x='RASES_fmt',
+            y='Valor_Graficar',
             text='Texto_Barra',
-            color='Periodo', 
+            color='Periodo',
             barmode='group',
             color_discrete_map=mapa_color_comp,
             custom_data=['Cantidad', 'Usuarios']
@@ -1179,16 +1176,15 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
             hovertemplate=hovertemplate_cr
         )
         fig_comp_rases.update_layout(
-            font=dict(family="Poppins, sans-serif"), 
+            font=dict(family="Poppins, sans-serif"),
             xaxis=dict(categoryorder='array', categoryarray=orden_rases_comp),
-            xaxis_title="", 
-            yaxis_title="", 
-            height=340, 
-            margin=dict(l=10, r=10, t=30, b=10), 
+            xaxis_title="",
+            yaxis_title="",
+            height=340,
+            margin=dict(l=10, r=10, t=30, b=10),
             legend=dict(orientation="h", y=1.15, x=0, title=None, font=dict(size=10))
         )
         st.plotly_chart(aplicar_touch_safe(fig_comp_rases), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
-
         col_tit_cu, col_btn_cu = st.columns([3, 1])
         with col_tit_cu:
             st.markdown("""
@@ -1199,22 +1195,17 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
             """, unsafe_allow_html=True)
         with col_btn_cu:
             ver_tasa_comp_upres = st.toggle("PQRS por cada 1000 usuarios atendidos", key="tasa_upres_comp")
-
         df_u_comp_a = df_a['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
         df_u_comp_a.columns = ['UNIDAD DE ASIGNACIÓN', 'Cantidad']
         df_u_comp_a['Periodo'] = lbl_a_short
         df_u_comp_a['Usuarios'] = mapear_usuarios(df_u_comp_a['UNIDAD DE ASIGNACIÓN'], dict_upres_users_a)
-
         df_u_comp_b = df_b['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
         df_u_comp_b.columns = ['UNIDAD DE ASIGNACIÓN', 'Cantidad']
         df_u_comp_b['Periodo'] = lbl_b_short
         df_u_comp_b['Usuarios'] = mapear_usuarios(df_u_comp_b['UNIDAD DE ASIGNACIÓN'], dict_upres_users_b)
-
         df_comp_upres_simple = pd.concat([df_u_comp_a, df_u_comp_b])
         df_comp_upres_simple = df_comp_upres_simple[(df_comp_upres_simple['Cantidad'] > 0) & (df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].astype(str).str.strip() != '')].copy()
-        
         df_comp_upres_simple['UPRES_fmt'] = df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
-
         if ver_tasa_comp_upres:
             df_comp_upres_simple['Valor_Graficar'] = df_comp_upres_simple.apply(
                 lambda r: (r['Cantidad'] / r['Usuarios'] * 1000) if r['Usuarios'] > 0 else 0, axis=1
@@ -1225,19 +1216,16 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
             df_comp_upres_simple['Valor_Graficar'] = df_comp_upres_simple['Cantidad']
             df_comp_upres_simple['Texto_Barra'] = df_comp_upres_simple['Valor_Graficar'].apply(lambda v: f"{v:,.0f}")
             hovertemplate_cu = "<b>%{x} (%{fullData.name})</b><br>Cantidad: %{y:,} PQRS<br>Usuarios Prorrateados: %{customdata[1]:,.0f}<extra></extra>"
-
         df_p_b_metrics = df_comp_upres_simple[df_comp_upres_simple['Periodo'] == lbl_b_short]
         top_10_comp_upres = df_p_b_metrics.sort_values('Valor_Graficar', ascending=False).head(10)['UNIDAD DE ASIGNACIÓN'].tolist()
-        
         df_comp_upres_simple = df_comp_upres_simple[df_comp_upres_simple['UNIDAD DE ASIGNACIÓN'].isin(top_10_comp_upres)].copy()
         orden_upres_comp = [acortar_texto_abreviado(u) for u in top_10_comp_upres]
-
         fig_comp_upres_simple = px.bar(
-            df_comp_upres_simple, 
-            x='UPRES_fmt', 
-            y='Valor_Graficar', 
+            df_comp_upres_simple,
+            x='UPRES_fmt',
+            y='Valor_Graficar',
             text='Texto_Barra',
-            color='Periodo', 
+            color='Periodo',
             barmode='group',
             color_discrete_map=mapa_color_comp,
             category_orders={'UPRES_fmt': orden_upres_comp},
@@ -1248,32 +1236,35 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
             hovertemplate=hovertemplate_cu
         )
         fig_comp_upres_simple.update_layout(
-            font=dict(family="Poppins, sans-serif"), 
-            xaxis_title="", 
-            yaxis_title="", 
-            height=360, 
-            margin=dict(l=10, r=10, t=30, b=10), 
+            font=dict(family="Poppins, sans-serif"),
+            xaxis_title="",
+            yaxis_title="",
+            height=360,
+            margin=dict(l=10, r=10, t=30, b=10),
             legend=dict(orientation="h", y=1.15, x=0, title=None, font=dict(size=10))
         )
         st.plotly_chart(aplicar_touch_safe(fig_comp_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
+        # ⭐ NUEVO: Gráfico comparativo de PQRS por Red (debajo de UPRES)
         st.markdown("---")
+        generar_grafico_red_comparativo(df_a, df_b, "Comparativo PQRS por Red", lbl_a=lbl_a_short, lbl_b=lbl_b_short)
 
+        st.markdown("---")
         generar_barras_100pct_comparativo(
-            df_a, df_b, 
-            'ESPECIALIDAD_CATEGORIA', 
+            df_a, df_b,
+            'ESPECIALIDAD_CATEGORIA',
             "Comparativo Distribución (%) por UPRES - Categoría Salud (Top 5 por UPRES)",
             lbl_a=lbl_a_short,
             lbl_b=lbl_b_short
         )
-        
         generar_barras_100pct_comparativo(
-            df_a, df_b, 
-            col_mot_esp, 
+            df_a, df_b,
+            col_mot_esp,
             "Comparativo Distribución (%) por UPRES - Motivo Específico (Top 5 por UPRES)",
             lbl_a=lbl_a_short,
             lbl_b=lbl_b_short
         )
+
 
 # -----------------------------------------------------------------------------
 # 5. AUTENTICACIÓN Y EJECUCIÓN
@@ -1291,7 +1282,6 @@ authenticator = stauth.Authenticate(
     config['cookie']['key'],
     config['cookie']['expiry_days']
 )
-
 name, authentication_status, username = authenticator.login('main')
 
 if authentication_status is False:
@@ -1299,7 +1289,6 @@ if authentication_status is False:
 elif authentication_status is None:
     st.warning("Por favor ingrese sus credenciales para acceder")
 elif authentication_status:
-
     # 1. Caché del Engine
     @st.cache_resource
     def get_db_engine():
@@ -1319,11 +1308,9 @@ elif authentication_status:
             db_host = os.getenv("DB_HOST")
             db_port = int(os.getenv("DB_PORT", "5432"))
             db_name = os.getenv("DB_NAME", "neondb")
-
             if not db_user or not db_pass or not db_host:
                 st.error("❌ Faltan las credenciales de conexión a la base de datos.")
                 st.stop()
-
             connection_url = URL.create(
                 drivername="postgresql+psycopg2",
                 username=db_user,
@@ -1332,7 +1319,6 @@ elif authentication_status:
                 port=db_port,
                 database=db_name
             )
-
         return create_engine(
             connection_url,
             connect_args={'client_encoding': 'utf8'},
@@ -1354,8 +1340,9 @@ elif authentication_status:
     @st.cache_data(ttl=600, show_spinner="Cargando datos consolidados...")
     def cargar_datos_consolidados(total_registros_bd):
         engine = get_db_engine()
+        # ⭐ MODIFICADO: Se agregó "Red" a la consulta
         query = text('''
-            SELECT 
+            SELECT
                 "fecha_dt",
                 "RASES",
                 "UNIDAD DE ASIGNACIÓN",
@@ -1363,38 +1350,34 @@ elif authentication_status:
                 "MOTIVO ESPECÍFICO",
                 "MOTIVO GENERAL",
                 "Tipo de Solicitud",
-                "Medio de Recepción"
+                "Medio de Recepción",
+                "Red"
             FROM "V_SIPQR2S_CONSOLIDADO";
         ''')
         with engine.connect() as conn:
             df = pd.read_sql(query, con=conn)
-        
         df['fecha_dt'] = pd.to_datetime(df['fecha_dt'])
         df['fecha_corta'] = df['fecha_dt'].dt.strftime('%Y-%m-%d')
-        
         cols_cat = [
-            'RASES', 
-            'UNIDAD DE ASIGNACIÓN', 
-            'ESPECIALIDAD_CATEGORIA', 
-            'MOTIVO ESPECÍFICO', 
-            'MOTIVO GENERAL', 
-            'Tipo de Solicitud', 
+            'RASES',
+            'UNIDAD DE ASIGNACIÓN',
+            'ESPECIALIDAD_CATEGORIA',
+            'MOTIVO ESPECÍFICO',
+            'MOTIVO GENERAL',
+            'Tipo de Solicitud',
             'Medio de Recepción'
         ]
         for col in cols_cat:
             if col in df.columns:
                 df[col] = df[col].astype('category')
-                
         return df
 
     # 3. Carga Ajustada de Usuarios Mensuales Atendidos desde PostgreSQL (Neon)
     @st.cache_data(ttl="1h")
     def cargar_usuarios_mensuales():
-        # Esquema esperado: UNIDAD, ANIO, MES, USUARIOS (tolera también MES_ANIO "2026-01").
         engine = get_db_engine()
         with engine.connect() as conn:
             df_u = pd.read_sql(text('SELECT * FROM "USUARIOS_ATENDIDOS_MENSUAL";'), con=conn)
-
         if 'ANIO' in df_u.columns and 'MES' in df_u.columns:
             df_u['ANIO'] = pd.to_numeric(df_u['ANIO'], errors='coerce')
             df_u['MES'] = pd.to_numeric(df_u['MES'], errors='coerce')
@@ -1404,7 +1387,6 @@ elif authentication_status:
             df_u['MES'] = fechas.dt.month
         else:
             raise ValueError("USUARIOS_ATENDIDOS_MENSUAL debe tener ANIO y MES (o MES_ANIO).")
-
         df_u['USUARIOS'] = pd.to_numeric(df_u['USUARIOS'], errors='coerce').fillna(0)
         df_u = df_u.dropna(subset=['ANIO', 'MES']).copy()
         df_u['ANIO'] = df_u['ANIO'].astype(int)
@@ -1431,7 +1413,6 @@ elif authentication_status:
         except Exception as e_m:
             st.warning(f"⚠️ No se pudo cargar la tabla UPRES_RASES: {e_m}")
             df_maestro_upres_rases = pd.DataFrame()
-
         min_global_date = df_raw['fecha_dt'].min().date() if not df_raw.empty else None
         max_global_date = df_raw['fecha_dt'].max().date() if not df_raw.empty else None
     except Exception as e:
@@ -1447,9 +1428,10 @@ elif authentication_status:
         st.session_state["sel_motivos"] = []
         st.session_state["sel_tipos"] = []
         st.session_state["sel_medios"] = []
+        st.session_state["sel_red"] = []
         guardar_preferencias({})
 
-    for clave_filtro in ["sel_rases", "sel_unidades", "sel_cat", "sel_motivos", "sel_tipos", "sel_medios"]:
+    for clave_filtro in ["sel_rases", "sel_unidades", "sel_cat", "sel_motivos", "sel_tipos", "sel_medios", "sel_red"]:
         if clave_filtro not in st.session_state:
             st.session_state[clave_filtro] = prefs.get(clave_filtro, [])
 
@@ -1457,37 +1439,35 @@ elif authentication_status:
     authenticator.logout('Cerrar Sesión', 'sidebar')
     st.sidebar.markdown("---")
     st.sidebar.markdown("<h3 style='font-size: 1.1rem;'><i class='fa-solid fa-filter' style='color:#1b5e20;'></i> Filtros Globales de Control</h3>", unsafe_allow_html=True)
-
     lista_rases = sorted([x for x in df_raw['RASES'].dropna().unique() if str(x).strip() != '' and 'NIVEL CENTRAL' not in str(x).upper()])
     sel_rases = st.sidebar.multiselect("RASES", options=lista_rases, key="sel_rases")
-
     lista_unidades = sorted([x for x in df_raw['UNIDAD DE ASIGNACIÓN'].dropna().unique() if str(x).strip() != ''])
     sel_unidades = st.sidebar.multiselect("UPRES", options=lista_unidades, key="sel_unidades")
-
     if not df_raw.empty and 'ESPECIALIDAD_CATEGORIA' in df_raw.columns:
         cat_ordenadas = [c for c in df_raw['ESPECIALIDAD_CATEGORIA'].value_counts().index if str(c).strip() != '']
     else:
         cat_ordenadas = []
-
     sel_cat = st.sidebar.multiselect("Categoría Salud", options=cat_ordenadas, placeholder="Seleccione categoría...", key="sel_cat")
-
     col_mot_esp = 'MOTIVO ESPECÍFICO' if 'MOTIVO ESPECÍFICO' in df_raw.columns else 'MOTIVO GENERAL'
     if not df_raw.empty and col_mot_esp in df_raw.columns:
         motivos_ordenados = [m for m in df_raw[col_mot_esp].value_counts().index if str(m).strip() != '']
     else:
         motivos_ordenados = []
-
     sel_motivos = st.sidebar.multiselect("Motivo Específico", options=motivos_ordenados, placeholder="Seleccione motivo...", key="sel_motivos")
-
     lista_tipos = sorted([x for x in df_raw['Tipo de Solicitud'].dropna().unique() if str(x).strip() != ''])
     sel_tipos = st.sidebar.multiselect("Tipo de Solicitud", options=lista_tipos, key="sel_tipos")
-
     lista_medios = sorted([x for x in df_raw['Medio de Recepción'].dropna().unique() if str(x).strip() != ''])
     sel_medios = st.sidebar.multiselect("Medio de Recepción", options=lista_medios, key="sel_medios")
 
+    # ⭐ NUEVO: Filtro de Red en sidebar
+    if not df_raw.empty and 'Red' in df_raw.columns:
+        opciones_red = ['Red Propia', 'Red Externa', 'Sin asignar']
+        sel_red = st.sidebar.multiselect("Red", options=opciones_red, key="sel_red")
+    else:
+        sel_red = []
+
     st.sidebar.markdown("---")
     col_btn1, col_btn2 = st.sidebar.columns(2)
-
     with col_btn1:
         if st.button("💾 Guardar", use_container_width=True, help="Guarda la configuración actual de filtros"):
             data_to_save = {
@@ -1496,21 +1476,20 @@ elif authentication_status:
                 "sel_cat": st.session_state.get("sel_cat", []),
                 "sel_motivos": st.session_state.get("sel_motivos", []),
                 "sel_tipos": st.session_state.get("sel_tipos", []),
-                "sel_medios": st.session_state.get("sel_medios", [])
+                "sel_medios": st.session_state.get("sel_medios", []),
+                "sel_red": st.session_state.get("sel_red", [])
             }
             if guardar_preferencias(data_to_save):
                 st.sidebar.success("¡Filtros guardados!")
             else:
                 st.sidebar.error("Error al guardar.")
-
     with col_btn2:
         st.button(
-            "🔄 Restablecer", 
-            use_container_width=True, 
+            "🔄 Restablecer",
+            use_container_width=True,
             help="Limpia todos los filtros",
             on_click=restablecer_filtros_callback
         )
-
     # Botón de refresco manual de caché
     st.sidebar.markdown("---")
     if st.sidebar.button("🔄 Refrescar Datos de BD", use_container_width=True, help="Fuerza la recarga limpia de datos desde PostgreSQL"):
@@ -1531,16 +1510,20 @@ elif authentication_status:
     if sel_medios:
         df_base_global = df_base_global[df_base_global['Medio de Recepción'].isin(sel_medios)]
 
+    # ⭐ NUEVO: Aplicar filtro de Red
+    if sel_red and 'Red' in df_base_global.columns:
+        df_base_global['Red_Normalizada'] = df_base_global['Red'].apply(normalizar_red)
+        df_base_global = df_base_global[df_base_global['Red_Normalizada'].isin(sel_red)]
+        df_base_global = df_base_global.drop(columns=['Red_Normalizada'])
+
     st.markdown("""
         <h1 style='display: flex; align-items: center; gap: 12px; margin-bottom: 0px;'>
             <i class="fa-solid fa-shield-halved" style="color: #1b5e20;"></i>
             SIPQR2S Sanidad
         </h1>
     """, unsafe_allow_html=True)
-    
     if "active_tab" not in st.session_state:
         st.session_state["active_tab"] = "📊 Análisis Individual"
-
     tab_seleccionada = st.radio(
         "Navegación",
         options=["📊 Análisis Individual", "🔄 Comparativo"],
@@ -1548,12 +1531,20 @@ elif authentication_status:
         horizontal=True,
         key="tab_selector"
     )
-    
     st.session_state["active_tab"] = tab_seleccionada
-
     st.markdown("---")
-
     if tab_seleccionada == "📊 Análisis Individual":
         render_tab_individual(df_base_global, col_mot_esp, min_global_date, max_global_date, df_users_mensual, df_maestro_upres_rases)
     elif tab_seleccionada == "🔄 Comparativo":
         render_tab_comparativo(df_base_global, col_mot_esp, min_global_date, max_global_date, df_users_mensual, df_maestro_upres_rases)
+
+    # ⭐ NUEVO: Footer con información de la base de datos
+    st.markdown("---")
+    st.markdown(f"""
+        <div class="db-provider-footer">
+            <i class="fa-solid fa-database"></i>
+            Base de datos activa: <strong>{DB_PROVIDER}</strong> |
+            <i class="fa-solid fa-server"></i>
+            Proyecto: Dashboard_SIPQR2S - Producción
+        </div>
+    """, unsafe_allow_html=True)
