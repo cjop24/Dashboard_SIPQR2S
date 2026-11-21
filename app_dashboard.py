@@ -28,7 +28,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ⭐ NUEVO: Variable para identificar el proveedor de BD
+# ⭐ Variable para identificar el proveedor de BD
 DB_PROVIDER = os.getenv("DB_PROVIDER", "NEON").upper()
 
 # Inyección CSS: Font Awesome y Google Fonts (Poppins)
@@ -118,6 +118,8 @@ COLOR_PERIODO_B = '#c62828'
 COLOR_RED_PROPIA = '#1b5e20'
 COLOR_RED_EXTERNA = '#c62828'
 COLOR_RED_SIN_ASIGNAR = '#9e9e9e'
+# ⭐ Orden visible en los gráficos de Red (solo Propia y Externa)
+ORDEN_RED_VISIBLE = ['Red Propia', 'Red Externa']
 CONFIG_PLOTLY_TOUCH = {
     'displayModeBar': False,
     'scrollZoom': False,
@@ -278,9 +280,10 @@ def acortar_texto_abreviado(texto):
     return " ".join(words_clean)
 
 
-# ⭐ NUEVA FUNCIÓN: Normalizar valor de Red para visualización
+# ⭐ Normalizar valor de Red para visualización consistente.
 def normalizar_red(valor):
-    """Normaliza los valores de la columna Red para visualización consistente."""
+    """Normaliza los valores de la columna Red.
+    Retorna 'Red Propia', 'Red Externa' o 'Sin asignar' (para vacíos)."""
     if pd.isna(valor) or not valor or str(valor).strip() == '':
         return "Sin asignar"
     s = str(valor).strip().upper()
@@ -643,7 +646,7 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
     st.plotly_chart(aplicar_touch_safe(fig), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 
-# ⭐ NUEVA FUNCIÓN: Gráfico de PQRS por Red (Individual)
+# ⭐ Gráfico de PQRS por Red (Individual) — SOLO Red Propia y Red Externa
 def generar_grafico_red_individual(df_base, titulo_grafico="PQRS por Red"):
     st.markdown(f"""
         <h3 style='display: flex; align-items: center; gap: 8px;'>
@@ -658,17 +661,27 @@ def generar_grafico_red_individual(df_base, titulo_grafico="PQRS por Red"):
 
     df_red = df_base.copy()
     df_red['Red_Normalizada'] = df_red['Red'].apply(normalizar_red)
+    # ⭐ Excluir 'Sin asignar'
+    df_red = df_red[df_red['Red_Normalizada'].isin(ORDEN_RED_VISIBLE)]
+
     df_red_count = df_red['Red_Normalizada'].value_counts().reset_index()
     df_red_count.columns = ['Red', 'Cantidad']
 
-    orden_red = ['Red Propia', 'Red Externa', 'Sin asignar']
-    df_red_count['Orden'] = df_red_count['Red'].apply(lambda x: orden_red.index(x) if x in orden_red else 99)
+    # ⭐ Garantizar que ambas categorías existan (con 0 si no hay datos)
+    for cat in ORDEN_RED_VISIBLE:
+        if cat not in df_red_count['Red'].values:
+            df_red_count = pd.concat([df_red_count, pd.DataFrame({'Red': [cat], 'Cantidad': [0]})], ignore_index=True)
+
+    df_red_count['Orden'] = df_red_count['Red'].apply(lambda x: ORDEN_RED_VISIBLE.index(x))
     df_red_count = df_red_count.sort_values('Orden')
+
+    if df_red_count['Cantidad'].sum() == 0:
+        st.info("No hay tickets con Red Propia o Red Externa en el periodo seleccionado.")
+        return
 
     color_map_red = {
         'Red Propia': COLOR_RED_PROPIA,
-        'Red Externa': COLOR_RED_EXTERNA,
-        'Sin asignar': COLOR_RED_SIN_ASIGNAR
+        'Red Externa': COLOR_RED_EXTERNA
     }
 
     fig_red = px.bar(
@@ -679,7 +692,7 @@ def generar_grafico_red_individual(df_base, titulo_grafico="PQRS por Red"):
         color='Red',
         color_discrete_map=color_map_red,
         labels={'Cantidad': 'PQRS Recepcionadas', 'Red': ''},
-        category_orders={'Red': orden_red}
+        category_orders={'Red': ORDEN_RED_VISIBLE}
     )
     fig_red.update_traces(
         textposition='outside',
@@ -693,12 +706,12 @@ def generar_grafico_red_individual(df_base, titulo_grafico="PQRS por Red"):
         height=340,
         margin=dict(l=5, r=5, t=20, b=10),
         showlegend=False,
-        xaxis=dict(categoryorder='array', categoryarray=orden_red)
+        xaxis=dict(categoryorder='array', categoryarray=ORDEN_RED_VISIBLE)
     )
     st.plotly_chart(aplicar_touch_safe(fig_red), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 
-# ⭐ NUEVA FUNCIÓN: Gráfico de PQRS por Red (Comparativo)
+# ⭐ Gráfico de PQRS por Red (Comparativo) — SOLO Red Propia y Red Externa
 def generar_grafico_red_comparativo(df_a, df_b, titulo_grafico="Comparativo PQRS por Red", lbl_a="Periodo A", lbl_b="Periodo B"):
     st.markdown(f"""
         <h3 style='display: flex; align-items: center; gap: 8px;'>
@@ -712,22 +725,29 @@ def generar_grafico_red_comparativo(df_a, df_b, titulo_grafico="Comparativo PQRS
         return
 
     def procesar_red(df_in, lbl):
+        # ⭐ CORREGIDO: DataFrame vacío con columnas esperadas para evitar error de concat
         if df_in.empty or 'Red' not in df_in.columns:
-            return pd.DataFrame()
+            return pd.DataFrame(columns=['Red_Normalizada', 'Periodo', 'Cantidad'])
         df_temp = df_in.copy()
         df_temp['Red_Normalizada'] = df_temp['Red'].apply(normalizar_red)
+        # ⭐ Excluir 'Sin asignar'
+        df_temp = df_temp[df_temp['Red_Normalizada'].isin(ORDEN_RED_VISIBLE)]
         df_temp['Periodo'] = lbl
-        return df_temp.groupby('Red_Normalizada', observed=True).size().reset_index(name='Cantidad')
+        # ⭐ CORREGIDO: groupby por AMBAS columnas para conservar 'Periodo'
+        return df_temp.groupby(['Red_Normalizada', 'Periodo'], observed=True).size().reset_index(name='Cantidad')
 
     df_red_a = procesar_red(df_a, lbl_a)
     df_red_b = procesar_red(df_b, lbl_b)
     df_red_comp = pd.concat([df_red_a, df_red_b], ignore_index=True)
 
-    if df_red_comp.empty:
-        st.info("No hay datos suficientes en los rangos seleccionados.")
+    if df_red_comp.empty or df_red_comp['Cantidad'].sum() == 0:
+        st.info("No hay tickets con Red Propia o Red Externa en los periodos seleccionados.")
         return
 
-    orden_red = ['Red Propia', 'Red Externa', 'Sin asignar']
+    # ⭐ Garantizar estructura completa (todas las combinaciones categoría x periodo)
+    full_index = pd.MultiIndex.from_product([ORDEN_RED_VISIBLE, [lbl_a, lbl_b]], names=['Red_Normalizada', 'Periodo'])
+    df_red_comp = df_red_comp.set_index(['Red_Normalizada', 'Periodo']).reindex(full_index, fill_value=0).reset_index()
+
     color_map_red_comp = {
         lbl_a: COLOR_PERIODO_A,
         lbl_b: COLOR_PERIODO_B
@@ -742,7 +762,7 @@ def generar_grafico_red_comparativo(df_a, df_b, titulo_grafico="Comparativo PQRS
         barmode='group',
         color_discrete_map=color_map_red_comp,
         labels={'Cantidad': 'PQRS Recepcionadas', 'Red_Normalizada': ''},
-        category_orders={'Red_Normalizada': orden_red}
+        category_orders={'Red_Normalizada': ORDEN_RED_VISIBLE}
     )
     fig_red_comp.update_traces(
         textposition='outside',
@@ -756,7 +776,7 @@ def generar_grafico_red_comparativo(df_a, df_b, titulo_grafico="Comparativo PQRS
         height=340,
         margin=dict(l=10, r=10, t=30, b=10),
         legend=dict(orientation="h", y=1.15, x=0, title=None, font=dict(size=10)),
-        xaxis=dict(categoryorder='array', categoryarray=orden_red)
+        xaxis=dict(categoryorder='array', categoryarray=ORDEN_RED_VISIBLE)
     )
     st.plotly_chart(aplicar_touch_safe(fig_red_comp), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
@@ -1053,7 +1073,7 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
     )
     st.plotly_chart(aplicar_touch_safe(fig_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    # ⭐ NUEVO: Gráfico de PQRS por Red (debajo de UPRES)
+    # ⭐ Gráfico de PQRS por Red (debajo de UPRES)
     st.markdown("---")
     generar_grafico_red_individual(df_base, "Distribución de PQRS por Red")
 
@@ -1245,7 +1265,7 @@ def render_tab_comparativo(df_base_global, col_mot_esp, min_hist, max_hist, df_u
         )
         st.plotly_chart(aplicar_touch_safe(fig_comp_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-        # ⭐ NUEVO: Gráfico comparativo de PQRS por Red (debajo de UPRES)
+        # ⭐ Gráfico comparativo de PQRS por Red (debajo de UPRES)
         st.markdown("---")
         generar_grafico_red_comparativo(df_a, df_b, "Comparativo PQRS por Red", lbl_a=lbl_a_short, lbl_b=lbl_b_short)
 
@@ -1340,7 +1360,6 @@ elif authentication_status:
     @st.cache_data(ttl=600, show_spinner="Cargando datos consolidados...")
     def cargar_datos_consolidados(total_registros_bd):
         engine = get_db_engine()
-        # ⭐ MODIFICADO: Se agregó "Red" a la consulta
         query = text('''
             SELECT
                 "fecha_dt",
@@ -1459,9 +1478,9 @@ elif authentication_status:
     lista_medios = sorted([x for x in df_raw['Medio de Recepción'].dropna().unique() if str(x).strip() != ''])
     sel_medios = st.sidebar.multiselect("Medio de Recepción", options=lista_medios, key="sel_medios")
 
-    # ⭐ NUEVO: Filtro de Red en sidebar
+    # ⭐ Filtro de Red en sidebar (solo Propia y Externa)
     if not df_raw.empty and 'Red' in df_raw.columns:
-        opciones_red = ['Red Propia', 'Red Externa', 'Sin asignar']
+        opciones_red = ORDEN_RED_VISIBLE
         sel_red = st.sidebar.multiselect("Red", options=opciones_red, key="sel_red")
     else:
         sel_red = []
@@ -1510,7 +1529,7 @@ elif authentication_status:
     if sel_medios:
         df_base_global = df_base_global[df_base_global['Medio de Recepción'].isin(sel_medios)]
 
-    # ⭐ NUEVO: Aplicar filtro de Red
+    # ⭐ Aplicar filtro de Red
     if sel_red and 'Red' in df_base_global.columns:
         df_base_global['Red_Normalizada'] = df_base_global['Red'].apply(normalizar_red)
         df_base_global = df_base_global[df_base_global['Red_Normalizada'].isin(sel_red)]
@@ -1538,7 +1557,7 @@ elif authentication_status:
     elif tab_seleccionada == "🔄 Comparativo":
         render_tab_comparativo(df_base_global, col_mot_esp, min_global_date, max_global_date, df_users_mensual, df_maestro_upres_rases)
 
-    # ⭐ NUEVO: Footer con información de la base de datos
+    # ⭐ Footer con información de la base de datos
     st.markdown("---")
     st.markdown(f"""
         <div class="db-provider-footer">
