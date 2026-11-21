@@ -21,7 +21,7 @@ DB_USER = os.getenv("DB_USER")
 DB_PASS = os.getenv("DB_PASS")
 DB_HOST = os.getenv("DB_HOST")
 DB_PORT = os.getenv("DB_PORT", "6543")
-DB_NAME = os.getenv("DB_NAME", "neondb")  # ⭐ CAMBIADO de "postgres" a "neondb"
+DB_NAME = os.getenv("DB_NAME", "neondb")
 
 if not DB_USER or not DB_PASS or not DB_HOST:
     raise ValueError("❌ Error: Faltan credenciales de base de datos en el archivo .env")
@@ -96,6 +96,18 @@ def normalizar_texto_cruce(texto):
     return re.sub(r'\s+', ' ', s).strip()
 
 
+def normalizar_red(valor):
+    """Normaliza el valor de Red: Red Propia / Red Externa / vacío."""
+    if pd.isna(valor) or not str(valor).strip():
+        return ""
+    s = str(valor).strip().upper()
+    if "PROPIA" in s:
+        return "Red Propia"
+    elif "EXTERNA" in s:
+        return "Red Externa"
+    return ""
+
+
 def aplicar_formulas_excel_estrictas(cadena):
     if pd.isna(cadena) or not str(cadena).strip():
         return ["", "", "", "", "", ""]
@@ -115,6 +127,51 @@ def aplicar_formulas_excel_estrictas(cadena):
     else:
         subtipo = tipo
     return [codigo, macro, general, especifico, tipo, subtipo]
+
+
+def actualizar_red_en_existentes(df_raw):
+    """⭐ NUEVO: Actualiza la columna 'Red' en los tickets que YA existen en la BD."""
+    if "Red" not in df_raw.columns or "Consecutivo Ticket" not in df_raw.columns:
+        return 0
+    df_aux = df_raw.copy()
+    df_aux["Consecutivo Ticket"] = df_aux["Consecutivo Ticket"].astype(str).str.strip()
+    df_aux["Red"] = df_aux["Red"].apply(normalizar_red)
+    df_aux = df_aux[df_aux["Red"] != ""].drop_duplicates(subset=["Consecutivo Ticket"])
+    if df_aux.empty:
+        return 0
+
+    conn = obtener_conexion_psycopg2()
+    cursor = conn.cursor()
+    try:
+        valores = [tuple(x) for x in df_aux[["Consecutivo Ticket", "Red"]].to_numpy()]
+        update_sql = '''
+            UPDATE "TICKETS_SIPQR2S" AS t
+            SET "Red" = v."Red"
+            FROM (VALUES %s) AS v("Consecutivo Ticket", "Red")
+            WHERE t."Consecutivo Ticket" = v."Consecutivo Ticket"
+              AND (t."Red" IS NULL OR t."Red" = '' OR t."Red" <> v."Red");
+        '''
+        execute_values(cursor, update_sql, valores, page_size=5000)
+        n = cursor.rowcount
+        # Propagar a complementos
+        cursor.execute('''
+            UPDATE "COMPLEMENTOS_TICKETS_SIPQR2S" AS c
+            SET "Red" = t."Red"
+            FROM "TICKETS_SIPQR2S" AS t
+            WHERE c."Consecutivo Ticket" = t."Consecutivo Ticket"
+              AND t."Red" IS NOT NULL AND t."Red" <> ''
+              AND (c."Red" IS NULL OR c."Red" = '' OR c."Red" <> t."Red");
+        ''')
+        conn.commit()
+        print(f"  🔄 'Red' actualizado en {n} registros preexistentes.")
+        return n
+    except Exception as e:
+        conn.rollback()
+        print(f"  ⚠️ No se pudo actualizar 'Red' en existentes: {e}")
+        return 0
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def cargar_tickets_y_complementos():
@@ -140,6 +197,9 @@ def cargar_tickets_y_complementos():
     df_raw.columns = [str(col).strip() for col in df_raw.columns]
     df_raw = df_raw.drop_duplicates(subset=["Consecutivo Ticket"]).copy()
     df_raw = sanitizar_dataframe(df_raw)
+
+    # ⭐ NUEVO: Primero actualizar 'Red' en los que ya existen (independiente del INSERT)
+    actualizar_red_en_existentes(df_raw)
 
     try:
         conn_check = obtener_conexion_psycopg2()
@@ -168,7 +228,7 @@ def cargar_tickets_y_complementos():
         "Clasificación Completa", "Fecha de Recepción", "Fecha de Creación",
         "Aspecto de Interes", "Unidad de Procedencia", "Medio de Recepción",
         "Sigla Fisica", "Sigla Comprometida", "Unidad", "Lugar Asignación",
-        "Lugar", "Estado", "Descripción Hechos", "Red"  # ⭐ NUEVO
+        "Lugar", "Estado", "Descripción Hechos", "Red"
     ]
 
     df_tickets = df_nuevos[[c for c in cols_tickets_exactas if c in df_nuevos.columns]].copy()
@@ -223,14 +283,14 @@ def cargar_tickets_y_complementos():
 
     # ⭐ NUEVO: Agregar columna "Red" al DataFrame de complementos
     if "Red" in df_nuevos.columns:
-        df_comp["Red"] = df_nuevos["Red"].fillna("").astype(str).str.strip()
+        df_comp["Red"] = df_nuevos["Red"].apply(normalizar_red)
     else:
         df_comp["Red"] = ""
 
     cols_comp_exactas = [
         "Consecutivo Ticket", "CODIGO CLASIFICACIÓN", "MACROMOTIVO", "MOTIVO GENERAL",
         "MOTIVO ESPECÍFICO", "TIPO DE MOTIVO ESPECÍFICO", "SUBTIPO DE MOTIVO ESPECÍFICO",
-        "RASES", "FECHA CREACIÓN", "UNIDAD DE ASIGNACIÓN", "CATEGORÍA_SALUD", "Red"  # ⭐ NUEVO
+        "RASES", "FECHA CREACIÓN", "UNIDAD DE ASIGNACIÓN", "CATEGORÍA_SALUD", "Red"
     ]
     df_comp_final = sanitizar_dataframe(df_comp[cols_comp_exactas])
     print("  📥 Insertando registros en 'COMPLEMENTOS_TICKETS_SIPQR2S'...")
