@@ -21,7 +21,7 @@ DB_USER = os.getenv("DB_USER")
 DB_PASS = os.getenv("DB_PASS")
 DB_HOST = os.getenv("DB_HOST")
 DB_PORT = os.getenv("DB_PORT", "6543")
-DB_NAME = os.getenv("DB_NAME", "postgres")
+DB_NAME = os.getenv("DB_NAME", "neondb")  # ⭐ CAMBIADO de "postgres" a "neondb"
 
 if not DB_USER or not DB_PASS or not DB_HOST:
     raise ValueError("❌ Error: Faltan credenciales de base de datos en el archivo .env")
@@ -168,7 +168,7 @@ def cargar_tickets_y_complementos():
         "Clasificación Completa", "Fecha de Recepción", "Fecha de Creación",
         "Aspecto de Interes", "Unidad de Procedencia", "Medio de Recepción",
         "Sigla Fisica", "Sigla Comprometida", "Unidad", "Lugar Asignación",
-        "Lugar", "Estado", "Descripción Hechos", "Red"
+        "Lugar", "Estado", "Descripción Hechos", "Red"  # ⭐ NUEVO
     ]
 
     df_tickets = df_nuevos[[c for c in cols_tickets_exactas if c in df_nuevos.columns]].copy()
@@ -230,7 +230,7 @@ def cargar_tickets_y_complementos():
     cols_comp_exactas = [
         "Consecutivo Ticket", "CODIGO CLASIFICACIÓN", "MACROMOTIVO", "MOTIVO GENERAL",
         "MOTIVO ESPECÍFICO", "TIPO DE MOTIVO ESPECÍFICO", "SUBTIPO DE MOTIVO ESPECÍFICO",
-        "RASES", "FECHA CREACIÓN", "UNIDAD DE ASIGNACIÓN", "CATEGORÍA_SALUD", "Red"
+        "RASES", "FECHA CREACIÓN", "UNIDAD DE ASIGNACIÓN", "CATEGORÍA_SALUD", "Red"  # ⭐ NUEVO
     ]
     df_comp_final = sanitizar_dataframe(df_comp[cols_comp_exactas])
     print("  📥 Insertando registros en 'COMPLEMENTOS_TICKETS_SIPQR2S'...")

@@ -12,8 +12,8 @@ load_dotenv()
 DB_USER = os.getenv("DB_USER")
 DB_PASS = os.getenv("DB_PASS")
 DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "postgres")
+DB_PORT = os.getenv("DB_PORT", "6543")  # ⭐ CAMBIADO de "5432" a "6543"
+DB_NAME = os.getenv("DB_NAME", "neondb")  # ⭐ CAMBIADO de "postgres" a "neondb"
 
 
 def obtener_conexion_psycopg2():
@@ -73,6 +73,7 @@ def ejecutar_recalculo_completo():
     # Desactivar timeout a nivel de sesión antes de leer
     cursor.execute("SET statement_timeout = 0;")
 
+    # ⭐ MODIFICADO: Se agregó "Red" a la consulta
     sql_tickets = """
         SELECT 
             "Consecutivo Ticket", 
@@ -152,7 +153,7 @@ def ejecutar_recalculo_completo():
     cols_comp_exactas = [
         "Consecutivo Ticket", "CODIGO CLASIFICACIÓN", "MACROMOTIVO", "MOTIVO GENERAL",
         "MOTIVO ESPECÍFICO", "TIPO DE MOTIVO ESPECÍFICO", "SUBTIPO DE MOTIVO ESPECÍFICO",
-        "RASES", "FECHA CREACIÓN", "UNIDAD DE ASIGNACIÓN", "CATEGORÍA_SALUD", "Red"
+        "RASES", "FECHA CREACIÓN", "UNIDAD DE ASIGNACIÓN", "CATEGORÍA_SALUD", "Red"  # ⭐ NUEVO
     ]
     df_comp_final = df_comp[cols_comp_exactas].fillna("")
 
