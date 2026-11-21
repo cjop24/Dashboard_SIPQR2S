@@ -726,7 +726,9 @@ def _generar_grafico_red_global(df_base):
 
 
 def _generar_grafico_upres_por_red(df_base):
-    """Vista por UPRES: top 10 UPRES con barras agrupadas de Red Propia y Red Externa."""
+    """Vista por UPRES: top 10 UPRES con barras agrupadas de Red Propia y Red Externa.
+    Solo muestra UPRES que tienen al menos un ticket con Red Propia o Red Externa."""
+    
     # Filtrar solo registros con Red Propia o Red Externa
     df_filtrado = df_base.copy()
     df_filtrado['Red_Normalizada'] = df_filtrado['Red'].apply(normalizar_red)
@@ -738,11 +740,13 @@ def _generar_grafico_upres_por_red(df_base):
         st.info("No hay datos de Red Propia/Externa por UPRES en el periodo seleccionado.")
         return
 
-    # Top 10 UPRES por volumen total (Red Propia + Red Externa)
+    # ⭐ CORRECCIÓN: Top 10 UPRES que TIENEN datos de Red (no todas las UPRES)
     top_10_upres = df_filtrado['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index.tolist()
+    
+    # Filtrar solo esas UPRES
     df_top = df_filtrado[df_filtrado['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
 
-    # ⭐ CORRECCIÓN: Convertir columnas a string nativo (no Arrow) antes de agrupar
+    # Convertir columnas a string nativo (no Arrow) antes de agrupar
     df_top['UNIDAD_DE_ASIGNACION_STR'] = df_top['UNIDAD DE ASIGNACIÓN'].astype(str)
     df_top['RED_NORM_STR'] = df_top['Red_Normalizada'].astype(str)
 
@@ -750,7 +754,6 @@ def _generar_grafico_upres_por_red(df_base):
     df_agg = df_top.groupby(['UNIDAD_DE_ASIGNACION_STR', 'RED_NORM_STR'], observed=True).size().reset_index(name='Cantidad')
     df_agg.columns = ['UNIDAD_DE_ASIGNACION_STR', 'RED_NORM_STR', 'Cantidad']
 
-    # ⭐ CORRECCIÓN: Hacer el reindex SOLO sobre la columna Cantidad (numérica)
     # Construir el DataFrame completo con todas las combinaciones UPRES x Red
     full_combinations = pd.DataFrame(
         [(upres, red) for upres in top_10_upres for red in ORDEN_RED_VISIBLE],
