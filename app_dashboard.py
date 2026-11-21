@@ -644,7 +644,7 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
 
 
 # ⭐ Gráfico de PQRS por Red (Individual) — con toggle para ver por UPRES
-def generar_grafico_red_individual(df_base, titulo_grafico="PQRS por Red"):
+def generar_grafico_red_individual(df_base, titulo_grafico="PQRS por Red", upres_top10=None):
     st.markdown(f"""
         <h3 style='display: flex; align-items: center; gap: 8px;'>
             <i class="fa-solid fa-network-wired" style="color: #1b5e20;"></i>
@@ -656,18 +656,18 @@ def generar_grafico_red_individual(df_base, titulo_grafico="PQRS por Red"):
         st.info("No hay datos de Red disponibles.")
         return
 
-    # ⭐ NUEVO: Toggle para alternar entre vista global y vista por UPRES
+    # Toggle para alternar entre vista global y vista por UPRES
     col_tit_red, col_btn_red = st.columns([3, 1])
     with col_tit_red:
-        st.markdown("")  # Espacio vacío para alinear con el botón
+        st.markdown("")
     with col_btn_red:
         ver_por_upres = st.toggle("Ver por UPRES", key="toggle_red_upres")
 
     if ver_por_upres:
-        # ⭐ Vista por UPRES: top 10 UPRES con barras de Red Propia y Red Externa
-        _generar_grafico_upres_por_red(df_base)
+        # Vista por UPRES: usar las mismas UPRES del gráfico superior
+        _generar_grafico_upres_por_red(df_base, upres_top10)
     else:
-        # ⭐ Vista global: barras de Red Propia y Red Externa (totales)
+        # Vista global: barras de Red Propia y Red Externa (totales)
         _generar_grafico_red_global(df_base)
 
 
@@ -725,9 +725,8 @@ def _generar_grafico_red_global(df_base):
     st.plotly_chart(aplicar_touch_safe(fig_red), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 
-def _generar_grafico_upres_por_red(df_base):
-    """Vista por UPRES: top 10 UPRES con barras agrupadas de Red Propia y Red Externa.
-    Solo muestra UPRES que tienen al menos un ticket con Red Propia o Red Externa."""
+def _generar_grafico_upres_por_red(df_base, upres_top10=None):
+    """Vista por UPRES: mostrar Red Propia y Red Externa para las UPRES especificadas."""
     
     # Filtrar solo registros con Red Propia o Red Externa
     df_filtrado = df_base.copy()
@@ -740,11 +739,17 @@ def _generar_grafico_upres_por_red(df_base):
         st.info("No hay datos de Red Propia/Externa por UPRES en el periodo seleccionado.")
         return
 
-    # ⭐ CORRECCIÓN: Top 10 UPRES que TIENEN datos de Red (no todas las UPRES)
-    top_10_upres = df_filtrado['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index.tolist()
+    # ⭐ USAR las UPRES del gráfico superior si se proporcionan
+    if upres_top10 is None or len(upres_top10) == 0:
+        # Si no se proporcionan, calcular el top 10 de UPRES con datos de Red
+        upres_top10 = df_filtrado['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index.tolist()
     
     # Filtrar solo esas UPRES
-    df_top = df_filtrado[df_filtrado['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
+    df_top = df_filtrado[df_filtrado['UNIDAD DE ASIGNACIÓN'].isin(upres_top10)].copy()
+
+    if df_top.empty:
+        st.info("No hay datos de Red para las UPRES seleccionadas.")
+        return
 
     # Convertir columnas a string nativo (no Arrow) antes de agrupar
     df_top['UNIDAD_DE_ASIGNACION_STR'] = df_top['UNIDAD DE ASIGNACIÓN'].astype(str)
@@ -756,7 +761,7 @@ def _generar_grafico_upres_por_red(df_base):
 
     # Construir el DataFrame completo con todas las combinaciones UPRES x Red
     full_combinations = pd.DataFrame(
-        [(upres, red) for upres in top_10_upres for red in ORDEN_RED_VISIBLE],
+        [(upres, red) for upres in upres_top10 for red in ORDEN_RED_VISIBLE],
         columns=['UNIDAD_DE_ASIGNACION_STR', 'RED_NORM_STR']
     )
 
@@ -771,10 +776,8 @@ def _generar_grafico_upres_por_red(df_base):
     # Agregar columna formateada para visualización
     df_agg_full['UPRES_fmt'] = df_agg_full['UNIDAD_DE_ASIGNACION_STR'].apply(acortar_texto_abreviado)
 
-    # Ordenar UPRES por total descendente
-    totales_upres = df_agg_full.groupby('UNIDAD_DE_ASIGNACION_STR')['Cantidad'].sum().sort_values(ascending=False)
-    upres_ordenadas = totales_upres.index.tolist()
-    upres_fmt_ordenadas = [acortar_texto_abreviado(u) for u in upres_ordenadas]
+    # ⭐ MANTENER el orden de las UPRES del gráfico superior
+    upres_fmt_ordenadas = [acortar_texto_abreviado(u) for u in upres_top10]
 
     color_map_upres_red = {
         'Red Propia': COLOR_RED_PROPIA,
@@ -1168,9 +1171,16 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
     )
     st.plotly_chart(aplicar_touch_safe(fig_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    # ⭐ Gráfico de PQRS por Red (debajo de UPRES) — con toggle
+    # ⭐ Calcular las UPRES del gráfico superior (top 10 por volumen total)
+    df_u1_raw_temp = df_base['UNIDAD DE ASIGNACIÓN'].dropna().value_counts().reset_index()
+    df_u1_raw_temp.columns = ['UPRES', 'Cantidad']
+    df_u1_temp = df_u1_raw_temp[(df_u1_raw_temp['Cantidad'] > 0) & (df_u1_raw_temp['UPRES'].astype(str).str.strip() != '')].copy()
+    df_u1_temp = df_u1_temp.sort_values(by='Cantidad', ascending=False).head(10)
+    upres_top10_list = df_u1_temp['UPRES'].tolist()
+
+    # ⭐ Gráfico de PQRS por Red (debajo de UPRES) — con toggle y UPRES del gráfico superior
     st.markdown("---")
-    generar_grafico_red_individual(df_base, "Distribución de PQRS por Red")
+    generar_grafico_red_individual(df_base, "Distribución de PQRS por Red", upres_top10=upres_top10_list)
 
     generar_grafico_upres_apilado(df_base, 'ESPECIALIDAD_CATEGORIA', "Distribución por UPRES - Categoría Salud (Top 5)")
     generar_grafico_upres_apilado(df_base, col_mot_esp, "Distribución por UPRES - Motivo Específico (Top 5)")
