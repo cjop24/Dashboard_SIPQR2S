@@ -118,7 +118,6 @@ COLOR_PERIODO_B = '#c62828'
 COLOR_RED_PROPIA = '#1b5e20'
 COLOR_RED_EXTERNA = '#c62828'
 COLOR_RED_SIN_ASIGNAR = '#9e9e9e'
-# ⭐ Orden visible en los gráficos de Red (solo Propia y Externa)
 ORDEN_RED_VISIBLE = ['Red Propia', 'Red Externa']
 CONFIG_PLOTLY_TOUCH = {
     'displayModeBar': False,
@@ -155,7 +154,7 @@ MAPEO_UPRES_CODIGO_DANE = {
     'NARIÑO': '52', 'DENAR': '52',
     'NORTE DE SANTANDER': '54', 'DENOR': '54',
     'QUINDIO': '63', 'QUINDÍO': '63', 'DEQUI': '63',
-    'RISARALDA': '66', 'DERIS': '66',
+    'RISARALda': '66', 'DERIS': '66',
     'SANTANDER': '68', 'DESAN': '68',
     'SUCRE': '70', 'DESUC': '70',
     'TOLIMA': '73', 'DETOL': '73',
@@ -280,10 +279,8 @@ def acortar_texto_abreviado(texto):
     return " ".join(words_clean)
 
 
-# ⭐ Normalizar valor de Red para visualización consistente.
 def normalizar_red(valor):
-    """Normaliza los valores de la columna Red.
-    Retorna 'Red Propia', 'Red Externa' o 'Sin asignar' (para vacíos)."""
+    """Normaliza los valores de la columna Red para visualización consistente."""
     if pd.isna(valor) or not valor or str(valor).strip() == '':
         return "Sin asignar"
     s = str(valor).strip().upper()
@@ -646,7 +643,7 @@ def generar_barras_100pct_comparativo(df_a, df_b, col_target, titulo_grafico, lb
     st.plotly_chart(aplicar_touch_safe(fig), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 
-# ⭐ Gráfico de PQRS por Red (Individual) — SOLO Red Propia y Red Externa
+# ⭐ Gráfico de PQRS por Red (Individual) — con toggle para ver por UPRES
 def generar_grafico_red_individual(df_base, titulo_grafico="PQRS por Red"):
     st.markdown(f"""
         <h3 style='display: flex; align-items: center; gap: 8px;'>
@@ -659,15 +656,32 @@ def generar_grafico_red_individual(df_base, titulo_grafico="PQRS por Red"):
         st.info("No hay datos de Red disponibles.")
         return
 
+    # ⭐ NUEVO: Toggle para alternar entre vista global y vista por UPRES
+    col_tit_red, col_btn_red = st.columns([3, 1])
+    with col_tit_red:
+        st.markdown("")  # Espacio vacío para alinear con el botón
+    with col_btn_red:
+        ver_por_upres = st.toggle("Ver por UPRES", key="toggle_red_upres")
+
+    if ver_por_upres:
+        # ⭐ Vista por UPRES: top 10 UPRES con barras de Red Propia y Red Externa
+        _generar_grafico_upres_por_red(df_base)
+    else:
+        # ⭐ Vista global: barras de Red Propia y Red Externa (totales)
+        _generar_grafico_red_global(df_base)
+
+
+def _generar_grafico_red_global(df_base):
+    """Vista global: barras de Red Propia y Red Externa (totales)."""
     df_red = df_base.copy()
     df_red['Red_Normalizada'] = df_red['Red'].apply(normalizar_red)
-    # ⭐ Excluir 'Sin asignar'
+    # Excluir 'Sin asignar'
     df_red = df_red[df_red['Red_Normalizada'].isin(ORDEN_RED_VISIBLE)]
 
     df_red_count = df_red['Red_Normalizada'].value_counts().reset_index()
     df_red_count.columns = ['Red', 'Cantidad']
 
-    # ⭐ Garantizar que ambas categorías existan (con 0 si no hay datos)
+    # Garantizar que ambas categorías existan (con 0 si no hay datos)
     for cat in ORDEN_RED_VISIBLE:
         if cat not in df_red_count['Red'].values:
             df_red_count = pd.concat([df_red_count, pd.DataFrame({'Red': [cat], 'Cantidad': [0]})], ignore_index=True)
@@ -711,6 +725,70 @@ def generar_grafico_red_individual(df_base, titulo_grafico="PQRS por Red"):
     st.plotly_chart(aplicar_touch_safe(fig_red), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
 
+def _generar_grafico_upres_por_red(df_base):
+    """Vista por UPRES: top 10 UPRES con barras agrupadas de Red Propia y Red Externa."""
+    # Filtrar solo registros con Red Propia o Red Externa
+    df_filtrado = df_base.copy()
+    df_filtrado['Red_Normalizada'] = df_filtrado['Red'].apply(normalizar_red)
+    df_filtrado = df_filtrado[df_filtrado['Red_Normalizada'].isin(ORDEN_RED_VISIBLE)]
+    df_filtrado = df_filtrado.dropna(subset=['UNIDAD DE ASIGNACIÓN'])
+    df_filtrado = df_filtrado[df_filtrado['UNIDAD DE ASIGNACIÓN'].astype(str).str.strip() != '']
+
+    if df_filtrado.empty:
+        st.info("No hay datos de Red Propia/Externa por UPRES en el periodo seleccionado.")
+        return
+
+    # Top 10 UPRES por volumen total (Red Propia + Red Externa)
+    top_10_upres = df_filtrado['UNIDAD DE ASIGNACIÓN'].value_counts().head(10).index.tolist()
+    df_top = df_filtrado[df_filtrado['UNIDAD DE ASIGNACIÓN'].isin(top_10_upres)].copy()
+
+    # Agrupar por UPRES y Red
+    df_agg = df_top.groupby(['UNIDAD DE ASIGNACIÓN', 'Red_Normalizada'], observed=True).size().reset_index(name='Cantidad')
+    df_agg['UPRES_fmt'] = df_agg['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+
+    # Asegurar que todas las combinaciones UPRES x Red existan
+    full_index = pd.MultiIndex.from_product([top_10_upres, ORDEN_RED_VISIBLE], names=['UNIDAD DE ASIGNACIÓN', 'Red_Normalizada'])
+    df_agg_full = df_agg.set_index(['UNIDAD DE ASIGNACIÓN', 'Red_Normalizada']).reindex(full_index, fill_value=0).reset_index()
+    df_agg_full['UPRES_fmt'] = df_agg_full['UNIDAD DE ASIGNACIÓN'].apply(acortar_texto_abreviado)
+
+    # Ordenar UPRES por total descendente
+    totales_upres = df_agg_full.groupby('UNIDAD DE ASIGNACIÓN')['Cantidad'].sum().sort_values(ascending=False)
+    upres_ordenadas = totales_upres.index.tolist()
+    upres_fmt_ordenadas = [acortar_texto_abreviado(u) for u in upres_ordenadas]
+
+    color_map_upres_red = {
+        'Red Propia': COLOR_RED_PROPIA,
+        'Red Externa': COLOR_RED_EXTERNA
+    }
+
+    fig = px.bar(
+        df_agg_full,
+        x='UPRES_fmt',
+        y='Cantidad',
+        text='Cantidad',
+        color='Red_Normalizada',
+        barmode='group',
+        color_discrete_map=color_map_upres_red,
+        labels={'Cantidad': 'PQRS Recepcionadas', 'UPRES_fmt': '', 'Red_Normalizada': ''},
+        category_orders={'UPRES_fmt': upres_fmt_ordenadas, 'Red_Normalizada': ORDEN_RED_VISIBLE}
+    )
+    fig.update_traces(
+        textposition='outside',
+        texttemplate='%{y:,.0f}',
+        hovertemplate="<b>%{x} - %{fullData.name}</b><br>Cantidad: %{y:,} PQRS<extra></extra>"
+    )
+    fig.update_layout(
+        font=dict(family="Poppins, sans-serif"),
+        xaxis_title="",
+        yaxis_title="",
+        height=420,
+        margin=dict(l=5, r=5, t=20, b=10),
+        legend=dict(orientation="h", y=1.08, x=0, title=None, font=dict(size=11)),
+        xaxis=dict(categoryorder='array', categoryarray=upres_fmt_ordenadas)
+    )
+    st.plotly_chart(aplicar_touch_safe(fig), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
+
+
 # ⭐ Gráfico de PQRS por Red (Comparativo) — SOLO Red Propia y Red Externa
 def generar_grafico_red_comparativo(df_a, df_b, titulo_grafico="Comparativo PQRS por Red", lbl_a="Periodo A", lbl_b="Periodo B"):
     st.markdown(f"""
@@ -725,15 +803,12 @@ def generar_grafico_red_comparativo(df_a, df_b, titulo_grafico="Comparativo PQRS
         return
 
     def procesar_red(df_in, lbl):
-        # ⭐ CORREGIDO: DataFrame vacío con columnas esperadas para evitar error de concat
         if df_in.empty or 'Red' not in df_in.columns:
             return pd.DataFrame(columns=['Red_Normalizada', 'Periodo', 'Cantidad'])
         df_temp = df_in.copy()
         df_temp['Red_Normalizada'] = df_temp['Red'].apply(normalizar_red)
-        # ⭐ Excluir 'Sin asignar'
         df_temp = df_temp[df_temp['Red_Normalizada'].isin(ORDEN_RED_VISIBLE)]
         df_temp['Periodo'] = lbl
-        # ⭐ CORREGIDO: groupby por AMBAS columnas para conservar 'Periodo'
         return df_temp.groupby(['Red_Normalizada', 'Periodo'], observed=True).size().reset_index(name='Cantidad')
 
     df_red_a = procesar_red(df_a, lbl_a)
@@ -744,7 +819,7 @@ def generar_grafico_red_comparativo(df_a, df_b, titulo_grafico="Comparativo PQRS
         st.info("No hay tickets con Red Propia o Red Externa en los periodos seleccionados.")
         return
 
-    # ⭐ Garantizar estructura completa (todas las combinaciones categoría x periodo)
+    # Garantizar estructura completa (todas las combinaciones categoría x periodo)
     full_index = pd.MultiIndex.from_product([ORDEN_RED_VISIBLE, [lbl_a, lbl_b]], names=['Red_Normalizada', 'Periodo'])
     df_red_comp = df_red_comp.set_index(['Red_Normalizada', 'Periodo']).reindex(full_index, fill_value=0).reset_index()
 
@@ -1073,7 +1148,7 @@ def render_tab_individual(df_base_global, col_mot_esp, min_f, max_f, df_users_me
     )
     st.plotly_chart(aplicar_touch_safe(fig_upres_simple), use_container_width=True, config=CONFIG_PLOTLY_TOUCH)
 
-    # ⭐ Gráfico de PQRS por Red (debajo de UPRES)
+    # ⭐ Gráfico de PQRS por Red (debajo de UPRES) — con toggle
     st.markdown("---")
     generar_grafico_red_individual(df_base, "Distribución de PQRS por Red")
 
